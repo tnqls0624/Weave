@@ -1,35 +1,72 @@
-import { Tabs } from 'expo-router';
+import BottomNav from '@/components/BottomNav';
+import SearchView from '@/components/SearchView';
+import Sidebar from '@/components/Sidebar';
+import { CALENDARS } from '@/constants';
+import { useApp } from '@/contexts/AppContext';
+import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { StyleSheet, View } from 'react-native';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const router = useRouter();
+  const {
+    isSidebarOpen,
+    setIsSidebarOpen,
+    isSearchOpen,
+    setIsSearchOpen,
+    activeCalendarId,
+    handleSelectCalendar,
+    users,
+    calendarEvents,
+    setCalendarDate,
+    setDetailDrawerDate,
+  } = useApp();
+
+  const handleEventSelect = (event: any) => {
+    const eventDate = new Date(event.startDate + 'T00:00:00');
+    setCalendarDate(eventDate);
+    setDetailDrawerDate(eventDate);
+    setIsSearchOpen(false);
+    router.push('/(tabs)/calendar');
+  };
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+    <Sidebar 
+      isOpen={isSidebarOpen}
+      onClose={() => setIsSidebarOpen(false)}
+      calendars={CALENDARS}
+      activeCalendarId={activeCalendarId}
+      onSelectCalendar={handleSelectCalendar}
+      currentUser={users && users.length > 0 ? users[0] : { id: 'user1', name: 'You', avatarUrl: 'https://i.pravatar.cc/150?u=user1', color: 'blue' }}
+    >
+      <View style={styles.container}>
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: { display: 'none' }, // Hide default tab bar, use custom BottomNav
+          }}
+        >
+          <Tabs.Screen name="feed" />
+          <Tabs.Screen name="calendar" />
+          <Tabs.Screen name="map" />
+          <Tabs.Screen name="settings" />
+        </Tabs>
+        
+        <SearchView
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+          events={calendarEvents}
+          onEventSelect={handleEventSelect}
+        />
+        
+        {!isSidebarOpen && <BottomNav />}
+      </View>
+    </Sidebar>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
