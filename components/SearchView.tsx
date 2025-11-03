@@ -1,7 +1,16 @@
-import { MaterialIcons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { Event } from '../types';
+import { MaterialIcons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { Event } from "../types";
 
 interface SearchViewProps {
   isOpen: boolean;
@@ -10,12 +19,18 @@ interface SearchViewProps {
   onEventSelect: (event: Event) => void;
 }
 
-const SearchView: React.FC<SearchViewProps> = ({ isOpen, onClose, events, onEventSelect }) => {
-  const [query, setQuery] = useState('');
+const SearchView: React.FC<SearchViewProps> = ({
+  isOpen,
+  onClose,
+  events,
+  onEventSelect,
+}) => {
+  const [query, setQuery] = useState("");
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (isOpen) {
-      setQuery('');
+      setQuery("");
     }
   }, [isOpen]);
 
@@ -23,24 +38,34 @@ const SearchView: React.FC<SearchViewProps> = ({ isOpen, onClose, events, onEven
     if (!query.trim()) {
       return [];
     }
-    return events.filter(event => 
-      event.title.toLowerCase().includes(query.toLowerCase())
-    ).sort((a, b) => {
-      const dateA = a.startTime ? new Date(`${a.startDate}T${a.startTime}`) : new Date(a.startDate + 'T00:00:00');
-      const dateB = b.startTime ? new Date(`${b.startDate}T${b.startTime}`) : new Date(b.startDate + 'T00:00:00');
-      return dateA.getTime() - dateB.getTime();
-    });
+    return events
+      .filter((event) =>
+        event.title.toLowerCase().includes(query.toLowerCase())
+      )
+      .sort((a, b) => {
+        const dateA = a.startTime
+          ? new Date(`${a.startDate}T${a.startTime}`)
+          : new Date(a.startDate + "T00:00:00");
+        const dateB = b.startTime
+          ? new Date(`${b.startDate}T${b.startTime}`)
+          : new Date(b.startDate + "T00:00:00");
+        return dateA.getTime() - dateB.getTime();
+      });
   }, [query, events]);
 
   const handleSelect = (event: Event) => {
     onEventSelect(event);
     onClose();
   };
-  
+
   const formatEventDate = (event: Event) => {
     const date = new Date(`${event.startDate}T00:00:00`);
-    const datePart = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
-    return `${datePart} at ${event.startTime || 'all day'}`;
+    const datePart = date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      weekday: "short",
+    });
+    return `${datePart} at ${event.startTime || "all day"}`;
   };
 
   if (!isOpen) {
@@ -56,14 +81,23 @@ const SearchView: React.FC<SearchViewProps> = ({ isOpen, onClose, events, onEven
       statusBarTranslucent
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <View style={styles.container} onStartShouldSetResponder={() => false}>
+        <View
+          style={[styles.container, { top: 60 + insets.top }]}
+          onStartShouldSetResponder={() => false}
+        >
           <View style={styles.searchContainer}>
             <View style={styles.inputContainer}>
-              <MaterialIcons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
+              <MaterialIcons
+                name="search"
+                size={20}
+                color="#9ca3af"
+                style={styles.searchIcon}
+              />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search for events..."
+                placeholder="일정 검색..."
+                placeholderTextColor="#9ca3af"
                 style={styles.input}
                 autoFocus
               />
@@ -72,33 +106,38 @@ const SearchView: React.FC<SearchViewProps> = ({ isOpen, onClose, events, onEven
               </Pressable>
             </View>
 
-            <View style={styles.results}>
-              {query.trim() && (
-                <>
-                  {filteredEvents.length > 0 ? (
-                    filteredEvents.map(event => (
-                      <Pressable 
-                        key={event.id} 
-                        onPress={() => handleSelect(event)} 
-                        style={styles.resultItem}
-                      >
-                        <View style={styles.iconContainer}>
-                          <MaterialIcons name="event" size={24} color="#6b7280" />
-                        </View>
-                        <View style={styles.resultContent}>
-                          <Text style={styles.resultTitle}>{event.title}</Text>
-                          <Text style={styles.resultDate}>{formatEventDate(event)}</Text>
-                        </View>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <View style={styles.noResults}>
-                      <Text style={styles.noResultsText}>No events found for "{query}".</Text>
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
+            {query.trim() && (
+              <ScrollView
+                style={styles.results}
+                contentContainerStyle={{ paddingBottom: 8 }}
+              >
+                {filteredEvents.length > 0 ? (
+                  filteredEvents.map((event) => (
+                    <Pressable
+                      key={event.id}
+                      onPress={() => handleSelect(event)}
+                      style={styles.resultItem}
+                    >
+                      <View style={styles.iconContainer}>
+                        <MaterialIcons name="event" size={24} color="#6b7280" />
+                      </View>
+                      <View style={styles.resultContent}>
+                        <Text style={styles.resultTitle}>{event.title}</Text>
+                        <Text style={styles.resultDate}>
+                          {formatEventDate(event)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))
+                ) : (
+                  <View style={styles.noResults}>
+                    <Text style={styles.noResultsText}>
+                      &ldquo;{query}&rdquo;에 대한 일정이 없습니다.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Pressable>
@@ -109,28 +148,27 @@ const SearchView: React.FC<SearchViewProps> = ({ isOpen, onClose, events, onEven
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(243, 244, 246, 0.7)',
+    backgroundColor: "rgba(243, 244, 246, 0.7)",
   },
   container: {
-    position: 'absolute',
-    top: 100,
+    position: "absolute",
     left: 16,
     right: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   searchContainer: {
-    width: '100%',
+    width: "100%",
     maxWidth: 512,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 8,
     paddingHorizontal: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -143,36 +181,36 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     paddingVertical: 12,
-    color: '#1f2937',
+    color: "#1f2937",
   },
   closeButton: {
     padding: 4,
   },
   results: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 8,
     marginTop: 4,
-    maxHeight: '70%',
-    shadowColor: '#000',
+    maxHeight: 400,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
   resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    borderTopColor: "#f3f4f6",
   },
   iconContainer: {
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 16,
   },
   resultContent: {
@@ -180,23 +218,23 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
+    fontWeight: "600",
+    color: "#1f2937",
     marginBottom: 4,
   },
   resultDate: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
   },
   noResults: {
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    borderTopColor: "#f3f4f6",
   },
   noResultsText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
   },
 });
 

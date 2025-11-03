@@ -1,11 +1,11 @@
-import BottomNav from '@/components/BottomNav';
-import SearchView from '@/components/SearchView';
-import Sidebar from '@/components/Sidebar';
-import { CALENDARS } from '@/constants';
-import { useApp } from '@/contexts/AppContext';
-import { Tabs, useRouter } from 'expo-router';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import BottomNav from "@/components/BottomNav";
+import SearchView from "@/components/SearchView";
+import Sidebar from "@/components/Sidebar";
+import { CALENDARS } from "@/constants";
+import { useApp } from "@/contexts/AppContext";
+import { Tabs, useRouter } from "expo-router";
+import React from "react";
+import { StyleSheet, View } from "react-native";
 
 export default function TabLayout() {
   const router = useRouter();
@@ -23,27 +23,36 @@ export default function TabLayout() {
   } = useApp();
 
   const handleEventSelect = (event: any) => {
-    const eventDate = new Date(event.startDate + 'T00:00:00');
+    const eventDate = new Date(event.startDate + "T00:00:00");
     setCalendarDate(eventDate);
     setDetailDrawerDate(eventDate);
     setIsSearchOpen(false);
-    router.push('/(tabs)/calendar');
+    router.push("/(tabs)/calendar");
   };
 
   return (
-    <Sidebar 
+    <Sidebar
       isOpen={isSidebarOpen}
       onClose={() => setIsSidebarOpen(false)}
       calendars={CALENDARS}
       activeCalendarId={activeCalendarId}
       onSelectCalendar={handleSelectCalendar}
-      currentUser={users && users.length > 0 ? users[0] : { id: 'user1', name: 'You', avatarUrl: 'https://i.pravatar.cc/150?u=user1', color: 'blue' }}
+      currentUser={
+        users && users.length > 0
+          ? users[0]
+          : {
+              id: "user1",
+              name: "You",
+              avatarUrl: "https://i.pravatar.cc/150?u=user1",
+              color: "blue",
+            }
+      }
     >
       <View style={styles.container}>
         <Tabs
           screenOptions={{
             headerShown: false,
-            tabBarStyle: { display: 'none' }, // Hide default tab bar, use custom BottomNav
+            tabBarStyle: { display: "none" }, // Hide default tab bar, use custom BottomNav
           }}
         >
           <Tabs.Screen name="feed" />
@@ -51,14 +60,14 @@ export default function TabLayout() {
           <Tabs.Screen name="map" />
           <Tabs.Screen name="settings" />
         </Tabs>
-        
+
         <SearchView
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
           events={calendarEvents}
           onEventSelect={handleEventSelect}
         />
-        
+
         {!isSidebarOpen && <BottomNav />}
       </View>
     </Sidebar>

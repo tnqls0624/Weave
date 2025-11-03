@@ -1,9 +1,9 @@
-import CalendarView from '@/components/CalendarView';
-import { useApp } from '@/contexts/AppContext';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CalendarView from "@/components/CalendarView";
+import { useApp } from "@/contexts/AppContext";
+import { useRouter } from "expo-router";
+import React from "react";
+import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
   const router = useRouter();
@@ -23,14 +23,14 @@ export default function CalendarScreen() {
 
   const handleStartEdit = (event: any) => {
     setEventToEdit(event);
-    router.push('/create');
+    router.push("/create");
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <CalendarView 
-        events={calendarEvents} 
-        users={users} 
+      <CalendarView
+        events={calendarEvents}
+        users={users}
         currentDate={calendarDate}
         setCurrentDate={setCalendarDate}
         selectedDate={detailDrawerDate}
@@ -47,5 +47,6 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#ffffff",
   },
 });
