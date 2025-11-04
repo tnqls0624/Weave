@@ -1,41 +1,93 @@
+import { AppProvider } from "@/contexts/AppContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { queryClient } from "@/services/queryClient";
+import NotificationManager from "@/utils/notification";
 import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-
-import { AppProvider } from "@/contexts/AppContext";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export const unstable_settings = {
   anchor: "(tabs)",
 };
 
+// 앱 초기화 및 딥링크 처리를 위한 커스텀 훅 생성
+const useAppInitialization = () => {
+  const appInitializedRef = useRef(false);
+
+  useEffect(() => {
+    // 앱이 이미 초기화되었는지 확인
+    if (appInitializedRef.current) {
+      console.log("앱이 이미 초기화되었습니다");
+      return;
+    }
+
+    // 앱이 초기화되었음을 표시
+    appInitializedRef.current = true;
+
+    // 앱 초기화 로직 시작
+    const initializeApp = async () => {
+      try {
+        // 기본 서비스 초기화
+        await NotificationManager.getInstance().init();
+
+        // 스플래시 화면 숨기기
+        await SplashScreen.hideAsync();
+        console.log("[초기화] 앱 초기화 완료");
+      } catch (error) {
+        console.error("[앱 초기화] 오류:", error);
+        // 오류가 발생해도 스플래시 화면 숨김
+        await SplashScreen.hideAsync();
+      }
+    };
+
+    // 앱 초기화 실행
+    initializeApp();
+  }, []);
+
+  return null;
+};
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  // 앱 초기화 훅 사용
+  useAppInitialization();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppProvider>
-          <ThemeProvider
-            value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-          >
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="create"
-                options={{ presentation: "modal", headerShown: false }}
-              />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </AppProvider>
+        <QueryClientProvider client={queryClient}>
+          <AppProvider>
+            <NotificationProvider>
+              <ThemeProvider
+                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+              >
+                <Stack>
+                  <Stack.Screen
+                    name="(tabs)"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="create"
+                    options={{ presentation: "modal", headerShown: false }}
+                  />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </NotificationProvider>
+          </AppProvider>
+        </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

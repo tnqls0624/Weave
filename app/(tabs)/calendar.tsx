@@ -1,30 +1,69 @@
 import CalendarView from "@/components/CalendarView";
-import { useApp } from "@/contexts/AppContext";
+import { useAppData, useAppStore } from "@/stores";
 import { useRouter } from "expo-router";
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const {
-    calendarEvents,
-    users,
     calendarDate,
     setCalendarDate,
     detailDrawerDate,
     setDetailDrawerDate,
     setIsSidebarOpen,
     setIsSearchOpen,
-    activeCalendar,
     setEventToEdit,
-  } = useApp();
+  } = useAppStore();
+
+  const {
+    events: calendarEvents,
+    users,
+    activeCalendar,
+    isLoading,
+    error,
+  } = useAppData();
 
   const handleStartEdit = (event: any) => {
     setEventToEdit(event);
     router.push("/create");
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: insets.top,
+            justifyContent: "center",
+            alignItems: "center",
+          },
+        ]}
+      >
+        <Text>Loading calendar...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: insets.top,
+            justifyContent: "center",
+            alignItems: "center",
+          },
+        ]}
+      >
+        <Text>Error loading calendar: {error.message}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

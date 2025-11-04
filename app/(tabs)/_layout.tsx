@@ -2,7 +2,7 @@ import BottomNav from "@/components/BottomNav";
 import SearchView from "@/components/SearchView";
 import Sidebar from "@/components/Sidebar";
 import { CALENDARS } from "@/constants";
-import { useApp } from "@/contexts/AppContext";
+import { useAppData, useAppStore } from "@/stores";
 import { Tabs, useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, View } from "react-native";
@@ -16,11 +16,11 @@ export default function TabLayout() {
     setIsSearchOpen,
     activeCalendarId,
     handleSelectCalendar,
-    users,
-    calendarEvents,
     setCalendarDate,
     setDetailDrawerDate,
-  } = useApp();
+  } = useAppStore();
+
+  const { users, events: calendarEvents } = useAppData();
 
   const handleEventSelect = (event: any) => {
     const eventDate = new Date(event.startDate + "T00:00:00");

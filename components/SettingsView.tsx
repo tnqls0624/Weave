@@ -31,10 +31,10 @@ type SettingsPage = "main" | "account" | "tags" | "notifications" | "privacy";
 
 interface SettingsViewProps {
   users: User[];
-  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  onUpdateUser: (userId: string, userData: Partial<User>) => Promise<void>;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ users, setUsers }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState<SettingsPage>("main");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -87,10 +87,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, setUsers }) => {
     }
   };
 
-  const handleColorChange = (userId: string, color: string) => {
-    setUsers((currentUsers) =>
-      currentUsers.map((u) => (u.id === userId ? { ...u, color } : u))
-    );
+  const handleColorChange = async (userId: string, color: string) => {
+    try {
+      await onUpdateUser(userId, { color });
+    } catch (error) {
+      console.error("Failed to update user color:", error);
+    }
   };
 
   // Initialize profile name when users change
@@ -176,15 +178,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, setUsers }) => {
   const renderAccountPage = () => {
     const currentUser = users[0];
 
-    const handleSaveProfile = () => {
+    const handleSaveProfile = async () => {
       if (currentUser) {
-        setUsers((prevUsers) =>
-          prevUsers.map((u) =>
-            u.id === currentUser.id ? { ...u, name: profileName } : u
-          )
-        );
+        try {
+          await onUpdateUser(currentUser.id, { name: profileName });
+          setPage("main");
+        } catch (error) {
+          console.error("Failed to update profile:", error);
+        }
       }
-      setPage("main");
     };
 
     return (
