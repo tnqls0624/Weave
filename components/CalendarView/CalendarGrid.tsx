@@ -1,14 +1,15 @@
+import dayjs from "dayjs";
 import React, { useCallback, useMemo, useRef } from "react";
 import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { CalendarList, DateData } from "react-native-calendars";
 // @ts-ignore
 import DoubleClick from "react-native-double-tap";
 import { isHoliday } from "../../constants/holidays";
-import type { Event, User } from "../../types";
+import type { Schedule, User } from "../../types";
 
 interface CalendarGridProps {
   currentDate: Date;
-  events: Event[];
+  schedules: Schedule[];
   users: User[];
   currentUser: User;
   onSelectDay: (date: Date) => void;
@@ -30,13 +31,13 @@ interface DayCellProps {
   isHoliday: boolean;
   holidayName?: string;
   dayOfWeek: number;
-  dayEvents: Event[];
+  dayEvents: Schedule[];
   dayCellHeight: number;
   onSelectDay: (date: Date) => void;
   onDoubleTap: (date: Date) => void;
-  getEventColor: (event: Event) => string;
+  getEventColor: (schedule: Schedule) => string;
   getEventForDay: (
-    event: Event,
+    schedule: Schedule,
     day: Date
   ) => { isStart: boolean; isEnd: boolean; visible: boolean };
   eventsDateCache: Map<
@@ -72,15 +73,17 @@ const DayCell = React.memo<DayCellProps>(
     let dateColor = isCurrentMonth ? "#374151" : "#d1d5db";
     if (isCurrentMonth) {
       if (dayOfWeek === 0 || isHoliday) dateColor = "#ef4444";
-      if (dayOfWeek === 6) dateColor = "#3b82f6";
+      if (dayOfWeek === 6) dateColor = "#007AFF";
     }
 
     const dayEventsForDisplay = dayEvents.slice(0, 2);
 
     // 연속된 일정이 있는지 확인
-    const hasMultiDayEvent = dayEventsForDisplay.some((event) => {
-      const dateInfo = eventsDateCache.get(event.id);
-      return dateInfo ? dateInfo.startTime !== dateInfo.endTime : false;
+    const hasMultiDayEvent = dayEventsForDisplay.some((schedule: Schedule) => {
+      const dateInfo = eventsDateCache.get(schedule.id);
+      return dateInfo
+        ? dayjs(schedule.startDate).diff(dayjs(schedule.endDate)) !== 0
+        : false;
     });
 
     return (
@@ -118,23 +121,23 @@ const DayCell = React.memo<DayCellProps>(
             !hasMultiDayEvent && styles.eventsContainerPadding,
           ]}
         >
-          {dayEventsForDisplay.map((event, idx) => {
-            const eventInfo = getEventForDay(event, dayDate);
+          {dayEventsForDisplay.map((schedule: Schedule, idx: number) => {
+            const eventInfo = getEventForDay(schedule, dayDate);
             if (!eventInfo.visible) return null;
 
             // 캐시된 날짜 정보 사용 (Date 객체 생성 최소화)
-            const dateInfo = eventsDateCache.get(event.id);
+            const dateInfo = eventsDateCache.get(schedule.id);
             const isMultiDay = dateInfo
               ? dateInfo.startTime !== dateInfo.endTime
               : false;
 
             return (
               <View
-                key={event.id}
+                key={schedule.id}
                 style={[
                   styles.eventBar,
                   {
-                    backgroundColor: getEventColor(event),
+                    backgroundColor: getEventColor(schedule),
                   },
                   eventInfo.isStart && styles.eventBarStart,
                   !eventInfo.isStart &&
@@ -151,7 +154,7 @@ const DayCell = React.memo<DayCellProps>(
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    {event.title}
+                    {schedule.title}
                   </Text>
                 )}
               </View>
@@ -195,7 +198,8 @@ const DayCell = React.memo<DayCellProps>(
 
     // 이벤트 ID만 비교 (내용 변경은 무시하여 성능 최적화)
     const eventsEqual = prevProps.dayEvents.every(
-      (e, i) => e.id === nextProps.dayEvents[i]?.id
+      (schedule: Schedule, i: number) =>
+        schedule.id === nextProps.dayEvents[i].id
     );
 
     // eventsDateCache는 events 변경 시에만 재생성되므로 참조 비교로 충분
@@ -209,9 +213,9 @@ const DayCell = React.memo<DayCellProps>(
 
 DayCell.displayName = "DayCell";
 
-const CalendarGrid: React.FC<CalendarGridProps> = ({
+const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   currentDate,
-  events,
+  schedules,
   users,
   currentUser,
   onSelectDay,
@@ -279,29 +283,42 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   }, [selectedDate]);
 
   const getEventColor = useCallback(
-    (event: Event): string => {
+    (schedule: Schedule): string => {
       let colorName = "gray";
-      if (event.participantIds.includes(currentUser.id)) {
-        colorName = currentUser.color;
-      } else if (event.participantIds.length > 0) {
-        const firstParticipant = users.find(
-          (u) => u.id === event.participantIds[0]
-        );
-        if (firstParticipant) {
+
+      // 스케줄의 첫 번째 참여자의 색상 사용
+      if (schedule.participants.length > 0) {
+        const firstParticipantId = schedule.participants[0];
+        const firstParticipant = users.find((u) => u.id === firstParticipantId);
+
+        if (firstParticipant && firstParticipant.color) {
           colorName = firstParticipant.color;
         }
       }
 
       const colorMap: { [key: string]: string } = {
-        blue: "#60a5fa",
-        emerald: "#34d399",
+        red: "#ef4444",
         orange: "#fb923c",
+        amber: "#f59e0b",
+        yellow: "#eab308",
+        lime: "#84cc16",
+        green: "#22c55e",
+        emerald: "#34d399",
+        teal: "#14b8a6",
+        cyan: "#06b6d4",
+        blue: "#60a5fa",
+        indigo: "#6366f1",
         violet: "#a78bfa",
+        purple: "#a855f7",
+        fuchsia: "#d946ef",
+        pink: "#ec4899",
+        rose: "#f43f5e",
         gray: "#9ca3af",
       };
+
       return colorMap[colorName] || colorMap["gray"];
     },
-    [currentUser, users]
+    [users]
   );
 
   // 이벤트 날짜 정보를 사전 계산하여 캐시 (성능 최적화)
@@ -314,26 +331,26 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const eventsDateCache = useMemo(() => {
     const cache = new Map<string, EventDateInfo>();
-    events.forEach((event) => {
-      const eventStart = new Date(event.startDate + "T00:00:00");
-      const eventEnd = event.endDate
-        ? new Date(event.endDate + "T00:00:00")
+    schedules.forEach((schedule: Schedule) => {
+      const eventStart = new Date(schedule.startDate + "T00:00:00");
+      const eventEnd = schedule.endDate
+        ? new Date(schedule.endDate + "T00:00:00")
         : eventStart;
-      cache.set(event.id, {
+      cache.set(schedule.id, {
         startTime: eventStart.getTime(),
         endTime: eventEnd.getTime(),
-        startDateStr: event.startDate,
-        endDateStr: event.endDate || event.startDate,
+        startDateStr: schedule.startDate || "",
+        endDateStr: schedule.endDate || schedule.startDate || "",
       });
     });
     return cache;
-  }, [events]);
+  }, [schedules]);
 
   // 날짜별 이벤트를 사전 계산하여 캐시 (성능 최적화)
   const eventsByDateCache = useMemo(() => {
-    const cache = new Map<string, Event[]>();
-    events.forEach((event) => {
-      const dateInfo = eventsDateCache.get(event.id);
+    const cache = new Map<string, Schedule[]>();
+    schedules.forEach((schedule: Schedule) => {
+      const dateInfo = eventsDateCache.get(schedule.id);
       if (!dateInfo) return;
 
       const eventStart = dateInfo.startTime;
@@ -342,22 +359,20 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
       // 이벤트가 포함된 모든 날짜에 추가
       let currentDate = eventStart;
       while (currentDate <= eventEnd) {
-        const dateStr = new Date(currentDate).toDateString();
+        const dateStr = dayjs(currentDate).format("YYYY-MM-DD");
         if (!cache.has(dateStr)) {
           cache.set(dateStr, []);
         }
-        cache.get(dateStr)!.push(event);
+        cache.get(dateStr)!.push(schedule);
         currentDate += 24 * 60 * 60 * 1000; // 다음 날
       }
     });
     return cache;
-  }, [events, eventsDateCache]);
+  }, [schedules, eventsDateCache]);
 
   const getDayEvents = useCallback(
-    (day: Date): Event[] => {
-      const dayStart = new Date(day);
-      dayStart.setHours(0, 0, 0, 0);
-      const dateStr = dayStart.toDateString();
+    (day: Date): Schedule[] => {
+      const dateStr = dayjs(day).format("YYYY-MM-DD");
       return eventsByDateCache.get(dateStr) || [];
     },
     [eventsByDateCache]
@@ -365,10 +380,10 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const getEventForDay = useCallback(
     (
-      event: Event,
+      schedule: Schedule,
       day: Date
     ): { isStart: boolean; isEnd: boolean; visible: boolean } => {
-      const dateInfo = eventsDateCache.get(event.id);
+      const dateInfo = eventsDateCache.get(schedule.id);
       if (!dateInfo) {
         return { isStart: false, isEnd: false, visible: false };
       }
@@ -413,12 +428,12 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
   getEventForDayRef.current = getEventForDay;
 
   const stableGetEventColor = useCallback(
-    (event: Event) => getEventColorRef.current(event),
+    (schedule: Schedule) => getEventColorRef.current(schedule),
     []
   );
 
   const stableGetEventForDay = useCallback(
-    (event: Event, day: Date) => getEventForDayRef.current(event, day),
+    (schedule: Schedule, day: Date) => getEventForDayRef.current(schedule, day),
     []
   );
 
@@ -592,7 +607,7 @@ const styles = StyleSheet.create({
     color: "#ef4444",
   },
   saturday: {
-    color: "#3b82f6",
+    color: "#007AFF",
   },
   calendar: {},
   dayCell: {
@@ -686,5 +701,70 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+// CalendarGrid 컴포넌트를 메모이제이션하여 불필요한 리렌더링 방지
+const CalendarGrid = React.memo(
+  CalendarGridComponent,
+  (prevProps, nextProps) => {
+    // Date 객체는 참조가 다르므로 시간 값으로 비교
+    if (prevProps.currentDate.getTime() !== nextProps.currentDate.getTime()) {
+      return false;
+    }
+
+    if (
+      prevProps.selectedDate?.getTime() !== nextProps.selectedDate?.getTime()
+    ) {
+      return false;
+    }
+
+    // 일정 배열 비교 (ID와 길이만 비교)
+    if (prevProps.schedules.length !== nextProps.schedules.length) {
+      return false;
+    }
+
+    const schedulesEqual = prevProps.schedules.every(
+      (schedule, i) => schedule.id === nextProps.schedules[i]?.id
+    );
+    if (!schedulesEqual) {
+      return false;
+    }
+
+    // 사용자 배열 비교
+    if (prevProps.users.length !== nextProps.users.length) {
+      return false;
+    }
+
+    // 현재 사용자 비교
+    if (prevProps.currentUser.id !== nextProps.currentUser.id) {
+      return false;
+    }
+
+    // animationDirection 비교
+    if (prevProps.animationDirection !== nextProps.animationDirection) {
+      return false;
+    }
+
+    // 함수는 참조 비교 (부모에서 useCallback으로 안정화되어야 함)
+    if (prevProps.onSelectDay !== nextProps.onSelectDay) {
+      return false;
+    }
+
+    if (prevProps.onDoubleTap !== nextProps.onDoubleTap) {
+      return false;
+    }
+
+    if (prevProps.onChangeMonth !== nextProps.onChangeMonth) {
+      return false;
+    }
+
+    if (prevProps.onAnimationEnd !== nextProps.onAnimationEnd) {
+      return false;
+    }
+
+    return true;
+  }
+);
+
+CalendarGrid.displayName = "CalendarGrid";
 
 export default CalendarGrid;

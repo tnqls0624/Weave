@@ -1,66 +1,62 @@
-import CreateEventView from "@/components/CreateEventView";
+import CreateScheduleView from "@/components/CreateScheduleView";
 import {
   useAppData,
   useAppStore,
-  useCreateEvent,
-  useUpdateEvent,
+  useCreateSchedule,
+  useUpdateSchedule,
 } from "@/stores";
+import { User } from "@/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 export default function CreateScreen() {
   const router = useRouter();
-  const { eventId } = useLocalSearchParams<{ eventId?: string }>();
-  const { eventToEdit, setEventToEdit, activeCalendarId } = useAppStore();
-  const { users, events, isLoading, error } = useAppData();
-  const createEventMutation = useCreateEvent();
-  const updateEventMutation = useUpdateEvent();
+  const { scheduleId } = useLocalSearchParams<{ scheduleId?: string }>();
+  const {
+    scheduleToEdit,
+    setScheduleToEdit,
+    activeWorkspaceId,
+    detailDrawerDate,
+  } = useAppStore();
+  const { users, schedules, currentUser, isLoading, error } = useAppData();
+  const createScheduleMutation = useCreateSchedule();
+  const updateScheduleMutation = useUpdateSchedule();
 
   const handleSetActiveView = (view: string) => {
     if (view !== "create") {
-      setEventToEdit(null);
+      setScheduleToEdit(null);
       router.back();
     }
   };
 
-  // Find event to edit if eventId is provided
-  const event = eventId
-    ? events.find((e: any) => e.id === eventId) || null
-    : eventToEdit;
+  // Find schedule to edit if scheduleId is provided
+  const schedule = scheduleId
+    ? schedules.find((s: any) => s.id === scheduleId) || null
+    : scheduleToEdit;
 
-  const handleSave = async (eventData: any, id?: string) => {
+  const handleSave = async (scheduleData: any, id?: string) => {
     try {
       if (id) {
-        // Update existing event
-        await updateEventMutation.mutateAsync({ eventId: id, eventData });
+        // Update existing schedule
+        await updateScheduleMutation.mutateAsync({
+          scheduleId: id,
+          scheduleData,
+        });
       } else {
-        // Create new event
-        await createEventMutation.mutateAsync({
-          ...eventData,
-          calendarId: activeCalendarId,
+        // Create new schedule
+        await createScheduleMutation.mutateAsync({
+          ...scheduleData,
+          workspace: activeWorkspaceId,
         });
       }
-      setEventToEdit(null);
+      setScheduleToEdit(null);
       router.back();
     } catch (error) {
-      console.error("Failed to save event:", error);
+      console.error("Failed to save schedule:", error);
       // 에러 처리 로직 추가 가능
     }
   };
-
-  if (isLoading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
 
   if (error) {
     return (
@@ -77,12 +73,13 @@ export default function CreateScreen() {
 
   return (
     <View style={styles.container}>
-      <CreateEventView
+      <CreateScheduleView
         onSave={handleSave}
-        users={users}
-        currentUser={users[0]}
+        users={users as unknown as User[]}
+        currentUser={currentUser as User}
         setActiveView={handleSetActiveView}
-        eventToEdit={event}
+        scheduleToEdit={schedule || null}
+        initialDate={detailDrawerDate}
       />
     </View>
   );

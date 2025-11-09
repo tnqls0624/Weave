@@ -31,7 +31,6 @@ const messaging = getMessaging(getApp());
 setBackgroundMessageHandler(
   messaging,
   async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
-    console.log("Background Message:", remoteMessage);
     // 백그라운드 메시지에서는 알림을 직접 표시하지 않음 (FCM이 자동으로 처리)
     return Promise.resolve();
   }
@@ -61,7 +60,6 @@ export async function registerForPushNotificationsAsync() {
     }
 
     if (finalStatus !== "granted") {
-      console.log("Failed to get push token for push notification!");
       return null;
     }
 
@@ -74,14 +72,11 @@ export async function registerForPushNotificationsAsync() {
         return null;
       }
 
-      console.log("Requesting Expo push token with projectId:", projectId);
-
       const expoPushToken = await Notifications.getExpoPushTokenAsync({
         projectId: projectId,
       });
 
       token = expoPushToken.data;
-      console.log("Expo Push Token:", token);
     } catch (error) {
       console.error("Error getting expo push token:", error);
     }

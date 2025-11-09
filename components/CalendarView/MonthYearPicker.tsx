@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, Text, Modal } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 interface MonthYearPickerProps {
   currentDate: Date;
@@ -8,15 +8,19 @@ interface MonthYearPickerProps {
   onClose: () => void;
 }
 
-type PickerMode = 'months' | 'years';
+type PickerMode = "months" | "years";
 
-const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ currentDate, onDateSelect, onClose }) => {
+const MonthYearPicker: React.FC<MonthYearPickerProps> = ({
+  currentDate,
+  onDateSelect,
+  onClose,
+}) => {
   const [displayDate, setDisplayDate] = useState(new Date(currentDate));
-  const [pickerMode, setPickerMode] = useState<PickerMode>('months');
+  const [pickerMode, setPickerMode] = useState<PickerMode>("months");
 
-  const changeDisplayDate = (amount: number, unit: 'year' | 'decade') => {
+  const changeDisplayDate = (amount: number, unit: "year" | "decade") => {
     const newDate = new Date(displayDate);
-    if (unit === 'year') {
+    if (unit === "year") {
       newDate.setFullYear(newDate.getFullYear() + amount);
     } else {
       newDate.setFullYear(newDate.getFullYear() + amount * 10);
@@ -25,7 +29,9 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ currentDate, onDateSe
   };
 
   const renderMonthsGrid = () => {
-    const months = Array.from({ length: 12 }, (_, i) => new Date(0, i).toLocaleString('ko-KR', { month: 'long' }));
+    const months = Array.from({ length: 12 }, (_, i) =>
+      new Date(0, i).toLocaleString("ko-KR", { month: "long" })
+    );
     const currentDisplayMonth = displayDate.getMonth();
     const currentActualMonth = currentDate.getMonth();
     const currentActualYear = currentDate.getFullYear();
@@ -41,13 +47,19 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ currentDate, onDateSe
             }}
             style={[
               styles.monthButton,
-              i === currentActualMonth && displayDate.getFullYear() === currentActualYear && styles.selectedMonth
+              i === currentActualMonth &&
+                displayDate.getFullYear() === currentActualYear &&
+                styles.selectedMonth,
             ]}
           >
-            <Text style={[
-              styles.monthText,
-              i === currentActualMonth && displayDate.getFullYear() === currentActualYear && styles.selectedMonthText
-            ]}>
+            <Text
+              style={[
+                styles.monthText,
+                i === currentActualMonth &&
+                  displayDate.getFullYear() === currentActualYear &&
+                  styles.selectedMonthText,
+              ]}
+            >
               {month}
             </Text>
           </Pressable>
@@ -67,34 +79,38 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ currentDate, onDateSe
             key={y}
             onPress={() => {
               setDisplayDate(new Date(y, displayDate.getMonth(), 1));
-              setPickerMode('months');
+              setPickerMode("months");
             }}
             style={[styles.yearButton, y === year && styles.selectedYear]}
           >
-            <Text style={[styles.yearText, y === year && styles.selectedYearText]}>{y}</Text>
+            <Text
+              style={[styles.yearText, y === year && styles.selectedYearText]}
+            >
+              {y}
+            </Text>
           </Pressable>
         ))}
       </View>
     );
   };
-  
+
   const renderHeader = () => {
-    let title = '';
+    let title = "";
     let onTitlePress: () => void = () => {};
     let onPrev: () => void = () => {};
     let onNext: () => void = () => {};
 
-    if (pickerMode === 'months') {
+    if (pickerMode === "months") {
       title = `${displayDate.getFullYear()}년`;
-      onTitlePress = () => setPickerMode('years');
-      onPrev = () => changeDisplayDate(-1, 'year');
-      onNext = () => changeDisplayDate(1, 'year');
+      onTitlePress = () => setPickerMode("years");
+      onPrev = () => changeDisplayDate(-1, "year");
+      onNext = () => changeDisplayDate(1, "year");
     } else {
       const startYear = Math.floor(displayDate.getFullYear() / 10) * 10;
       const endYear = startYear + 9;
       title = `${startYear} - ${endYear}`;
-      onPrev = () => changeDisplayDate(-1, 'decade');
-      onNext = () => changeDisplayDate(1, 'decade');
+      onPrev = () => changeDisplayDate(-1, "decade");
+      onNext = () => changeDisplayDate(1, "decade");
     }
 
     return (
@@ -124,8 +140,8 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ currentDate, onDateSe
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.picker} onStartShouldSetResponder={() => true}>
           {renderHeader()}
-          {pickerMode === 'months' && renderMonthsGrid()}
-          {pickerMode === 'years' && renderYearsGrid()}
+          {pickerMode === "months" && renderMonthsGrid()}
+          {pickerMode === "years" && renderYearsGrid()}
         </Pressable>
       </Pressable>
     </Modal>
@@ -135,14 +151,14 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({ currentDate, onDateSe
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   picker: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -151,9 +167,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   titleButton: {
@@ -161,11 +177,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
   },
   navButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 4,
   },
   navButton: {
@@ -173,52 +189,54 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   monthsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     paddingVertical: 8,
   },
   monthButton: {
-    width: '30%',
+    width: "30%",
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
   },
   selectedMonth: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: "#007AFF",
   },
   monthText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
   },
   selectedMonthText: {
-    color: '#fff',
+    color: "#fff",
   },
   yearsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     paddingVertical: 8,
   },
   yearButton: {
-    width: '23%',
-    padding: 12,
+    width: "30%",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
   },
   selectedYear: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: "#007AFF",
   },
   yearText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: "600",
+    color: "#374151",
+    textAlign: "center",
   },
   selectedYearText: {
-    color: '#fff',
+    color: "#fff",
   },
 });
 

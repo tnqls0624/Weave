@@ -1,7 +1,6 @@
 import BottomNav from "@/components/BottomNav";
 import SearchView from "@/components/SearchView";
 import Sidebar from "@/components/Sidebar";
-import { CALENDARS } from "@/constants";
 import { useAppData, useAppStore } from "@/stores";
 import { Tabs, useRouter } from "expo-router";
 import React from "react";
@@ -14,13 +13,13 @@ export default function TabLayout() {
     setIsSidebarOpen,
     isSearchOpen,
     setIsSearchOpen,
-    activeCalendarId,
-    handleSelectCalendar,
+    activeWorkspaceId,
+    handleSelectWorkspace,
     setCalendarDate,
     setDetailDrawerDate,
   } = useAppStore();
 
-  const { users, events: calendarEvents } = useAppData();
+  const { workspaces, currentUser, users, schedules } = useAppData();
 
   const handleEventSelect = (event: any) => {
     const eventDate = new Date(event.startDate + "T00:00:00");
@@ -34,18 +33,19 @@ export default function TabLayout() {
     <Sidebar
       isOpen={isSidebarOpen}
       onClose={() => setIsSidebarOpen(false)}
-      calendars={CALENDARS}
-      activeCalendarId={activeCalendarId}
-      onSelectCalendar={handleSelectCalendar}
+      calendars={workspaces || []} // API에서 가져온 workspaces 데이터
+      activeCalendarId={activeWorkspaceId}
+      onSelectCalendar={handleSelectWorkspace}
       currentUser={
-        users && users.length > 0
+        currentUser ||
+        (users && users.length > 0
           ? users[0]
-          : {
+          : ({
               id: "user1",
               name: "You",
               avatarUrl: "https://i.pravatar.cc/150?u=user1",
               color: "blue",
-            }
+            } as any))
       }
     >
       <View style={styles.container}>
@@ -64,7 +64,7 @@ export default function TabLayout() {
         <SearchView
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
-          events={calendarEvents}
+          events={schedules || []}
           onEventSelect={handleEventSelect}
         />
 

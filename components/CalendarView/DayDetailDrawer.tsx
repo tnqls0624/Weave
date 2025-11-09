@@ -7,15 +7,15 @@ import React, { useCallback, useRef } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isHoliday } from "../../constants/holidays";
-import type { Event, User } from "../../types";
+import type { Schedule, User } from "../../types";
 
 interface DayDetailDrawerProps {
   date: Date;
-  events: Event[];
+  events: Schedule[];
   users: User[];
   currentUser: User;
   onClose: () => void;
-  onStartEdit: (event: Event) => void;
+  onStartEdit: (schedule: Schedule) => void;
 }
 
 const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
@@ -47,35 +47,47 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
   const getUser = (id: string) => users.find((u) => u.id === id);
 
-  const getEventColor = (event: Event) => {
-    if (event.participantIds.includes(currentUser.id)) {
-      return currentUser.color;
+  const getScheduleColor = (schedule: Schedule) => {
+    // 스케줄의 첫 번째 참여자의 색상 사용 (users 배열에서 조회)
+    const firstParticipantId = (schedule.participants || [])[0];
+    if (firstParticipantId) {
+      const participant = users.find((u) => u.id === firstParticipantId);
+      return participant?.color || "gray";
     }
-    const firstParticipant = users.find(
-      (u) => u.id === event.participantIds[0]
-    );
-    return firstParticipant?.color || "gray";
+    return "gray";
   };
 
   const getColorCode = (colorName: string) => {
     const colorMap: { [key: string]: string } = {
-      blue: "#3b82f6",
-      emerald: "#10b981",
-      orange: "#f97316",
-      violet: "#8b5cf6",
-      gray: "#6b7280",
+      red: "#ef4444",
+      orange: "#fb923c",
+      amber: "#f59e0b",
+      yellow: "#eab308",
+      lime: "#84cc16",
+      green: "#22c55e",
+      emerald: "#34d399",
+      teal: "#14b8a6",
+      cyan: "#06b6d4",
+      blue: "#60a5fa",
+      indigo: "#6366f1",
+      violet: "#a78bfa",
+      purple: "#a855f7",
+      fuchsia: "#d946ef",
+      pink: "#ec4899",
+      rose: "#f43f5e",
+      gray: "#9ca3af",
     };
     return colorMap[colorName] || colorMap["gray"];
   };
 
-  const dayEvents = events.filter((event) => {
-    const eventStart = new Date(event.startDate + "T00:00:00");
-    const eventEnd = event.endDate
-      ? new Date(event.endDate + "T00:00:00")
-      : eventStart;
+  const daySchedules = events.filter((schedule) => {
+    const scheduleStart = new Date(schedule.startDate + "T00:00:00");
+    const scheduleEnd = schedule.endDate
+      ? new Date(schedule.endDate + "T00:00:00")
+      : scheduleStart;
     const currentDay = new Date(date);
     currentDay.setHours(0, 0, 0, 0);
-    return currentDay >= eventStart && currentDay <= eventEnd;
+    return currentDay >= scheduleStart && currentDay <= scheduleEnd;
   });
 
   // 공휴일 확인
@@ -116,8 +128,8 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
           </Pressable>
         </View>
 
-        {dayEvents.length > 0 ? (
-          dayEvents
+        {daySchedules.length > 0 ? (
+          daySchedules
             .sort((a, b) => {
               if (a.startTime && b.startTime)
                 return a.startTime.localeCompare(b.startTime);
@@ -125,38 +137,40 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               if (b.startTime) return 1;
               return a.title.localeCompare(b.title);
             })
-            .map((event) => {
-              const participants = event.participantIds
+            .map((schedule) => {
+              const participants = (schedule.participants || [])
                 .map(getUser)
                 .filter(Boolean) as User[];
-              const eventColor = getEventColor(event);
-              const bgColor = getColorCode(eventColor) + "20";
-              const textColor = getColorCode(eventColor);
+              const scheduleColor = getScheduleColor(schedule);
+              const bgColor = getColorCode(scheduleColor) + "20";
+              const textColor = getColorCode(scheduleColor);
 
               return (
                 <View
-                  key={event.id}
-                  style={[styles.eventCard, { backgroundColor: bgColor }]}
+                  key={schedule.id}
+                  style={[styles.scheduleCard, { backgroundColor: bgColor }]}
                 >
                   <View
                     style={[styles.timeColumn, { backgroundColor: textColor }]}
                   >
                     <Text style={styles.timeText}>
-                      {event.startTime ? event.startTime : "All-day"}
+                      {schedule.startTime ? schedule.startTime : "All-day"}
                     </Text>
                   </View>
-                  <View style={styles.eventContent}>
-                    <View style={styles.eventHeader}>
+                  <View style={styles.scheduleContent}>
+                    <View style={styles.scheduleHeader}>
                       <View>
-                        <Text style={styles.eventTitle}>{event.title}</Text>
-                        {event.description && (
-                          <Text style={styles.eventDescription}>
-                            {event.description}
+                        <Text style={styles.scheduleTitle}>
+                          {schedule.title}
+                        </Text>
+                        {schedule.memo && (
+                          <Text style={styles.scheduleDescription}>
+                            {schedule.memo}
                           </Text>
                         )}
                       </View>
                       <Pressable
-                        onPress={() => onStartEdit(event)}
+                        onPress={() => onStartEdit(schedule)}
                         style={styles.editButton}
                       >
                         <MaterialIcons name="edit" size={20} color="#6b7280" />
@@ -178,9 +192,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               );
             })
         ) : (
-          <Text style={styles.emptyText}>
-            No events scheduled for this day.
-          </Text>
+          <Text style={styles.emptyText}>No schedules for this day.</Text>
         )}
       </BottomSheetScrollView>
     </BottomSheet>
@@ -214,59 +226,60 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
-  eventCard: {
+  scheduleCard: {
     flexDirection: "row",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
   },
   timeColumn: {
-    width: 64,
+    width: 56,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    marginRight: 12,
+    borderRadius: 6,
+    marginRight: 10,
+    paddingVertical: 6,
   },
   timeText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "bold",
     color: "#fff",
   },
-  eventContent: {
+  scheduleContent: {
     flex: 1,
   },
-  eventHeader: {
+  scheduleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  eventTitle: {
-    fontWeight: "bold",
+  scheduleTitle: {
+    fontWeight: "600",
     color: "#1f2937",
-    fontSize: 16,
-  },
-  eventDescription: {
     fontSize: 14,
+  },
+  scheduleDescription: {
+    fontSize: 12,
     color: "#6b7280",
-    marginTop: 4,
+    marginTop: 2,
   },
   editButton: {
-    padding: 8,
-    borderRadius: 20,
+    padding: 4,
+    borderRadius: 16,
   },
   participants: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 8,
   },
   participantAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#fff",
-    marginLeft: -8,
+    marginLeft: -6,
   },
   emptyText: {
     color: "#6b7280",

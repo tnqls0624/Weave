@@ -33,7 +33,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
           <MaterialIcons
             name={isPickerOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"}
             size={20}
-            color="#10b981"
+            color="#007AFF"
           />
         </Pressable>
         <Text style={styles.subtitle}>{activeCalendarName}</Text>
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#10b981",
+    color: "#007AFF",
   },
   subtitle: {
     fontSize: 12,

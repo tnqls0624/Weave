@@ -1,12 +1,16 @@
 import SettingsView from "@/components/SettingsView";
-import { useAppData, useUpdateUser } from "@/stores";
+import { useAppData, useAppStore, useUpdateUser } from "@/stores";
+import { User } from "@/types";
+import { useRouter } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { users, isLoading, error } = useAppData();
+  const router = useRouter();
+  const { users, currentUser, isLoading, error } = useAppData();
+  const { clearAuth, activeWorkspaceId } = useAppStore();
   const updateUserMutation = useUpdateUser();
 
   const handleUpdateUser = async (userId: string, userData: any) => {
@@ -17,22 +21,27 @@ export default function SettingsScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
+  const handleLogout = () => {
+    Alert.alert(
+      "로그아웃",
+      "정말 로그아웃 하시겠습니까?",
+      [
+        {
+          text: "취소",
+          style: "cancel",
+        },
+        {
+          text: "로그아웃",
+          style: "destructive",
+          onPress: () => {
+            clearAuth();
+            router.replace("/login");
           },
-        ]}
-      >
-        <Text>Loading settings...</Text>
-      </View>
+        },
+      ],
+      { cancelable: true }
     );
-  }
+  };
 
   if (error) {
     return (
@@ -53,7 +62,13 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <SettingsView users={users} onUpdateUser={handleUpdateUser} />
+      <SettingsView
+        users={users as unknown as User[]}
+        currentUser={currentUser}
+        workspaceId={activeWorkspaceId}
+        onUpdateUser={handleUpdateUser}
+        onLogout={handleLogout}
+      />
     </View>
   );
 }

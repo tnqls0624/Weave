@@ -1,5 +1,8 @@
 import FeedView from "@/components/FeedView";
+import { useWorkspaceScheduleFeed } from "@/services/queries";
 import { useAppData, useAppStore } from "@/stores";
+import { Schedule, User } from "@/types";
+import dayjs from "dayjs";
 import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -8,17 +11,23 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function FeedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { setCalendarDate, setDetailDrawerDate } = useAppStore();
-  const { events: calendarEvents, users, isLoading, error } = useAppData();
+  const { setCalendarDate, setDetailDrawerDate, activeWorkspaceId } =
+    useAppStore();
+  const { users, currentUser, isLoading: appDataLoading, error } = useAppData();
 
-  const handleEventSelect = (event: any) => {
-    const eventDate = new Date(event.startDate + "T00:00:00");
+  const { data: feedSchedules = [], isLoading: feedLoading } =
+    useWorkspaceScheduleFeed(activeWorkspaceId, {
+      enabled: !!activeWorkspaceId,
+    });
+
+  const handleEventSelect = (schedule: Schedule) => {
+    const eventDate = dayjs(schedule.startDate).toDate();
     setCalendarDate(eventDate);
     setDetailDrawerDate(eventDate);
     router.push("/(tabs)/calendar");
   };
 
-  if (isLoading) {
+  if (appDataLoading || feedLoading) {
     return (
       <View
         style={[
@@ -55,8 +64,9 @@ export default function FeedScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <FeedView
-        events={calendarEvents}
-        users={users}
+        schedules={feedSchedules}
+        users={users as unknown as User[]}
+        currentUser={currentUser}
         onEventSelect={handleEventSelect}
       />
     </View>

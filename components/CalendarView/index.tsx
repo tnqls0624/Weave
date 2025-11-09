@@ -1,14 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import type { Event, User } from "../../types";
+import type { Schedule, User } from "../../types";
 import CalendarGrid from "./CalendarGrid";
 import CalendarHeader from "./CalendarHeader";
 import DayDetailDrawer from "./DayDetailDrawer";
 import MonthYearPicker from "./MonthYearPicker";
 
 interface CalendarViewProps {
-  events: Event[];
-  users: User[];
+  schedules: Schedule[];
+  users: any[];
+  currentUser?: User; // 로그인한 사용자
   currentDate: Date;
   setCurrentDate: (date: Date) => void;
   selectedDate: Date | null;
@@ -19,9 +20,10 @@ interface CalendarViewProps {
   activeCalendarName: string;
 }
 
-const CalendarView: React.FC<CalendarViewProps> = ({
-  events,
+const CalendarViewComponent: React.FC<CalendarViewProps> = ({
+  schedules,
   users,
+  currentUser,
   currentDate,
   setCurrentDate,
   selectedDate,
@@ -31,17 +33,31 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   onOpenSearch,
   activeCalendarName,
 }) => {
-  const [filteredUserIds, setFilteredUserIds] = useState<string[]>(
-    users.map((u) => u.id)
+  // 로그인한 사용자 또는 첫 번째 사용자 사용 (메모이제이션)
+  const activeUser = useMemo(
+    () => currentUser || users[0],
+    [currentUser, users]
   );
+
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<
     "left" | "right" | null
   >(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const filteredEvents = events.filter((event) =>
-    event.participantIds.some((id) => filteredUserIds.includes(id))
+  // 필터링된 사용자 ID (메모이제이션)
+  const filteredUserIds = useMemo(() => users.map((u: User) => u.id), [users]);
+
+  // 필터링된 일정 (메모이제이션)
+  const filteredEvents = useMemo(
+    () =>
+      schedules.filter(
+        (schedule: Schedule) =>
+          schedule.participants.some((id: string) =>
+            filteredUserIds.includes(id)
+          ) || false
+      ),
+    [schedules, filteredUserIds]
   );
 
   // Single tap: 날짜 선택 (시각적 피드백만)
@@ -100,6 +116,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     [currentDate, setCurrentDate]
   );
 
+  const handleAnimationEnd = useCallback(() => {
+    setAnimationDirection(null);
+  }, []);
+
   // currentDate가 변경될 때 selectedDate와 동기화
   useEffect(() => {
     if (selectedDate) {
@@ -120,9 +140,21 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
-  const handleTitleClick = () => {
+  const handleTitleClick = useCallback(() => {
     setIsMonthPickerOpen((prev) => !prev);
-  };
+  }, []);
+
+  const handleMonthYearSelect = useCallback(
+    (date: Date) => {
+      setCurrentDate(date);
+      setIsMonthPickerOpen(false);
+    },
+    [setCurrentDate]
+  );
+
+  const handleMonthYearPickerClose = useCallback(() => {
+    setIsMonthPickerOpen(false);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -137,23 +169,20 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       {isMonthPickerOpen && (
         <MonthYearPicker
           currentDate={currentDate}
-          onDateSelect={(date) => {
-            setCurrentDate(date);
-            setIsMonthPickerOpen(false);
-          }}
-          onClose={() => setIsMonthPickerOpen(false)}
+          onDateSelect={handleMonthYearSelect}
+          onClose={handleMonthYearPickerClose}
         />
       )}
       <CalendarGrid
         currentDate={currentDate}
-        events={filteredEvents}
+        schedules={filteredEvents}
         onSelectDay={handleSelectDay}
         onDoubleTap={handleDoubleTap}
         users={users}
-        currentUser={users.find((u) => u.id === "user1")!}
+        currentUser={activeUser}
         onChangeMonth={handleChangeMonth}
         animationDirection={animationDirection}
-        onAnimationEnd={() => setAnimationDirection(null)}
+        onAnimationEnd={handleAnimationEnd}
         selectedDate={selectedDate}
       />
       {selectedDate && isDrawerOpen && (
@@ -162,7 +191,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           events={filteredEvents}
           onClose={handleCloseDrawer}
           users={users}
-          currentUser={users.find((u) => u.id === "user1")!}
+          currentUser={activeUser}
           onStartEdit={onStartEdit}
         />
       )}
@@ -178,5 +207,74 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
 });
+
+// CalendarView 컴포넌트를 메모이제이션하여 불필요한 리렌더링 방지
+const CalendarView = React.memo(
+  CalendarViewComponent,
+  (prevProps, nextProps) => {
+    // Date 객체는 참조가 다르므로 시간 값으로 비교
+    if (prevProps.currentDate.getTime() !== nextProps.currentDate.getTime()) {
+      return false;
+    }
+
+    if (
+      prevProps.selectedDate?.getTime() !== nextProps.selectedDate?.getTime()
+    ) {
+      return false;
+    }
+
+    // 일정 배열 비교 (ID와 길이만 비교)
+    if (prevProps.schedules.length !== nextProps.schedules.length) {
+      return false;
+    }
+
+    const schedulesEqual = prevProps.schedules.every(
+      (schedule, i) => schedule.id === nextProps.schedules[i]?.id
+    );
+    if (!schedulesEqual) {
+      return false;
+    }
+
+    // 사용자 배열 비교
+    if (prevProps.users.length !== nextProps.users.length) {
+      return false;
+    }
+
+    // 현재 사용자 비교
+    if (prevProps.currentUser?.id !== nextProps.currentUser?.id) {
+      return false;
+    }
+
+    // 캘린더 이름 비교
+    if (prevProps.activeCalendarName !== nextProps.activeCalendarName) {
+      return false;
+    }
+
+    // 함수는 참조 비교 (부모에서 useCallback으로 안정화되어야 함)
+    if (prevProps.setCurrentDate !== nextProps.setCurrentDate) {
+      return false;
+    }
+
+    if (prevProps.setSelectedDate !== nextProps.setSelectedDate) {
+      return false;
+    }
+
+    if (prevProps.onStartEdit !== nextProps.onStartEdit) {
+      return false;
+    }
+
+    if (prevProps.onOpenSidebar !== nextProps.onOpenSidebar) {
+      return false;
+    }
+
+    if (prevProps.onOpenSearch !== nextProps.onOpenSearch) {
+      return false;
+    }
+
+    return true;
+  }
+);
+
+CalendarView.displayName = "CalendarView";
 
 export default CalendarView;

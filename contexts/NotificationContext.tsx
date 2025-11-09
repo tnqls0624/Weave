@@ -51,7 +51,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
       listener = Notifications.addNotificationReceivedListener(
         (notification) => {
-          console.log("🔔 Notification Received: ", notification);
           setNotification(notification);
 
           // 푸시 알림 수신 시 진동 발생
@@ -72,7 +71,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
             notificationType === "schedule_deleted" ||
             notificationType === "schedule" // 일반적인 일정 알림
           ) {
-            console.log("📅 일정 업데이트 알림 감지, 캘린더 새로고침 트리거");
             if (scheduleUpdateCallback) {
               scheduleUpdateCallback();
             }

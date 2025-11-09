@@ -1,7 +1,7 @@
 import CalendarView from "@/components/CalendarView";
 import { useAppData, useAppStore } from "@/stores";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useCallback } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,21 +15,43 @@ export default function CalendarScreen() {
     setDetailDrawerDate,
     setIsSidebarOpen,
     setIsSearchOpen,
-    setEventToEdit,
+    setScheduleToEdit,
   } = useAppStore();
 
-  const {
-    events: calendarEvents,
-    users,
-    activeCalendar,
-    isLoading,
-    error,
-  } = useAppData();
+  const { schedules, users, currentUser, activeWorkspace, isLoading, error } =
+    useAppData();
 
-  const handleStartEdit = (event: any) => {
-    setEventToEdit(event);
-    router.push("/create");
-  };
+  // setCalendarDate를 useCallback으로 메모이제이션
+  const handleSetCalendarDate = useCallback(
+    (date: Date) => {
+      setCalendarDate(date);
+    },
+    [setCalendarDate]
+  );
+
+  // setDetailDrawerDate를 useCallback으로 메모이제이션
+  const handleSetDetailDrawerDate = useCallback(
+    (date: Date | null) => {
+      setDetailDrawerDate(date);
+    },
+    [setDetailDrawerDate]
+  );
+
+  const handleStartEdit = useCallback(
+    (schedule: any) => {
+      setScheduleToEdit(schedule);
+      router.push("/create");
+    },
+    [setScheduleToEdit, router]
+  );
+
+  const handleOpenSidebar = useCallback(() => {
+    setIsSidebarOpen(true);
+  }, [setIsSidebarOpen]);
+
+  const handleOpenSearch = useCallback(() => {
+    setIsSearchOpen(true);
+  }, [setIsSearchOpen]);
 
   if (isLoading) {
     return (
@@ -68,16 +90,17 @@ export default function CalendarScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <CalendarView
-        events={calendarEvents}
-        users={users}
+        schedules={schedules || []}
+        users={users || []}
+        activeCalendarName={activeWorkspace?.name || ""}
+        currentUser={currentUser}
         currentDate={calendarDate}
-        setCurrentDate={setCalendarDate}
+        setCurrentDate={handleSetCalendarDate}
         selectedDate={detailDrawerDate}
-        setSelectedDate={setDetailDrawerDate}
+        setSelectedDate={handleSetDetailDrawerDate}
         onStartEdit={handleStartEdit}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-        onOpenSearch={() => setIsSearchOpen(true)}
-        activeCalendarName={activeCalendar.name}
+        onOpenSidebar={handleOpenSidebar}
+        onOpenSearch={handleOpenSearch}
       />
     </View>
   );

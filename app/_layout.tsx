@@ -1,6 +1,7 @@
 import { AppProvider } from "@/contexts/AppContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useApiSync } from "@/services/apiSync";
 import { queryClient } from "@/services/queryClient";
 import NotificationManager from "@/utils/notification";
 import {
@@ -28,7 +29,7 @@ const useAppInitialization = () => {
   useEffect(() => {
     // 앱이 이미 초기화되었는지 확인
     if (appInitializedRef.current) {
-      console.log("앱이 이미 초기화되었습니다");
+      ("앱이 이미 초기화되었습니다");
       return;
     }
 
@@ -43,7 +44,6 @@ const useAppInitialization = () => {
 
         // 스플래시 화면 숨기기
         await SplashScreen.hideAsync();
-        console.log("[초기화] 앱 초기화 완료");
       } catch (error) {
         console.error("[앱 초기화] 오류:", error);
         // 오류가 발생해도 스플래시 화면 숨김
@@ -58,6 +58,12 @@ const useAppInitialization = () => {
   return null;
 };
 
+// API 동기화 컴포넌트
+function ApiSyncProvider({ children }: { children: React.ReactNode }) {
+  useApiSync();
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -69,23 +75,33 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <AppProvider>
-            <NotificationProvider>
-              <ThemeProvider
-                value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-              >
-                <Stack>
-                  <Stack.Screen
-                    name="(tabs)"
-                    options={{ headerShown: false }}
-                  />
-                  <Stack.Screen
-                    name="create"
-                    options={{ presentation: "modal", headerShown: false }}
-                  />
-                </Stack>
-                <StatusBar style="auto" />
-              </ThemeProvider>
-            </NotificationProvider>
+            <ApiSyncProvider>
+              <NotificationProvider>
+                <ThemeProvider
+                  value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+                >
+                  <Stack>
+                    <Stack.Screen
+                      name="index"
+                      options={{ headerShown: false }}
+                    />
+                    <Stack.Screen
+                      name="login"
+                      options={{ headerShown: false }}
+                    />
+                    <Stack.Screen
+                      name="(tabs)"
+                      options={{ headerShown: false }}
+                    />
+                    <Stack.Screen
+                      name="create"
+                      options={{ presentation: "modal", headerShown: false }}
+                    />
+                  </Stack>
+                  <StatusBar style="auto" />
+                </ThemeProvider>
+              </NotificationProvider>
+            </ApiSyncProvider>
           </AppProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

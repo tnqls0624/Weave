@@ -25,35 +25,45 @@ import {
 } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Event, RepeatOption, User } from "../types";
+import { RepeatOption, Schedule, User } from "../types";
 import DateTimePicker from "./DateTimePicker";
 
-interface CreateEventViewProps {
+interface CreateScheduleViewProps {
   onSave: (
-    eventData: Omit<Event, "id" | "calendarId">,
-    eventId?: string
+    scheduleData: Omit<Schedule, "id" | "workspace">,
+    scheduleId?: string
   ) => void;
   users: User[];
   currentUser: User;
   setActiveView: (view: string) => void;
-  eventToEdit: Event | null;
+  scheduleToEdit: Schedule | null;
+  initialDate?: Date | null;
 }
 
-const CreateEventView: React.FC<CreateEventViewProps> = ({
+const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   onSave,
   users,
   currentUser,
   setActiveView,
-  eventToEdit,
+  scheduleToEdit,
+  initialDate,
 }) => {
   const insets = useSafeAreaInsets();
+
+  const getInitialDate = () => {
+    if (initialDate) {
+      return dayjs(initialDate).format("YYYY-MM-DD");
+    }
+    return dayjs().format("YYYY-MM-DD");
+  };
+
   const [title, setTitle] = useState("");
-  const [startDate, setStartDate] = useState(dayjs().format("YYYY-MM-DD"));
+  const [startDate, setStartDate] = useState(getInitialDate());
   const [endDate, setEndDate] = useState<string | undefined>(undefined);
   const [isAllDay, setIsAllDay] = useState(false);
   const [startTime, setStartTime] = useState("18:00");
   const [endTime, setEndTime] = useState("19:00");
-  const [displayDate, setDisplayDate] = useState(new Date());
+  const [displayDate, setDisplayDate] = useState(initialDate || new Date());
   const [activeField, setActiveField] = useState<"start" | "end" | null>(null);
   const [activeTimeField, setActiveTimeField] = useState<
     "start" | "end" | null
@@ -84,18 +94,23 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
   );
 
   useEffect(() => {
-    if (eventToEdit) {
-      setTitle(eventToEdit.title);
-      setStartDate(eventToEdit.startDate);
-      setEndDate(eventToEdit.endDate);
-      setParticipantIds(eventToEdit.participantIds);
-      setRepeat(eventToEdit.repeat || "none");
-      setStartTime(eventToEdit.startTime || dayjs().format("HH:mm"));
-      setEndTime(eventToEdit.endTime || dayjs().add(1, "hour").format("HH:mm"));
-      setIsAllDay(!eventToEdit.startTime);
+    if (scheduleToEdit) {
+      setTitle(scheduleToEdit.title);
+      setStartDate(scheduleToEdit.startDate || dayjs().format("YYYY-MM-DD"));
+      setEndDate(scheduleToEdit.endDate);
+      setParticipantIds(scheduleToEdit.participants);
+      setRepeat((scheduleToEdit.repeatType as RepeatOption) || "none");
+      setStartTime(scheduleToEdit.startTime || dayjs().format("HH:mm"));
+      setEndTime(
+        scheduleToEdit.endTime || dayjs().add(1, "hour").format("HH:mm")
+      );
+      setIsAllDay(!scheduleToEdit.startTime);
     } else {
       setTitle("");
-      setStartDate(dayjs().format("YYYY-MM-DD"));
+      const initialDateStr = initialDate
+        ? dayjs(initialDate).format("YYYY-MM-DD")
+        : dayjs().format("YYYY-MM-DD");
+      setStartDate(initialDateStr);
       setEndDate(undefined);
       setParticipantIds([currentUser.id]);
       setRepeat("none");
@@ -103,21 +118,21 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
       setEndTime(dayjs().add(1, "hour").format("HH:mm"));
       setIsAllDay(false);
     }
-  }, [eventToEdit, currentUser.id]);
+  }, [scheduleToEdit, currentUser.id, initialDate]);
 
   const handleSubmit = () => {
-    const eventData: Omit<Event, "id" | "calendarId"> = {
-      title: title || "Event",
-      description: undefined,
+    const scheduleData: Omit<Schedule, "id" | "workspace"> = {
+      title,
+      memo: "",
       startDate,
-      participantIds,
-      repeat,
-      endDate: endDate && endDate !== startDate ? endDate : undefined,
+      endDate: endDate || startDate, // endDate가 없으면 startDate 사용
+      participants: participantIds,
+      repeatType: repeat,
+      calendarType: isLunar ? "lunar" : "solar",
       startTime: isAllDay ? undefined : startTime,
       endTime: isAllDay ? undefined : endTime,
-      location: eventToEdit?.location,
     };
-    onSave(eventData, eventToEdit?.id);
+    onSave(scheduleData, scheduleToEdit?.id);
   };
 
   const formattedDateTime = (date: string) => {
@@ -137,7 +152,6 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
         const lunar = lunarCal.getLunarCalendar();
         return `${lunar.year}년 ${lunar.month}월 ${lunar.day}일 (${day})`;
       } catch {
-        // 음력 변환 실패 시 양력 반환
         return `${dateObj.getFullYear()}년 ${
           dateObj.getMonth() + 1
         }월 ${dateObj.getDate()}일 (${day})`;
@@ -195,7 +209,7 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => setActiveView("calendar")}>
-          <MaterialIcons name="close" size={28} color="#10b981" />
+          <MaterialIcons name="close" size={28} color="#007AFF" />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleSubmit}>
           <Text style={styles.saveButton}>저장</Text>
@@ -218,12 +232,12 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
         </View>
 
         <View style={styles.section}>
-          <MaterialIcons name="access-time" size={24} color="#10b981" />
+          <MaterialIcons name="access-time" size={24} color="#007AFF" />
           <Text style={styles.sectionText}>종일</Text>
           <Switch
             value={isAllDay}
             onValueChange={setIsAllDay}
-            trackColor={{ false: "#d1d5db", true: "#10b981" }}
+            trackColor={{ false: "#d1d5db", true: "#007AFF" }}
           />
         </View>
 
@@ -343,7 +357,6 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
           </View>
         )}
 
-        {/* 시간만 선택하는 DatePicker  24시간 표시*/}
         {activeTimeField && (
           <View style={styles.timePickerContainer}>
             <DateTimePicker
@@ -364,28 +377,28 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
         )}
 
         <View style={styles.section}>
-          <MaterialIcons name="calendar-month" size={24} color="#10b981" />
+          <MaterialIcons name="calendar-month" size={24} color="#007AFF" />
           <Text style={styles.sectionText}>음력</Text>
           <Switch
             value={isLunar}
             onValueChange={setIsLunar}
-            trackColor={{ false: "#d1d5db", true: "#10b981" }}
+            trackColor={{ false: "#d1d5db", true: "#007AFF" }}
           />
         </View>
 
         <View style={styles.optionsSection}>
           {/* <View style={styles.section}>
-            <MaterialIcons name="note" size={24} color="#10b981" />
+            <MaterialIcons name="note" size={24} color="#007AFF" />
             <Text style={styles.sectionText}>메모로 저장하기</Text>
             <Switch
               value={false}
               onValueChange={() => {}}
-              trackColor={{ false: "#d1d5db", true: "#10b981" }}
+              trackColor={{ false: "#d1d5db", true: "#007AFF" }}
             />
           </View> */}
 
           {/* <View style={styles.section}>
-            <MaterialIcons name="label" size={24} color="#10b981" />
+            <MaterialIcons name="label" size={24} color="#007AFF" />
             <Text style={styles.sectionText}>에메랄드 그린</Text>
             <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
           </View> */}
@@ -395,7 +408,7 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
             onPress={() => bottomSheetRef.current?.expand()}
           >
             <View style={styles.sectionIcon}>
-              <MaterialIcons name="people" size={24} color="#10b981" />
+              <MaterialIcons name="people" size={24} color="#007AFF" />
             </View>
             <View style={styles.participantsRow}>
               <View style={styles.participantBadges}>
@@ -416,44 +429,44 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
           </Pressable>
 
           {/* <View style={styles.section}>
-            <MaterialIcons name="notifications" size={24} color="#10b981" />
+            <MaterialIcons name="notifications" size={24} color="#007AFF" />
             <Text style={styles.sectionText}>10분 전</Text>
             <MaterialIcons name="close" size={20} color="#9ca3af" />
           </View> */}
         </View>
 
         {/* <View style={styles.actionButtons}>
-          <MaterialIcons name="add-circle" size={32} color="#10b981" />
+          <MaterialIcons name="add-circle" size={32} color="#007AFF" />
           <View style={styles.buttonRow}>
             <Pressable style={styles.actionButton}>
-              <MaterialIcons name="repeat" size={20} color="#10b981" />
+              <MaterialIcons name="repeat" size={20} color="#007AFF" />
               <Text style={styles.actionButtonText}>반복</Text>
             </Pressable>
             <Pressable style={styles.actionButton}>
-              <MaterialIcons name="star" size={20} color="#10b981" />
+              <MaterialIcons name="star" size={20} color="#007AFF" />
               <Text style={styles.actionButtonText}>D-Day 기능</Text>
             </Pressable>
             <Pressable style={styles.actionButton}>
-              <MaterialIcons name="place" size={20} color="#10b981" />
+              <MaterialIcons name="place" size={20} color="#007AFF" />
               <Text style={styles.actionButtonText}>장소</Text>
             </Pressable>
           </View>
           <View style={styles.buttonRow}>
             <Pressable style={styles.actionButton}>
-              <MaterialIcons name="link" size={20} color="#10b981" />
+              <MaterialIcons name="link" size={20} color="#007AFF" />
               <Text style={styles.actionButtonText}>링크</Text>
             </Pressable>
             <Pressable style={styles.actionButton}>
-              <MaterialIcons name="description" size={20} color="#10b981" />
+              <MaterialIcons name="description" size={20} color="#007AFF" />
               <Text style={styles.actionButtonText}>메모</Text>
             </Pressable>
             <Pressable style={styles.actionButton}>
-              <MaterialIcons name="checklist" size={20} color="#10b981" />
+              <MaterialIcons name="checklist" size={20} color="#007AFF" />
               <Text style={styles.actionButtonText}>To-Do 리스트</Text>
             </Pressable>
           </View>
           <Pressable style={styles.actionButton}>
-            <MaterialIcons name="attach-file" size={20} color="#10b981" />
+            <MaterialIcons name="attach-file" size={20} color="#007AFF" />
             <MaterialIcons name="star-border" size={16} color="#000" />
             <Text style={styles.actionButtonText}>첨부 파일</Text>
           </Pressable>
@@ -500,11 +513,10 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
               />
               <Text style={styles.bottomSheetItemText}>나</Text>
               {participantIds.includes(currentUser.id) && (
-                <MaterialIcons name="check" size={24} color="#10b981" />
+                <MaterialIcons name="check" size={24} color="#007AFF" />
               )}
             </Pressable>
 
-            {/* 다른 참가자들 */}
             {users
               .filter((u) => u.id !== currentUser.id)
               .map((user) => (
@@ -531,7 +543,7 @@ const CreateEventView: React.FC<CreateEventViewProps> = ({
                   />
                   <Text style={styles.bottomSheetItemText}>{user.name}</Text>
                   {participantIds.includes(user.id) && (
-                    <MaterialIcons name="check" size={24} color="#10b981" />
+                    <MaterialIcons name="check" size={24} color="#007AFF" />
                   )}
                 </Pressable>
               ))}
@@ -555,7 +567,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   saveButton: {
-    color: "#10b981",
+    color: "#007AFF",
     fontWeight: "600",
     fontSize: 16,
   },
@@ -616,7 +628,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   startDateButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#007AFF",
   },
   startDateText: {
     fontSize: 12,
@@ -753,4 +765,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreateEventView;
+export default CreateScheduleView;

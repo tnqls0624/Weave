@@ -4,6 +4,7 @@ import BottomSheet, {
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import dayjs from "dayjs";
+import * as ImagePicker from "expo-image-picker";
 import React, {
   useCallback,
   useEffect,
@@ -12,6 +13,8 @@ import React, {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -24,31 +27,57 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { apiService } from "../services/api";
+import locationTrackingService from "../services/locationTrackingService";
+import {
+  useUpdateNotifications,
+  useUpdateParticipantColors,
+} from "../services/queries";
+import { useAppStore } from "../stores";
 import { User } from "../types";
 import DateTimePicker from "./DateTimePicker";
 
-type SettingsPage = "main" | "account" | "tags" | "notifications" | "privacy";
-
 interface SettingsViewProps {
   users: User[];
+  currentUser?: User; // 로그인한 사용자
+  workspaceId: string; // 워크스페이스 ID
   onUpdateUser: (userId: string, userData: Partial<User>) => Promise<void>;
+  onLogout?: () => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({
+  users,
+  currentUser,
+  workspaceId,
+  onUpdateUser,
+  onLogout,
+}) => {
   const insets = useSafeAreaInsets();
-  const [page, setPage] = useState<SettingsPage>("main");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const { settingsPage, setSettingsPage } = useAppStore();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    currentUser?.pushEnabled ?? true
+  );
+  const [locationSharingEnabled, setLocationSharingEnabled] = useState(
+    locationTrackingService.isTracking()
+  );
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  const updateParticipantColorsMutation = useUpdateParticipantColors();
+  const isUpdatingColors = updateParticipantColorsMutation.isPending;
+
+  const updateNotificationsMutation = useUpdateNotifications();
 
   const [profileName, setProfileName] = useState("");
   const [statusMessage, setStatusMessage] = useState("임의");
   const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [showInCalendar, setShowInCalendar] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showImagePicker, setShowImagePicker] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const colorBottomSheetRef = useRef<BottomSheet>(null);
+  const imagePickerBottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["50%"], []);
+  const imagePickerSnapPoints = useMemo(() => ["35%"], []);
 
   const availableColors = [
     { name: "emerald", koreanName: "에메랄드 그린" },
@@ -87,41 +116,128 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
     }
   };
 
-  const handleColorChange = async (userId: string, color: string) => {
+  const handleColorChange = async (userId: string, colorName: string) => {
     try {
-      await onUpdateUser(userId, { color });
+      // 현재 워크스페이스의 모든 사용자 색상을 hex 코드로 변환하여 준비
+      const participantColors: Record<string, string> = {};
+      users.forEach((user) => {
+        const userColorName = user.id === userId ? colorName : user.color;
+        participantColors[user.id] = getColorCode(userColorName);
+      });
+
+      // mutation이 완료될 때까지 기다림 (캐시 무효화 포함)
+      await updateParticipantColorsMutation.mutateAsync({
+        workspaceId,
+        participantColors,
+      });
     } catch (error) {
-      console.error("Failed to update user color:", error);
+      console.error("❌ [Color Update] Failed:", error);
+      Alert.alert("오류", "색상 업데이트에 실패했습니다.");
     }
   };
 
-  // Initialize profile name when users change
+  const handleOpenImagePicker = () => {
+    imagePickerBottomSheetRef.current?.expand();
+  };
+
+  const handleImagePickerOption = async (option: "camera" | "gallery") => {
+    imagePickerBottomSheetRef.current?.close();
+
+    try {
+      let result: ImagePicker.ImagePickerResult;
+
+      if (option === "camera") {
+        // 카메라 권한 요청
+        const cameraPermission =
+          await ImagePicker.requestCameraPermissionsAsync();
+        if (!cameraPermission.granted) {
+          Alert.alert("권한 필요", "카메라 권한이 필요합니다.");
+          return;
+        }
+
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: "images",
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      } else {
+        // 갤러리 권한 요청
+        const mediaPermission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!mediaPermission.granted) {
+          Alert.alert("권한 필요", "갤러리 접근 권한이 필요합니다.");
+          return;
+        }
+
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: "images",
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        await uploadAndUpdateAvatar(imageUri);
+      }
+    } catch (error) {
+      console.error("Image picker error:", error);
+      Alert.alert("오류", "이미지를 선택하는 중 오류가 발생했습니다.");
+    }
+  };
+
+  const uploadAndUpdateAvatar = async (imageUri: string) => {
+    if (!currentUser) return;
+
+    setIsUploadingImage(true);
+    try {
+      // 1. 이미지 업로드
+      const avatarUrl = await apiService.uploadProfileImage(imageUri);
+
+      // 2. 사용자 프로필 업데이트
+      await onUpdateUser(currentUser.id, { avatarUrl });
+
+      Alert.alert("성공", "프로필 사진이 업데이트되었습니다.");
+    } catch (error) {
+      console.error("Failed to upload avatar:", error);
+      Alert.alert("오류", "프로필 사진 업로드에 실패했습니다.");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Initialize profile name when currentUser changes
   useEffect(() => {
-    if (users.length > 0) {
+    if (currentUser) {
+      setProfileName(currentUser.name);
+    } else if (users.length > 0) {
       setProfileName(users[0].name);
     }
-  }, [users]);
+  }, [currentUser, users]);
 
   const getColorCode = (colorName: string) => {
     const colorMap: { [key: string]: string } = {
       red: "#ef4444",
-      orange: "#f97316",
+      orange: "#fb923c",
       amber: "#f59e0b",
       yellow: "#eab308",
       lime: "#84cc16",
       green: "#22c55e",
-      emerald: "#10b981",
+      emerald: "#34d399",
       teal: "#14b8a6",
       cyan: "#06b6d4",
-      blue: "#3b82f6",
+      blue: "#60a5fa",
       indigo: "#6366f1",
-      violet: "#8b5cf6",
+      violet: "#a78bfa",
       purple: "#a855f7",
       fuchsia: "#d946ef",
       pink: "#ec4899",
       rose: "#f43f5e",
+      gray: "#9ca3af",
     };
-    return colorMap[colorName] || "#6b7280";
+    return colorMap[colorName] || colorMap["gray"];
   };
 
   const renderMainPage = () => (
@@ -130,28 +246,28 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
         <SettingsItem
           icon="person"
           label="프로필 편집"
-          onPress={() => setPage("account")}
+          onPress={() => setSettingsPage("account")}
         />
         <SettingsItem
           icon="local-offer"
           label="태그 설정"
-          onPress={() => setPage("tags")}
+          onPress={() => setSettingsPage("tags")}
         />
         <SettingsItem
           icon="notifications"
           label="알림 설정"
-          onPress={() => setPage("notifications")}
+          onPress={() => setSettingsPage("notifications")}
         />
         <SettingsItem
           icon="security"
           label="개인정보처리방침"
-          onPress={() => setPage("privacy")}
+          onPress={() => setSettingsPage("privacy")}
           isLast={true}
         />
       </View>
 
       <View style={styles.card}>
-        <Pressable style={styles.logoutButton}>
+        <Pressable style={styles.logoutButton} onPress={onLogout}>
           <MaterialIcons name="logout" size={24} color="#dc2626" />
           <Text style={styles.logoutText}>로그아웃</Text>
         </Pressable>
@@ -162,7 +278,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
   const renderSubPage = (title: string, children: React.ReactNode) => (
     <View style={styles.profileEditContainer}>
       <View style={styles.profileHeader}>
-        <TouchableOpacity onPress={() => setPage("main")}>
+        <TouchableOpacity onPress={() => setSettingsPage("main")}>
           <MaterialIcons name="close" size={28} color="#374151" />
         </TouchableOpacity>
         <Text style={styles.profileHeaderTitle}>{title}</Text>
@@ -176,13 +292,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
   );
 
   const renderAccountPage = () => {
-    const currentUser = users[0];
+    const user = currentUser || users[0];
 
     const handleSaveProfile = async () => {
-      if (currentUser) {
+      if (user) {
         try {
-          await onUpdateUser(currentUser.id, { name: profileName });
-          setPage("main");
+          await onUpdateUser(user.id, { name: profileName });
+          setSettingsPage("main");
         } catch (error) {
           console.error("Failed to update profile:", error);
         }
@@ -192,7 +308,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
     return (
       <View style={styles.profileEditContainer}>
         <View style={styles.profileHeader}>
-          <TouchableOpacity onPress={() => setPage("main")}>
+          <TouchableOpacity onPress={() => setSettingsPage("main")}>
             <MaterialIcons name="close" size={28} color="#374151" />
           </TouchableOpacity>
           <Text style={styles.profileHeaderTitle}>프로필 편집</Text>
@@ -204,12 +320,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
         >
           {/* Profile Picture */}
           <View style={styles.profilePictureSection}>
-            <TouchableOpacity onPress={() => setShowImagePicker(true)}>
+            <TouchableOpacity
+              onPress={handleOpenImagePicker}
+              disabled={isUploadingImage}
+            >
               <View style={styles.profilePicturePlaceholder}>
-                <Image
-                  source={{ uri: currentUser?.avatarUrl }}
-                  style={styles.profilePicture}
-                />
+                {isUploadingImage ? (
+                  <ActivityIndicator size="large" color="#007AFF" />
+                ) : (
+                  <>
+                    <Image
+                      source={{ uri: user?.avatarUrl }}
+                      style={styles.profilePicture}
+                    />
+                    <View style={styles.cameraIconOverlay}>
+                      <MaterialIcons name="camera-alt" size={24} color="#fff" />
+                    </View>
+                  </>
+                )}
               </View>
             </TouchableOpacity>
           </View>
@@ -272,7 +400,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
               <Switch
                 value={showInCalendar}
                 onValueChange={setShowInCalendar}
-                trackColor={{ false: "#d1d5db", true: "#10b981" }}
+                trackColor={{ false: "#d1d5db", true: "#007AFF" }}
                 thumbColor="#fff"
               />
             </View>
@@ -299,7 +427,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
   };
 
   const renderPage = () => {
-    switch (page) {
+    switch (settingsPage) {
       case "main":
         return renderMainPage();
       case "account":
@@ -318,8 +446,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
                   style={[
                     styles.colorRowPressable,
                     index === users.length - 1 && { borderBottomWidth: 0 },
+                    isUpdatingColors && styles.disabledPressable,
                   ]}
-                  onPress={() => handleOpenColorPicker(user.id)}
+                  onPress={() =>
+                    !isUpdatingColors && handleOpenColorPicker(user.id)
+                  }
+                  disabled={isUpdatingColors}
                 >
                   <View style={styles.userInfo}>
                     <Image
@@ -349,14 +481,66 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
         );
       case "notifications":
         return renderSubPage(
-          "알림 설정",
+          "알림 및 위치 설정",
           <View style={styles.formSection}>
             <View style={styles.toggleContainer}>
-              <Text style={styles.toggleLabel}>일정 알림</Text>
+              <Text style={styles.toggleLabel}>푸시 알림</Text>
               <Switch
                 value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: "#d1d5db", true: "#10b981" }}
+                onValueChange={async (value) => {
+                  setNotificationsEnabled(value);
+                  try {
+                    await updateNotificationsMutation.mutateAsync(value);
+                  } catch (error) {
+                    console.error("Failed to update notifications:", error);
+                    // 실패 시 원래 값으로 되돌림
+                    setNotificationsEnabled(!value);
+                    Alert.alert("오류", "알림 설정 업데이트에 실패했습니다.");
+                  }
+                }}
+                trackColor={{ false: "#d1d5db", true: "#007AFF" }}
+                thumbColor="#fff"
+                disabled={updateNotificationsMutation.isPending}
+              />
+            </View>
+
+            <View style={styles.toggleContainer}>
+              <View style={styles.toggleLabelContainer}>
+                <Text style={styles.toggleLabel}>위치 공유</Text>
+                <Text style={styles.toggleDescription}>
+                  실시간으로 워크스페이스 멤버들과 위치 공유
+                </Text>
+              </View>
+              <Switch
+                value={locationSharingEnabled}
+                onValueChange={async (value) => {
+                  setLocationSharingEnabled(value);
+                  try {
+                    if (value) {
+                      // 위치 공유 시작
+                      const success =
+                        await locationTrackingService.startForegroundTracking(
+                          workspaceId,
+                          30000 // 30초마다 업데이트
+                        );
+                      if (!success) {
+                        setLocationSharingEnabled(false);
+                        Alert.alert(
+                          "위치 권한 필요",
+                          "위치 공유를 사용하려면 위치 권한이 필요합니다. 설정에서 권한을 허용해주세요."
+                        );
+                      }
+                    } else {
+                      // 위치 공유 중지
+                      await locationTrackingService.stopTracking();
+                    }
+                  } catch (error) {
+                    console.error("Failed to toggle location sharing:", error);
+                    setLocationSharingEnabled(!value);
+                    Alert.alert("오류", "위치 공유 설정에 실패했습니다.");
+                  }
+                }}
+                trackColor={{ false: "#d1d5db", true: "#007AFF" }}
                 thumbColor="#fff"
               />
             </View>
@@ -382,6 +566,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
         {/* <Text style={styles.title}>Settings</Text> */}
         {renderPage()}
       </ScrollView>
+
+      {/* Loading Overlay - 기존 UI 위에 회색 반투명 레이어 */}
+      {isUpdatingColors && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      )}
 
       {/* Color Picker Bottom Sheet */}
       <BottomSheet
@@ -422,13 +613,50 @@ const SettingsView: React.FC<SettingsViewProps> = ({ users, onUpdateUser }) => {
                 {selectedUserId &&
                 users.find((u) => u.id === selectedUserId)?.color ===
                   colorOption.name ? (
-                  <MaterialIcons name="check" size={24} color="#10b981" />
+                  <MaterialIcons name="check" size={24} color="#007AFF" />
                 ) : (
                   <MaterialIcons name="check" size={24} color="transparent" />
                 )}
               </Pressable>
             ))}
           </ScrollView>
+        </BottomSheetView>
+      </BottomSheet>
+
+      {/* Image Picker Bottom Sheet */}
+      <BottomSheet
+        ref={imagePickerBottomSheetRef}
+        index={-1}
+        snapPoints={imagePickerSnapPoints}
+        enablePanDownToClose={true}
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={styles.bottomSheetHandle}
+      >
+        <BottomSheetView style={styles.bottomSheetContent}>
+          <View style={styles.bottomSheetHeader}>
+            <Text style={styles.bottomSheetTitle}>프로필 사진 변경</Text>
+          </View>
+          <View
+            style={[
+              styles.imagePickerOptions,
+              { paddingBottom: insets.bottom + 20 },
+            ]}
+          >
+            <Pressable
+              style={styles.imagePickerOption}
+              onPress={() => handleImagePickerOption("camera")}
+            >
+              <MaterialIcons name="camera-alt" size={24} color="#374151" />
+              <Text style={styles.imagePickerOptionText}>카메라로 촬영</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.imagePickerOption, { borderBottomWidth: 0 }]}
+              onPress={() => handleImagePickerOption("gallery")}
+            >
+              <MaterialIcons name="photo-library" size={24} color="#374151" />
+              <Text style={styles.imagePickerOptionText}>갤러리에서 선택</Text>
+            </Pressable>
+          </View>
         </BottomSheetView>
       </BottomSheet>
 
@@ -499,6 +727,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(128, 128, 128, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999,
   },
   title: {
     fontSize: 24,
@@ -620,7 +859,7 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   selectedColor: {
-    borderColor: "#3b82f6",
+    borderColor: "#007AFF",
   },
   toggleRow: {
     flexDirection: "row",
@@ -640,6 +879,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
+  },
+  disabledPressable: {
+    opacity: 0.5,
   },
   colorDisplay: {
     flexDirection: "row",
@@ -734,6 +976,19 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
   },
+  cameraIconOverlay: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#007AFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
   editPictureButton: {
     backgroundColor: "#f3f4f6",
     paddingHorizontal: 16,
@@ -744,6 +999,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: "#374151",
+  },
+  imagePickerOptions: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  imagePickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  imagePickerOptionText: {
+    fontSize: 16,
+    color: "#374151",
+    marginLeft: 12,
   },
   formSection: {
     paddingHorizontal: 20,
@@ -805,16 +1076,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 4,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  toggleLabelContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleDescription: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 4,
   },
   saveButtonContainer: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#007AFF",
     paddingVertical: 18,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
-    shadowColor: "#10b981",
+    shadowColor: "#007AFF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -858,7 +1140,7 @@ const styles = StyleSheet.create({
   modalConfirmButton: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#10b981",
+    color: "#007AFF",
   },
 });
 

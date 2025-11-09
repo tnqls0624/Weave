@@ -1,16 +1,159 @@
-import { CALENDARS, EVENTS, USERS } from "../constants";
-import { Calendar, Event, User } from "../types";
+import axios, {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+  isAxiosError,
+} from "axios";
+import { Calendar, Schedule, User } from "../types";
 
 // API Base Configuration
-const API_BASE_URL = "https://api.weave.com"; // 실제 API 엔드포인트로 변경
-const USE_MOCK_DATA = true; // 실제 API가 준비될 때까지 mock 데이터 사용
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8080";
+
+// 백엔드 응답 타입
+interface ApiResponse<T> {
+  code: number;
+  data: T;
+  message: string;
+}
+
+interface SocialLoginRequest {
+  provider: "google" | "apple" | "kakao";
+  token: string;
+}
+
+interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+}
+
+interface WorkspaceScheduleParams {
+  year?: number;
+  month?: number;
+  week?: number;
+  day?: number;
+}
+
+// Hex 코드를 색상 이름으로 변환하는 헬퍼 함수
+export const hexToColorName = (hex: string): string => {
+  if (!hex || !hex.startsWith("#")) {
+    return hex;
+  }
+
+  const colorMap: { [key: string]: string } = {
+    "#EF4444": "red",
+    "#FB923C": "orange",
+    "#F59E0B": "amber",
+    "#EAB308": "yellow",
+    "#84CC16": "lime",
+    "#22C55E": "green",
+    "#34D399": "emerald",
+    "#14B8A6": "teal",
+    "#06B6D4": "cyan",
+    "#60A5FA": "blue",
+    "#6366F1": "indigo",
+    "#A78BFA": "violet",
+    "#A855F7": "purple",
+    "#D946EF": "fuchsia",
+    "#EC4899": "pink",
+    "#F43F5E": "rose",
+    "#9CA3AF": "gray",
+  };
+  const upperHex = hex.toUpperCase();
+  const result = colorMap[upperHex] || hex;
+
+  return result;
+};
 
 class ApiService {
   private static instance: ApiService;
-  private baseURL: string;
+  private axiosInstance: AxiosInstance;
+  private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private isRefreshing: boolean = false;
+  private failedQueue: {
+    resolve: (value?: any) => void;
+    reject: (error?: any) => void;
+  }[] = [];
 
   private constructor() {
-    this.baseURL = API_BASE_URL;
+    // Axios 인스턴스 생성
+    this.axiosInstance = axios.create({
+      baseURL: API_BASE_URL,
+      timeout: 30000,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    // Request Interceptor: 모든 요청에 토큰 추가
+    this.axiosInstance.interceptors.request.use(
+      (config: InternalAxiosRequestConfig) => {
+        if (this.accessToken && config.headers) {
+          config.headers.Authorization = `Bearer ${this.accessToken}`;
+        } else {
+          console.warn(
+            `⚠️ [API Request] ${config.method?.toUpperCase()} ${
+              config.url
+            } - No token available`
+          );
+        }
+        return config;
+      },
+      (error) => {
+        return Promise.reject(error);
+      }
+    );
+
+    // Response Interceptor: 401 에러 시 토큰 갱신
+    this.axiosInstance.interceptors.response.use(
+      (response: AxiosResponse) => {
+        return response;
+      },
+      async (error) => {
+        const originalRequest = error.config;
+
+        // 401 에러이고, 재시도하지 않은 요청인 경우
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          if (this.isRefreshing) {
+            // 이미 토큰 갱신 중이면 대기열에 추가
+            return new Promise((resolve, reject) => {
+              this.failedQueue.push({ resolve, reject });
+            })
+              .then(() => {
+                return this.axiosInstance(originalRequest);
+              })
+              .catch((err) => {
+                return Promise.reject(err);
+              });
+          }
+
+          originalRequest._retry = true;
+          this.isRefreshing = true;
+
+          try {
+            const refreshed = await this.refreshAccessToken();
+            if (refreshed) {
+              // 대기 중인 요청들 재시도
+              this.failedQueue.forEach((promise) => promise.resolve());
+              this.failedQueue = [];
+              return this.axiosInstance(originalRequest);
+            }
+          } catch (refreshError) {
+            // 토큰 갱신 실패 시 대기 중인 요청들 모두 실패 처리
+            this.failedQueue.forEach((promise) => promise.reject(refreshError));
+            this.failedQueue = [];
+            return Promise.reject(refreshError);
+          } finally {
+            this.isRefreshing = false;
+          }
+        }
+
+        return Promise.reject(error);
+      }
+    );
   }
 
   public static getInstance(): ApiService {
@@ -20,148 +163,415 @@ class ApiService {
     return ApiService.instance;
   }
 
+  // 토큰 설정
+  setTokens(accessToken: string, refreshToken: string) {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken;
+  }
+
+  // 토큰 제거
+  clearTokens() {
+    this.accessToken = null;
+    this.refreshToken = null;
+  }
+
+  // Private request wrapper
   private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
+    config: AxiosRequestConfig,
+    requiresAuth: boolean = true
   ): Promise<T> {
-    // Mock 데이터 사용 모드
-    if (USE_MOCK_DATA) {
-      return this.getMockData<T>(endpoint, options);
-    }
-
-    const url = `${this.baseURL}${endpoint}`;
-
-    const config: RequestInit = {
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-      ...options,
-    };
-
     try {
-      const response = await fetch(url, config);
+      const response = await this.axiosInstance.request<ApiResponse<T>>(config);
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      // 백엔드 응답 구조: { code, data, message }
+      const apiResponse = response.data;
+
+      // code가 0이 아니면 에러로 처리
+      if (apiResponse.code !== 0) {
+        throw new Error(apiResponse.message || "API request failed");
       }
 
-      return await response.json();
+      // 실제 데이터 반환
+      return apiResponse.data;
     } catch (error) {
-      console.error("API Request failed:", error);
+      if (isAxiosError(error)) {
+        const errorInfo = {
+          url: error.config?.url,
+          method: error.config?.method,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          message: error.message,
+          data: error.response?.data,
+        };
+
+        console.error("❌ [API Request failed]:", errorInfo);
+
+        // 403: 토큰 만료 또는 권한 없음
+        if (error.response?.status === 403) {
+          console.warn("⚠️ Access forbidden. Token may be expired or invalid.");
+          // 인증 실패 시 토큰 초기화
+          this.clearTokens();
+        }
+
+        // 서버 응답 에러 메시지 추출
+        const serverMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.response?.statusText;
+
+        throw new Error(
+          serverMessage || error.message || "Network request failed"
+        );
+      }
+      console.error("❌ [API Request failed]:", error);
       throw error;
     }
   }
 
-  // Mock 데이터 반환 (실제 API가 준비될 때까지 사용)
-  private async getMockData<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    // 네트워크 딜레이 시뮬레이션
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  // ==================== Auth API ====================
+  async socialLogin(data: SocialLoginRequest): Promise<AuthResponse> {
+    return this.request<AuthResponse>({
+      url: "/api/auth/social-login",
+      method: "POST",
+      data,
+    });
+  }
 
-    const method = options.method || "GET";
+  async refreshAccessToken(): Promise<boolean> {
+    try {
+      if (!this.refreshToken) return false;
 
-    if (endpoint.includes("/events")) {
-      if (method === "GET") {
-        // 쿼리 파라미터에서 calendarId 추출
-        const url = new URL(`http://dummy${endpoint}`);
-        const calendarId = url.searchParams.get("calendarId");
-        const filteredEvents = calendarId
-          ? EVENTS.filter((event) => event.calendarId === calendarId)
-          : EVENTS;
-        return filteredEvents as T;
-      } else if (method === "POST") {
-        // 새 이벤트 생성 시뮬레이션
-        const newEvent = options.body ? JSON.parse(options.body as string) : {};
-        const createdEvent = {
-          ...newEvent,
-          id: `event_${Date.now()}`,
-          createdAt: new Date().toISOString(),
-        };
-        return createdEvent as T;
-      }
-    } else if (endpoint.includes("/users")) {
-      if (method === "GET") {
-        return USERS as T;
-      } else if (method === "PUT") {
-        // 사용자 업데이트 시뮬레이션
-        const updateData = options.body
-          ? JSON.parse(options.body as string)
-          : {};
-        const userId = endpoint.split("/").pop();
-        const updatedUser = USERS.find((u) => u.id === userId);
-        if (updatedUser) {
-          return { ...updatedUser, ...updateData } as T;
+      const response = await this.axiosInstance.post<{ accessToken: string }>(
+        "/api/auth/refresh",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${this.refreshToken}`,
+          },
         }
+      );
+
+      this.accessToken = response.data.accessToken;
+      return true;
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      this.clearTokens();
+      return false;
+    }
+  }
+
+  // ==================== User API ====================
+  async getMyProfile(): Promise<User> {
+    return this.request<User>({
+      url: "/api/user/me",
+      method: "GET",
+    });
+  }
+
+  async updateUser(userId: string, userData: Partial<User>): Promise<User> {
+    return this.request<User>({
+      url: "/api/user/me",
+      method: "PUT",
+      data: userData,
+    });
+  }
+
+  async uploadProfileImage(imageUri: string): Promise<string> {
+    try {
+      const formData = new FormData();
+
+      // 이미지 파일 정보 추출
+      const filename = imageUri.split("/").pop() || "photo.jpg";
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : "image/jpeg";
+
+      // FormData에 이미지 추가
+      formData.append("file", {
+        uri: imageUri,
+        name: filename,
+        type: type,
+      } as any);
+
+      const response = await this.axiosInstance.post<
+        ApiResponse<{ url: string }>
+      >("/api/photo", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          ...(this.accessToken && {
+            Authorization: `Bearer ${this.accessToken}`,
+          }),
+        },
+      });
+
+      if (response.data.code !== 0) {
+        throw new Error(response.data.message || "Image upload failed");
       }
-    } else if (endpoint.includes("/calendars")) {
-      return CALENDARS as T;
+
+      return response.data.data.url;
+    } catch (error) {
+      console.error("❌ [Upload Profile Image] Failed:", error);
+      throw error;
+    }
+  }
+
+  // ==================== Schedule API ====================
+  async getSchedule(scheduleId: string): Promise<Schedule> {
+    const schedule = await this.request<any>({
+      url: `/api/schedule/${scheduleId}`,
+      method: "GET",
+    });
+    return this.transformScheduleFromServer(schedule);
+  }
+
+  async createSchedule(scheduleData: Omit<Schedule, "id">): Promise<Schedule> {
+    // 서버가 원하는 형식으로 데이터 변환
+    const transformedData: any = {
+      workspace: scheduleData.workspace, // 필수
+      title: scheduleData.title,
+      memo: scheduleData.memo || "",
+      participants: scheduleData.participants,
+      repeatType: scheduleData.repeatType || "none",
+      calendarType: scheduleData.calendarType || "solar",
+    };
+
+    // startDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
+    if (scheduleData.startDate) {
+      if (scheduleData.startTime) {
+        transformedData.startDate = `${scheduleData.startDate} ${scheduleData.startTime}:00`;
+      } else {
+        transformedData.startDate = `${scheduleData.startDate} 00:00:00`;
+      }
     }
 
-    // 기본적으로 빈 배열 반환
-    return [] as T;
-  }
+    // endDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
+    if (scheduleData.endDate) {
+      if (scheduleData.endTime) {
+        transformedData.endDate = `${scheduleData.endDate} ${scheduleData.endTime}:00`;
+      } else {
+        transformedData.endDate = `${scheduleData.endDate} 23:59:59`;
+      }
+    }
 
-  // Events API
-  async getEvents(calendarId?: string): Promise<Event[]> {
-    const endpoint = calendarId
-      ? `/events?calendarId=${calendarId}`
-      : "/events";
-    return this.request(endpoint);
-  }
-
-  async getEvent(eventId: string): Promise<Event> {
-    return this.request(`/events/${eventId}`);
-  }
-
-  async createEvent(eventData: Omit<Event, "id">): Promise<Event> {
-    return this.request("/events", {
+    const createdSchedule = await this.request<any>({
+      url: "/api/schedule",
       method: "POST",
-      body: JSON.stringify(eventData),
+      data: transformedData,
     });
+
+    return this.transformScheduleFromServer(createdSchedule);
   }
 
-  async updateEvent(
-    eventId: string,
-    eventData: Partial<Event>
-  ): Promise<Event> {
-    return this.request(`/events/${eventId}`, {
+  async updateSchedule(
+    scheduleId: string,
+    scheduleData: Partial<Schedule>
+  ): Promise<Schedule> {
+    // 서버가 원하는 형식으로 데이터 변환
+    const transformedData: any = {};
+
+    if (scheduleData.workspace)
+      transformedData.workspace = scheduleData.workspace;
+    if (scheduleData.title) transformedData.title = scheduleData.title;
+    if (scheduleData.memo !== undefined)
+      transformedData.memo = scheduleData.memo;
+    if (scheduleData.participants)
+      transformedData.participants = scheduleData.participants;
+    if (scheduleData.repeatType !== undefined)
+      transformedData.repeatType = scheduleData.repeatType;
+    if (scheduleData.calendarType)
+      transformedData.calendarType = scheduleData.calendarType;
+
+    // startDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
+    if (scheduleData.startDate) {
+      if (scheduleData.startTime) {
+        transformedData.startDate = `${scheduleData.startDate} ${scheduleData.startTime}:00`;
+      } else {
+        transformedData.startDate = `${scheduleData.startDate} 00:00:00`;
+      }
+    }
+
+    // endDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
+    if (scheduleData.endDate) {
+      if (scheduleData.endTime) {
+        transformedData.endDate = `${scheduleData.endDate} ${scheduleData.endTime}:00`;
+      } else {
+        transformedData.endDate = `${scheduleData.endDate} 23:59:59`;
+      }
+    }
+
+    const updatedSchedule = await this.request<any>({
+      url: `/api/schedule/${scheduleId}`,
       method: "PUT",
-      body: JSON.stringify(eventData),
+      data: transformedData,
     });
+
+    return this.transformScheduleFromServer(updatedSchedule);
   }
 
-  async deleteEvent(eventId: string): Promise<void> {
-    return this.request(`/events/${eventId}`, {
+  async deleteSchedule(scheduleId: string): Promise<void> {
+    return this.request<void>({
+      url: `/api/schedule/${scheduleId}`,
       method: "DELETE",
     });
   }
 
-  // Users API
-  async getUsers(): Promise<User[]> {
-    return this.request("/users");
+  // ==================== Workspace API ====================
+  async getMyWorkspaces(): Promise<Calendar[]> {
+    const workspaces = await this.request<Calendar[]>({
+      url: "/api/workspace",
+      method: "GET",
+    });
+
+    return workspaces;
   }
 
-  async getUser(userId: string): Promise<User> {
-    return this.request(`/users/${userId}`);
+  async getWorkspace(workspaceId: string): Promise<Calendar> {
+    const workspace = await this.request<Calendar>({
+      url: `/api/workspace/${workspaceId}`,
+      method: "GET",
+    });
+
+    console.log(
+      "🏢 [Workspace Detail] Response:",
+      JSON.stringify(workspace, null, 2)
+    );
+
+    return workspace;
   }
 
-  async updateUser(userId: string, userData: Partial<User>): Promise<User> {
-    return this.request(`/users/${userId}`, {
+  async getWorkspaceSchedules(
+    workspaceId: string,
+    params?: WorkspaceScheduleParams
+  ): Promise<Schedule[]> {
+    const response = await this.request<any>({
+      url: `/api/workspace/${workspaceId}/schedule/`,
+      method: "GET",
+      params,
+    });
+
+    // 응답에서 schedules 배열 추출
+    const schedules = response.schedules || [];
+
+    // 서버 응답 데이터를 클라이언트 형식으로 변환
+    return schedules.map((schedule: any) =>
+      this.transformScheduleFromServer(schedule)
+    );
+  }
+
+  async getWorkspaceScheduleFeed(workspaceId: string): Promise<Schedule[]> {
+    const response = await this.request<any>({
+      url: `/api/workspace/${workspaceId}/schedule/feed`,
+      method: "GET",
+    });
+
+    const schedules =
+      Array.isArray(response?.schedules) || Array.isArray(response)
+        ? response.schedules ?? response
+        : [];
+
+    return (schedules as any[]).map((schedule) =>
+      this.transformScheduleFromServer(schedule)
+    );
+  }
+
+  async updateParticipantColors(
+    workspaceId: string,
+    participantColors: Record<string, string>
+  ): Promise<void> {
+    return this.request<void>({
+      url: `/api/workspace/${workspaceId}/participant-colors`,
       method: "PUT",
-      body: JSON.stringify(userData),
+      data: { participantColors },
     });
   }
 
-  // Calendars API
-  async getCalendars(): Promise<Calendar[]> {
-    return this.request("/calendars");
+  // 알림 설정 업데이트
+  async updateNotifications(pushEnabled: boolean): Promise<User> {
+    return this.request<User>({
+      url: "/api/user/notifications",
+      method: "PUT",
+      data: { pushEnabled },
+    });
   }
 
-  async getCalendar(calendarId: string): Promise<Calendar> {
-    return this.request(`/calendars/${calendarId}`);
+  // 서버 응답에서 추출한 사용자 정보를 저장 (외부에서 접근 가능)
+  private cachedUsers = new Map<string, User>();
+
+  getCachedUsers(): User[] {
+    return Array.from(this.cachedUsers.values());
+  }
+
+  // 서버 데이터를 클라이언트 형식으로 변환하는 헬퍼 메서드
+  private transformScheduleFromServer(serverSchedule: any): Schedule {
+    // "2025-01-10 13:00:00" -> { date: "2025-01-10", time: "13:00" }
+    const parseDateTime = (dateTimeStr: string) => {
+      if (!dateTimeStr) return { date: "", time: undefined };
+      const parts = dateTimeStr.split(" ");
+      if (parts.length === 2) {
+        const [date, timeWithSeconds] = parts;
+        const time = timeWithSeconds.substring(0, 5); // "13:00:00" -> "13:00"
+        return { date, time };
+      }
+      return { date: dateTimeStr, time: undefined };
+    };
+
+    const start = parseDateTime(serverSchedule.startDate);
+    const end = parseDateTime(serverSchedule.endDate);
+
+    // participants가 객체 배열이면 User 정보 캐싱 후 ID만 추출
+    const participants = serverSchedule.participants
+      ? serverSchedule.participants.map((p: any) => {
+          if (typeof p === "string") {
+            return p;
+          } else {
+            this.cachedUsers.set(p.id, {
+              id: p.id,
+              name: p.name,
+              avatarUrl: p.avatarUrl,
+              color: p.color,
+            });
+            return p.id;
+          }
+        })
+      : [];
+
+    return {
+      id: serverSchedule._id || serverSchedule.id,
+      workspace: serverSchedule.workspace,
+      title: serverSchedule.title,
+      memo: serverSchedule.memo,
+      startDate: start.date,
+      startTime: start.time,
+      endDate: end.date,
+      endTime: end.time,
+      participants,
+      repeatType:
+        serverSchedule.repeatType?.toLowerCase() || serverSchedule.repeatType,
+      calendarType:
+        serverSchedule.calendarType?.toLowerCase() ||
+        serverSchedule.calendarType,
+      isHoliday: serverSchedule.isHoliday,
+    };
+  }
+
+  // ==================== Location API ====================
+  // 워크스페이스 멤버들의 위치 정보 가져오기
+  async getWorkspaceUserLocations(workspaceId: string): Promise<User[]> {
+    return this.request<User[]>({
+      url: `/api/workspace/${workspaceId}/locations`,
+      method: "GET",
+    });
+  }
+
+  // 현재 사용자 위치 업데이트
+  async updateMyLocation(location: {
+    latitude: number;
+    longitude: number;
+  }): Promise<void> {
+    return this.request<void>({
+      url: "/api/user/me/location",
+      method: "PUT",
+      data: location,
+    });
   }
 }
 
