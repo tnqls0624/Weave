@@ -7,19 +7,27 @@ import RSocketWebSocketClient from "rsocket-websocket-client";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const EXPLICIT_RSOCKET_URL = process.env.EXPO_PUBLIC_RSOCKET_URL;
+const RSOCKET_PATH = process.env.EXPO_PUBLIC_RSOCKET_PATH || "/rsocket";
 
-// HTTP URL을 WebSocket URL로 변환 (RSocket은 7070 포트 사용)
-const getWebSocketUrl = (baseUrl: string): string => {
-  // HTTP URL에서 호스트 추출
+const buildWebSocketUrl = (baseUrl: string): string => {
   const url = new URL(baseUrl);
   const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const portSegment = url.port ? `:${url.port}` : "";
+  const normalizedPath = RSOCKET_PATH.startsWith("/")
+    ? RSOCKET_PATH
+    : `/${RSOCKET_PATH}`;
+  return `${protocol}//${url.hostname}${portSegment}${normalizedPath}`;
+};
 
-  // RSocket은 7070 포트 사용
-  return `${protocol}//${url.hostname}:7070/rsocket`;
+const resolveRSocketUrl = (override?: string): string => {
+  if (override) return override;
+  if (EXPLICIT_RSOCKET_URL) return EXPLICIT_RSOCKET_URL;
+  return buildWebSocketUrl(API_BASE_URL);
 };
 
 class LocationRSocketService {
-  private client: RSocketClient | null = null;
+  private client: RSocketClient<any, any> | null = null;
   private rsocket: any = null;
   private isConnecting: boolean = false;
 
@@ -44,7 +52,7 @@ class LocationRSocketService {
     this.isConnecting = true;
 
     try {
-      const wsUrl = serverUrl || getWebSocketUrl(API_BASE_URL);
+      const wsUrl = resolveRSocketUrl(serverUrl);
 
       this.client = new RSocketClient({
         serializers: {
@@ -69,10 +77,10 @@ class LocationRSocketService {
       console.error("❌ RSocket connection failed:", error);
       console.error(
         "💡 Hint: Check if server is running at:",
-        getWebSocketUrl(API_BASE_URL)
+        resolveRSocketUrl()
       );
       console.error(
-        "💡 Hint: Server should have RSocket endpoint at port 7070 with path /rsocket"
+        "💡 Hint: Server should expose an RSocket WebSocket endpoint (default: /rsocket)"
       );
       this.rsocket = null;
       throw error;

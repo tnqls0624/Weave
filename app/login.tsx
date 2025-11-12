@@ -51,8 +51,6 @@ export default function LoginScreen() {
         accessToken: kakaoAccessToken,
       });
 
-      console.log("authResponse:::::::", authResponse);
-
       setTokens(authResponse.accessToken, authResponse.refreshToken);
       apiService.setTokens(authResponse.accessToken, authResponse.refreshToken);
 

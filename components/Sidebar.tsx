@@ -1,5 +1,5 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import {
   Image,
   Pressable,
@@ -32,6 +32,12 @@ const SidebarComponent: React.FC<SidebarProps> = ({
   children,
 }) => {
   const insets = useSafeAreaInsets();
+  const activeCalendarTitle = useMemo(() => {
+    const activeCalendar = calendars.find(
+      (calendar) => calendar.id === activeCalendarId
+    );
+    return activeCalendar?.title || "워크스페이스";
+  }, [calendars, activeCalendarId]);
 
   const renderDrawerContent = () => (
     <View
@@ -49,7 +55,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
           />
           <View>
             <Text style={styles.userName}>{currentUser.name}</Text>
-            <Text style={styles.subtitle}>My Calendars</Text>
+            <Text style={styles.subtitle}>{activeCalendarTitle}</Text>
           </View>
         </View>
         <Pressable onPress={onClose} style={styles.closeButton}>
@@ -82,7 +88,7 @@ const SidebarComponent: React.FC<SidebarProps> = ({
                     isActive && styles.activeCalendarText,
                   ]}
                 >
-                  {calendar.name || "Unnamed Calendar"}
+                  {calendar.title || "Unnamed Calendar"}
                 </Text>
               </Pressable>
             );

@@ -15,14 +15,19 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["weave-app"]
+            "CFBundleURLSchemes": [
+              "weave-app"
+            ]
           }
         ],
         "NSLocationAlwaysUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "NSLocationWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "CFBundleIconName": "AppIcon",
-        "UIBackgroundModes": ["remote-notification", "location"],
+        "UIBackgroundModes": [
+          "remote-notification",
+          "location"
+        ],
         "NSCameraUsageDescription": "카메라 접근 권한이 필요합니다",
         "NSPhotoLibraryUsageDescription": "사진 접근 권한이 필요합니다",
         "NSPhotoLibraryAddUsageDescription": "사진 저장 권한이 필요합니다"
@@ -31,15 +36,18 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/weave_logo.jpeg",
+        "backgroundImage": "./assets/images/weave_logo.jpeg",
+        "monochromeImage": "./assets/images/weave_logo.jpeg"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.anonymous.Weave"
     },
@@ -130,6 +138,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "dc1b0323-1a30-4a68-9c64-246f9fa929b1"
+      }
     }
   }
 }

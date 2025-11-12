@@ -10,6 +10,7 @@ export interface Location {
 export interface User {
   id: string;
   name: string;
+  birthday: string;
   avatarUrl: string;
   color: string;
   initialLocation?: Location;
@@ -19,7 +20,7 @@ export interface User {
 
 export interface Calendar {
   id: string;
-  name?: string;
+  title?: string;
   master: string; // 마스터 사용자 ID
   users: string[]; // 워크스페이스 참여자 ID 배열
   participantColors?: Record<string, string>; // userId -> hex color code

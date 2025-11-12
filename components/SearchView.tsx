@@ -10,20 +10,20 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { Event } from "../types";
+import type { Schedule } from "../types";
 
 interface SearchViewProps {
   isOpen: boolean;
   onClose: () => void;
-  events: Event[];
-  onEventSelect: (event: Event) => void;
+  events: Schedule[];
+  onScheduleSelect: (schedule: Schedule) => void;
 }
 
 const SearchView: React.FC<SearchViewProps> = ({
   isOpen,
   onClose,
   events,
-  onEventSelect,
+  onScheduleSelect,
 }) => {
   const [query, setQuery] = useState("");
   const insets = useSafeAreaInsets();
@@ -53,19 +53,19 @@ const SearchView: React.FC<SearchViewProps> = ({
       });
   }, [query, events]);
 
-  const handleSelect = (event: Event) => {
-    onEventSelect(event);
+  const handleSelect = (schedule: Schedule) => {
+    onScheduleSelect(schedule);
     onClose();
   };
 
-  const formatEventDate = (event: Event) => {
-    const date = new Date(`${event.startDate}T00:00:00`);
+  const formatEventDate = (schedule: Schedule) => {
+    const date = new Date(`${schedule.startDate}T00:00:00`);
     const datePart = date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       weekday: "short",
     });
-    return `${datePart} at ${event.startTime || "all day"}`;
+    return `${datePart} at ${schedule.startTime ?? "all day"}`;
   };
 
   if (!isOpen) {

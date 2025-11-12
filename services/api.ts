@@ -5,11 +5,11 @@ import axios, {
   InternalAxiosRequestConfig,
   isAxiosError,
 } from "axios";
+import dayjs from "dayjs";
 import { Calendar, Schedule, User } from "../types";
 
 // API Base Configuration
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 // 백엔드 응답 타입
 interface ApiResponse<T> {
@@ -182,7 +182,6 @@ class ApiService {
   ): Promise<T> {
     try {
       const response = await this.axiosInstance.request<ApiResponse<T>>(config);
-      console.log("response:::::::", response);
       // 백엔드 응답 구조: { code, data, message }
       const apiResponse = response.data;
 
@@ -504,14 +503,32 @@ class ApiService {
   private transformScheduleFromServer(serverSchedule: any): Schedule {
     // "2025-01-10 13:00:00" -> { date: "2025-01-10", time: "13:00" }
     const parseDateTime = (dateTimeStr: string) => {
-      if (!dateTimeStr) return { date: "", time: undefined };
-      const parts = dateTimeStr.split(" ");
+      if (!dateTimeStr) {
+        return { date: "", time: undefined };
+      }
+
+      const trimmed = dateTimeStr.trim();
+
+      // ISO 8601 또는 타임존 정보가 포함된 문자열 처리
+      if (trimmed.includes("T")) {
+        const parsed = dayjs(trimmed);
+        if (parsed.isValid()) {
+          const hasTimeComponent = /T\d{2}:\d{2}/.test(trimmed);
+          return {
+            date: parsed.format("YYYY-MM-DD"),
+            time: hasTimeComponent ? parsed.format("HH:mm") : undefined,
+          };
+        }
+      }
+
+      const parts = trimmed.split(" ");
       if (parts.length === 2) {
         const [date, timeWithSeconds] = parts;
         const time = timeWithSeconds.substring(0, 5); // "13:00:00" -> "13:00"
         return { date, time };
       }
-      return { date: dateTimeStr, time: undefined };
+
+      return { date: trimmed, time: undefined };
     };
 
     const start = parseDateTime(serverSchedule.startDate);
@@ -526,6 +543,7 @@ class ApiService {
             this.cachedUsers.set(p.id, {
               id: p.id,
               name: p.name,
+              birthday: p.birthday,
               avatarUrl: p.avatarUrl,
               color: p.color,
             });

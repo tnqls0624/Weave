@@ -300,6 +300,9 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     const wrapperKey = `${marker.id}-${
       marker.avatarUrl ?? "no-avatar"
     }-${size}`;
+    const hasAvatar =
+      typeof marker.avatarUrl === "string" &&
+      marker.avatarUrl.trim().length > 0;
 
     return (
       <NaverMapMarkerOverlay
@@ -314,13 +317,23 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           color: "#111827",
         }}
       >
-        <Image
-          source={{ uri: marker.avatarUrl ?? "" }}
-          style={[
-            styles.markerImage,
-            { borderColor: markerColor, borderWidth },
-          ]}
-        />
+        {hasAvatar ? (
+          <Image
+            source={{ uri: marker.avatarUrl ?? "" }}
+            style={[
+              styles.markerImage,
+              { borderColor: markerColor, borderWidth },
+            ]}
+          />
+        ) : (
+          <View
+            style={[
+              styles.markerImage,
+              styles.markerPlaceholder,
+              { borderColor: markerColor, borderWidth },
+            ]}
+          />
+        )}
       </NaverMapMarkerOverlay>
     );
   };
@@ -376,6 +389,9 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                 const memberColor = member.isMe
                   ? member.color // 내 색상은 이미 hex 코드
                   : getColorCode(member.color); // 다른 멤버는 변환 필요
+                const hasAvatar =
+                  typeof member.avatarUrl === "string" &&
+                  member.avatarUrl.trim().length > 0;
 
                 return (
                   <Pressable
@@ -391,13 +407,23 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                       )
                     }
                   >
-                    <Image
-                      source={{ uri: member.avatarUrl ?? "" }}
-                      style={[
-                        styles.memberAvatar,
-                        { borderColor: memberColor },
-                      ]}
-                    />
+                    {hasAvatar ? (
+                      <Image
+                        source={{ uri: member.avatarUrl }}
+                        style={[
+                          styles.memberAvatar,
+                          { borderColor: memberColor },
+                        ]}
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.memberAvatar,
+                          styles.memberAvatarPlaceholder,
+                          { borderColor: memberColor },
+                        ]}
+                      />
+                    )}
                     <Text style={styles.memberName} numberOfLines={1}>
                       {member.displayTitle}
                     </Text>
@@ -495,6 +521,9 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderRadius: 999,
+  },
+  markerPlaceholder: {
+    backgroundColor: "#ffffff",
   },
   markerInitial: {
     width: "100%",
@@ -627,6 +656,7 @@ const styles = StyleSheet.create({
   memberAvatarPlaceholder: {
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#ffffff",
   },
   memberAvatarText: {
     color: "#ffffff",

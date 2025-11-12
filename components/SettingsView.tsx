@@ -3,7 +3,6 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
-import dayjs from "dayjs";
 import * as ImagePicker from "expo-image-picker";
 import React, {
   useCallback,
@@ -35,7 +34,7 @@ import {
 } from "../services/queries";
 import { useAppStore } from "../stores";
 import { User } from "../types";
-import DateTimePicker from "./DateTimePicker";
+import MonthDayPicker from "./MonthDayPicker";
 
 interface SettingsViewProps {
   users: User[];
@@ -68,9 +67,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const updateNotificationsMutation = useUpdateNotifications();
 
   const [profileName, setProfileName] = useState("");
-  const [statusMessage, setStatusMessage] = useState("임의");
-  const [birthDate, setBirthDate] = useState<Date | null>(null);
-  const [showInCalendar, setShowInCalendar] = useState(true);
+  const [birthDate, setBirthDate] = useState<string | null>(null);
+  const formattedBirthDate = useMemo(() => {
+    if (!birthDate || birthDate.length !== 4) return null;
+    const month = Number.parseInt(birthDate.slice(0, 2), 10);
+    const day = Number.parseInt(birthDate.slice(2, 4), 10);
+    if (Number.isNaN(month) || Number.isNaN(day)) return null;
+    return `${month}월 ${day}일`;
+  }, [birthDate]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
@@ -208,12 +212,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  // Initialize profile name when currentUser changes
   useEffect(() => {
     if (currentUser) {
       setProfileName(currentUser.name);
-    } else if (users.length > 0) {
-      setProfileName(users[0].name);
+      setBirthDate(currentUser.birthday ?? null);
     }
   }, [currentUser, users]);
 
@@ -297,10 +299,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     const handleSaveProfile = async () => {
       if (user) {
         try {
-          await onUpdateUser(user.id, { name: profileName });
-          setSettingsPage("main");
+          const data = {
+            name: profileName,
+            birthday: birthDate ?? undefined,
+          };
+          await onUpdateUser(user.id, data);
+          Alert.alert("성공", "프로필이 업데이트되었습니다.");
+          // setSettingsPage("main");
         } catch (error) {
           console.error("Failed to update profile:", error);
+          Alert.alert("오류", "프로필 업데이트에 실패했습니다.");
         }
       }
     };
@@ -366,7 +374,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             </View>
 
             {/* Status Message */}
-            <View style={styles.formField}>
+            {/* <View style={styles.formField}>
               <Text style={styles.formLabel}>한마디</Text>
               <TextInput
                 style={styles.formInput}
@@ -375,26 +383,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 placeholder="한마디를 입력하세요"
                 placeholderTextColor="#9ca3af"
               />
-            </View>
+            </View> */}
 
             {/* Birth Date */}
             <View style={styles.formField}>
-              <Text style={styles.formLabel}>생년월일</Text>
+              <Text style={styles.formLabel}>생일</Text>
               <Pressable
                 style={styles.formInput}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text style={styles.dateText}>
-                  {birthDate
-                    ? dayjs(birthDate).format("YYYY년 M월 D일")
-                    : "날짜를 선택(임의)"}
+                  {formattedBirthDate ?? "생일을 선택하세요"}
                 </Text>
               </Pressable>
             </View>
           </View>
 
-          {/* Toggle: Show in Calendar */}
-          <View style={styles.formSection}>
+          {/* <View style={styles.formSection}>
             <View style={styles.toggleContainer}>
               <Text style={styles.toggleLabel}>캘린더에서 보기</Text>
               <Switch
@@ -405,14 +410,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </View>
 
-            {/* Registration Info */}
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>등록 정보</Text>
               <MaterialIcons name="info-outline" size={20} color="#6b7280" />
             </View>
-          </View>
+          </View> */}
 
-          {/* Save Button */}
           <View style={styles.formSection}>
             <TouchableOpacity
               style={styles.saveButtonContainer}
@@ -685,13 +688,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <Text style={styles.modalConfirmButton}>확인</Text>
               </TouchableOpacity>
             </View>
-            <DateTimePicker
-              value={birthDate || new Date()}
-              mode="date"
-              display="spinner"
-              onChange={(selectedDate) => {
-                setBirthDate(selectedDate as Date);
-              }}
+            <MonthDayPicker
+              value={birthDate ?? undefined}
+              onChange={setBirthDate}
               locale="ko-KR"
             />
           </Pressable>

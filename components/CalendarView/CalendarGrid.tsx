@@ -33,6 +33,7 @@ interface DayCellProps {
   dayOfWeek: number;
   dayEvents: Schedule[];
   dayCellHeight: number;
+  maxVisibleRows: number;
   onSelectDay: (date: Date) => void;
   onDoubleTap: (date: Date) => void;
   getEventColor: (schedule: Schedule) => string;
@@ -40,6 +41,7 @@ interface DayCellProps {
     schedule: Schedule,
     day: Date
   ) => { isStart: boolean; isEnd: boolean; visible: boolean };
+  eventLaneMap: Map<string, number>;
   eventsDateCache: Map<
     string,
     {
@@ -64,10 +66,12 @@ const DayCell = React.memo<DayCellProps>(
     dayOfWeek,
     dayEvents,
     dayCellHeight,
+    maxVisibleRows,
     onSelectDay,
     onDoubleTap,
     getEventColor,
     getEventForDay,
+    eventLaneMap,
     eventsDateCache,
   }) => {
     let dateColor = isCurrentMonth ? "#374151" : "#d1d5db";
@@ -76,15 +80,73 @@ const DayCell = React.memo<DayCellProps>(
       if (dayOfWeek === 6) dateColor = "#007AFF";
     }
 
-    const dayEventsForDisplay = dayEvents.slice(0, 2);
+    type VisibleEvent = {
+      schedule: Schedule;
+      lane: number;
+      eventInfo: { isStart: boolean; isEnd: boolean; visible: boolean };
+      dateInfo:
+        | {
+            startTime: number;
+            endTime: number;
+            startDateStr: string;
+            endDateStr: string;
+          }
+        | undefined;
+    };
 
-    // 연속된 일정이 있는지 확인
-    const hasMultiDayEvent = dayEventsForDisplay.some((schedule: Schedule) => {
-      const dateInfo = eventsDateCache.get(schedule.id);
-      return dateInfo
-        ? dayjs(schedule.startDate).diff(dayjs(schedule.endDate)) !== 0
-        : false;
+    const visibleEvents: VisibleEvent[] = dayEvents
+      .map((schedule: Schedule) => {
+        const eventInfo = getEventForDay(schedule, dayDate);
+        if (!eventInfo.visible) {
+          return null;
+        }
+        const lane = eventLaneMap.get(schedule.id) ?? 0;
+        const dateInfo = eventsDateCache.get(schedule.id);
+        return {
+          schedule,
+          lane,
+          eventInfo,
+          dateInfo,
+        };
+      })
+      .filter(Boolean) as VisibleEvent[];
+
+    const sortedVisibleEvents = visibleEvents.sort((a, b) => {
+      if (a.lane !== b.lane) {
+        return a.lane - b.lane;
+      }
+      const aStart = a.dateInfo?.startTime ?? 0;
+      const bStart = b.dateInfo?.startTime ?? 0;
+      if (aStart !== bStart) {
+        return aStart - bStart;
+      }
+      const aEnd = a.dateInfo?.endTime ?? 0;
+      const bEnd = b.dateInfo?.endTime ?? 0;
+      return aEnd - bEnd;
     });
+
+    const eventRows: (VisibleEvent | null)[] = Array(maxVisibleRows).fill(null);
+    let overflowCount = 0;
+
+    sortedVisibleEvents.forEach((eventData) => {
+      const { lane } = eventData;
+      if (lane < maxVisibleRows) {
+        if (!eventRows[lane]) {
+          eventRows[lane] = eventData;
+        } else {
+          overflowCount += 1;
+        }
+      } else {
+        overflowCount += 1;
+      }
+    });
+
+    const hasMultiDayEvent = eventRows.some(
+      (event) =>
+        event &&
+        event.dateInfo &&
+        event.dateInfo.startTime !== event.dateInfo.endTime
+    );
 
     return (
       <DoubleClick
@@ -109,27 +171,37 @@ const DayCell = React.memo<DayCellProps>(
           >
             {day.day}
           </Text>
-          {isHoliday && holidayName && (
-            <Text style={styles.holidayName} numberOfLines={1}>
-              {holidayName}
-            </Text>
-          )}
+          <View style={styles.holidayLabelSlot}>
+            {isHoliday && holidayName ? (
+              <Text style={styles.holidayName} numberOfLines={1}>
+                {holidayName}
+              </Text>
+            ) : null}
+          </View>
         </View>
         <View
           style={[
             styles.eventsContainer,
-            !hasMultiDayEvent && styles.eventsContainerPadding,
+            !hasMultiDayEvent && styles.eventsContainerTight,
           ]}
         >
-          {dayEventsForDisplay.map((schedule: Schedule, idx: number) => {
-            const eventInfo = getEventForDay(schedule, dayDate);
-            if (!eventInfo.visible) return null;
+          {eventRows.map((eventWithLane, idx: number) => {
+            if (!eventWithLane) {
+              return (
+                <View
+                  key={`event-placeholder-${idx}`}
+                  style={[
+                    styles.eventBarPlaceholder,
+                    idx === 0 && styles.firstEventBar,
+                  ]}
+                />
+              );
+            }
 
-            // 캐시된 날짜 정보 사용 (Date 객체 생성 최소화)
-            const dateInfo = eventsDateCache.get(schedule.id);
-            const isMultiDay = dateInfo
-              ? dateInfo.startTime !== dateInfo.endTime
-              : false;
+            const { schedule, eventInfo, dateInfo } = eventWithLane;
+
+            const isMultiDay =
+              dateInfo && dateInfo.startTime !== dateInfo.endTime;
 
             return (
               <View
@@ -160,8 +232,8 @@ const DayCell = React.memo<DayCellProps>(
               </View>
             );
           })}
-          {dayEvents.length > 2 && (
-            <Text style={styles.moreEvents}>+{dayEvents.length - 2}</Text>
+          {overflowCount > 0 && (
+            <Text style={styles.moreEvents}>+{overflowCount}</Text>
           )}
         </View>
       </DoubleClick>
@@ -190,6 +262,9 @@ const DayCell = React.memo<DayCellProps>(
     if (prevProps.dayCellHeight !== nextProps.dayCellHeight) {
       return false;
     }
+    if (prevProps.maxVisibleRows !== nextProps.maxVisibleRows) {
+      return false;
+    }
 
     // 이벤트 비교
     if (prevProps.dayEvents.length !== nextProps.dayEvents.length) {
@@ -204,6 +279,10 @@ const DayCell = React.memo<DayCellProps>(
 
     // eventsDateCache는 events 변경 시에만 재생성되므로 참조 비교로 충분
     if (prevProps.eventsDateCache !== nextProps.eventsDateCache) {
+      return false;
+    }
+
+    if (prevProps.eventLaneMap !== nextProps.eventLaneMap) {
       return false;
     }
 
@@ -268,6 +347,12 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   const dayCellHeight = useMemo(() => {
     return weekHeight;
   }, [weekHeight]);
+
+  const maxVisibleEventRows = useMemo(() => {
+    if (numberOfWeeks >= 6) return 2;
+    if (numberOfWeeks === 5) return 3;
+    return 4;
+  }, [numberOfWeeks]);
 
   // currentDate를 문자열로 변환
   const currentDateString = useMemo(() => {
@@ -368,6 +453,60 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
       }
     });
     return cache;
+  }, [schedules, eventsDateCache]);
+
+  const eventLaneMap = useMemo(() => {
+    const laneAssignments = new Map<string, number>();
+    const laneEndTimes: number[] = [];
+
+    const schedWithDates = schedules
+      .map((schedule: Schedule) => {
+        const dateInfo = eventsDateCache.get(schedule.id);
+        if (!dateInfo) {
+          return null;
+        }
+        return {
+          schedule,
+          startTime: dateInfo.startTime,
+          endTime: dateInfo.endTime,
+        };
+      })
+      .filter(Boolean) as {
+      schedule: Schedule;
+      startTime: number;
+      endTime: number;
+    }[];
+
+    schedWithDates
+      .sort((a, b) => {
+        if (a.startTime !== b.startTime) {
+          return a.startTime - b.startTime;
+        }
+        return a.endTime - b.endTime;
+      })
+      .forEach(({ schedule, startTime, endTime }) => {
+        let assignedLane = -1;
+        for (
+          let laneIndex = 0;
+          laneIndex < laneEndTimes.length;
+          laneIndex += 1
+        ) {
+          if (startTime > laneEndTimes[laneIndex]) {
+            assignedLane = laneIndex;
+            laneEndTimes[laneIndex] = endTime;
+            break;
+          }
+        }
+
+        if (assignedLane === -1) {
+          laneEndTimes.push(endTime);
+          assignedLane = laneEndTimes.length - 1;
+        }
+
+        laneAssignments.set(schedule.id, assignedLane);
+      });
+
+    return laneAssignments;
   }, [schedules, eventsDateCache]);
 
   const getDayEvents = useCallback(
@@ -483,10 +622,12 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
           dayOfWeek={dayOfWeek}
           dayEvents={dayEvents}
           dayCellHeight={dayCellHeight}
+          maxVisibleRows={maxVisibleEventRows}
           onSelectDay={stableOnSelectDay}
           onDoubleTap={stableOnDoubleTap}
           getEventColor={stableGetEventColor}
           getEventForDay={stableGetEventForDay}
+          eventLaneMap={eventLaneMap}
           eventsDateCache={eventsDateCache}
         />
       );
@@ -500,6 +641,8 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
       stableOnDoubleTap,
       stableGetEventColor,
       stableGetEventForDay,
+      maxVisibleEventRows,
+      eventLaneMap,
       eventsDateCache,
     ]
   );
@@ -564,8 +707,8 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         current={currentDateString}
         horizontal={true}
         pagingEnabled={true}
-        pastScrollRange={2}
-        futureScrollRange={2}
+        pastScrollRange={120}
+        futureScrollRange={120}
         scrollEnabled={true}
         hideArrows={true}
         hideExtraDays={false}
@@ -628,18 +771,23 @@ const styles = StyleSheet.create({
   dayNumberContainer: {
     alignItems: "center",
     width: "100%",
+    marginBottom: 2,
   },
   dayNumber: {
     fontSize: 16,
-    marginBottom: 2,
     marginHorizontal: 4,
     fontWeight: "500",
+  },
+  holidayLabelSlot: {
+    height: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
   },
   holidayName: {
     fontSize: 8,
     color: "#ef4444",
     fontWeight: "600",
-    marginBottom: 2,
   },
   today: {
     backgroundColor: "#000",
@@ -657,8 +805,14 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: "visible",
   },
-  eventsContainerPadding: {
+  eventsContainerTight: {
     paddingHorizontal: 1,
+  },
+  eventBarPlaceholder: {
+    height: 18,
+    marginBottom: 2,
+    width: "100%",
+    paddingHorizontal: 4,
   },
   eventBar: {
     height: 18,
