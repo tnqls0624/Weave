@@ -4,6 +4,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useApiSync } from "@/services/apiSync";
 import { queryClient } from "@/services/queryClient";
 import NotificationManager from "@/utils/notification";
+import { initializeKakaoSDK } from "@react-native-kakao/core";
 import {
   DarkTheme,
   DefaultTheme,
@@ -41,6 +42,7 @@ const useAppInitialization = () => {
       try {
         // 기본 서비스 초기화
         await NotificationManager.getInstance().init();
+        initializeKakaoSDK(process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY || "");
 
         // 스플래시 화면 숨기기
         await SplashScreen.hideAsync();

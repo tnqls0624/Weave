@@ -19,8 +19,8 @@ interface ApiResponse<T> {
 }
 
 interface SocialLoginRequest {
-  provider: "google" | "apple" | "kakao";
-  token: string;
+  loginType: "GOOGLE" | "APPLE" | "KAKAO";
+  accessToken: string;
 }
 
 interface AuthResponse {
@@ -182,7 +182,7 @@ class ApiService {
   ): Promise<T> {
     try {
       const response = await this.axiosInstance.request<ApiResponse<T>>(config);
-
+      console.log("response:::::::", response);
       // 백엔드 응답 구조: { code, data, message }
       const apiResponse = response.data;
 

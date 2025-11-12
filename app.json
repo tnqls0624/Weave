@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.weave",
+      "bundleIdentifier": "com.weave.project",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleURLTypes": [
@@ -18,9 +18,11 @@
             "CFBundleURLSchemes": ["weave-app"]
           }
         ],
-        "NSLocationAlwaysUsageDescription": "위치 접근 권한이 필요합니다",
+        "NSLocationAlwaysUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
+        "NSLocationWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "CFBundleIconName": "AppIcon",
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": ["remote-notification", "location"],
         "NSCameraUsageDescription": "카메라 접근 권한이 필요합니다",
         "NSPhotoLibraryUsageDescription": "사진 접근 권한이 필요합니다",
         "NSPhotoLibraryAddUsageDescription": "사진 저장 권한이 필요합니다"
@@ -50,7 +52,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/weave_logo.jpeg",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -62,10 +64,18 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+          "locationAlwaysAndWhenInUsePermission": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-maps",
+      [
+        "@mj-studio/react-native-naver-map",
+        {
+          "client_id": "8ckcjyetwm"
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       [
@@ -76,6 +86,44 @@
           "defaultChannel": "default",
           "mode": "production",
           "iosDisplayInForeground": true
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "사진을 업로드하려면 접근 권한이 필요합니다",
+          "cameraPermission": "카메라 사용 권한이 필요합니다",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://devrepo.kakao.com/nexus/content/groups/public/"
+            ]
+          },
+          "newArchEnabled": true
+        }
+      ],
+      [
+        "@react-native-kakao/core",
+        {
+          "nativeAppKey": "0e3bc9d02b52f861b4cbf758de26b746",
+          "android": {
+            "authCodeHandlerActivity": true
+          },
+          "ios": {
+            "handleKakaoOpenUrl": true
+          }
         }
       ]
     ],

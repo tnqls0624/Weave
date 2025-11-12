@@ -1,7 +1,8 @@
 import { apiService } from "@/services/api";
 import { useAppStore } from "@/stores/appStore";
+import { login } from "@react-native-kakao/user";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,36 +13,63 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+type LoadingProvider = "test" | "kakao" | null;
+
 export default function LoginScreen() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<LoadingProvider>(null);
   const { setTokens } = useAppStore();
   const router = useRouter();
 
-  const handleTestLogin = async () => {
-    setIsLoading(true);
+  const handleNavigationAfterLogin = useCallback(() => {
+    router.replace("/(tabs)/calendar");
+  }, [router]);
+
+  const handleKakaoLogin = useCallback(async () => {
+    setLoadingProvider("kakao");
     try {
-      // 테스트용 accessToken
-      const testAccessToken = process.env.EXPO_PUBLIC_TEST_ACCESS_TOKEN || "";
+      let kakaoToken = null;
 
-      const testRefreshToken = "test-refresh-token"; // Refresh token은 실제로는 백엔드에서 받아야 함
+      try {
+        kakaoToken = await login();
+        console.log("kakaoToken:::::::", kakaoToken);
+      } catch (loginError) {
+        console.warn(
+          "Primary Kakao login attempt failed, retrying without KakaoTalk:",
+          loginError
+        );
+        kakaoToken = await login({ throughTalk: false });
+      }
 
-      // Zustand에 토큰 저장
-      setTokens(testAccessToken, testRefreshToken);
+      if (!kakaoToken?.accessToken) {
+        throw new Error("카카오 토큰을 가져오지 못했습니다.");
+      }
 
-      // ApiService에도 즉시 토큰 설정 (동기화)
-      apiService.setTokens(testAccessToken, testRefreshToken);
+      const { accessToken: kakaoAccessToken } = kakaoToken;
 
-      // 약간의 지연 후 메인 화면으로 이동
-      setTimeout(() => {
-        setIsLoading(false);
-        router.replace("/(tabs)/calendar");
-      }, 500);
-    } catch (error) {
-      setIsLoading(false);
-      Alert.alert("로그인 실패", "다시 시도해주세요.");
-      console.error("Login error:", error);
+      const authResponse = await apiService.socialLogin({
+        loginType: "KAKAO",
+        accessToken: kakaoAccessToken,
+      });
+
+      console.log("authResponse:::::::", authResponse);
+
+      setTokens(authResponse.accessToken, authResponse.refreshToken);
+      apiService.setTokens(authResponse.accessToken, authResponse.refreshToken);
+
+      handleNavigationAfterLogin();
+    } catch (error: any) {
+      console.error("Kakao login error:", error);
+      const message =
+        error?.message === "E_CANCELLED_OPERATION"
+          ? "카카오 로그인이 취소되었습니다."
+          : "카카오 로그인에 실패했습니다. 다시 시도해주세요.";
+      Alert.alert("로그인 실패", message);
+    } finally {
+      setLoadingProvider(null);
     }
-  };
+  }, [handleNavigationAfterLogin, setTokens]);
+
+  const isLoading = loadingProvider !== null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -53,28 +81,42 @@ export default function LoginScreen() {
         </View>
 
         {/* 로그인 버튼 영역 */}
-        <View style={styles.buttonContainer}>
+        {/* <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.testButton]}
             onPress={handleTestLogin}
             disabled={isLoading}
           >
-            {isLoading ? (
+            {loadingProvider === "test" ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>테스트 로그인</Text>
             )}
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
-          {/* 개발용 표시 */}
-          <Text style={styles.devNote}>개발 환경용 테스트 로그인</Text>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            styles.kakaoButton,
+            loadingProvider && styles.disabledButton,
+          ]}
+          onPress={handleKakaoLogin}
+          disabled={isLoading}
+        >
+          {loadingProvider === "kakao" ? (
+            <ActivityIndicator color="#3C1E1E" />
+          ) : (
+            <Text style={styles.kakaoButtonText}>카카오 로그인</Text>
+          )}
+        </TouchableOpacity>
 
-          {/* 추후 소셜 로그인 버튼들 */}
-          <View style={styles.socialButtonsPlaceholder}>
-            <Text style={styles.placeholderText}>
-              소셜 로그인 (추후 구현 예정)
-            </Text>
-            <View style={[styles.button, styles.disabledButton]}>
+        {/* 개발용 표시 */}
+        {/* <Text style={styles.devNote}>개발 환경용 테스트 로그인</Text> */}
+
+        {/* 추후 소셜 로그인 버튼들 */}
+        <View style={styles.socialButtonsPlaceholder}>
+          <Text style={styles.placeholderText}>소셜 로그인</Text>
+          {/* <View style={[styles.button, styles.disabledButton]}>
               <Text style={[styles.buttonText, styles.disabledText]}>
                 Google 로그인
               </Text>
@@ -83,12 +125,11 @@ export default function LoginScreen() {
               <Text style={[styles.buttonText, styles.disabledText]}>
                 Apple 로그인
               </Text>
-            </View>
-            <View style={[styles.button, styles.disabledButton]}>
-              <Text style={[styles.buttonText, styles.disabledText]}>
-                Kakao 로그인
-              </Text>
-            </View>
+            </View> */}
+          <View style={[styles.button, styles.disabledButton]}>
+            <Text style={[styles.buttonText, styles.disabledText]}>
+              Kakao 로그인
+            </Text>
           </View>
         </View>
       </View>
@@ -141,6 +182,14 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  kakaoButton: {
+    backgroundColor: "#FEE500",
+  },
+  kakaoButtonText: {
+    color: "#3C1E1E",
     fontSize: 16,
     fontWeight: "600",
   },
