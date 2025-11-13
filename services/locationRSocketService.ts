@@ -4,6 +4,7 @@ import {
   RSocketClient,
 } from "rsocket-core";
 import RSocketWebSocketClient from "rsocket-websocket-client";
+import { apiService } from "./api";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8080";
@@ -53,6 +54,11 @@ class LocationRSocketService {
 
     try {
       const wsUrl = resolveRSocketUrl(serverUrl);
+      const accessToken = apiService.getAccessToken();
+
+      if (!accessToken) {
+        throw new Error("No access token available for RSocket authentication");
+      }
 
       this.client = new RSocketClient({
         serializers: {
@@ -64,6 +70,9 @@ class LocationRSocketService {
           lifetime: 180000,
           dataMimeType: "application/json",
           metadataMimeType: "message/x.rsocket.routing.v0",
+          data: JSON.stringify({
+            Authorization: `Bearer ${accessToken}`,
+          }),
         },
         transport: new RSocketWebSocketClient({
           url: wsUrl,

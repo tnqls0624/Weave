@@ -175,6 +175,11 @@ class ApiService {
     this.refreshToken = null;
   }
 
+  // 현재 액세스 토큰 가져오기
+  getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
   // Private request wrapper
   private async request<T>(
     config: AxiosRequestConfig,
