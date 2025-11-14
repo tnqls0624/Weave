@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
-import locationRSocketService from "./locationRSocketService";
+import locationWebSocketService from "./locationWebSocketService";
 
 const TASK_MANAGER_AVAILABLE =
   TaskManager &&
@@ -93,8 +93,8 @@ class LocationTrackingService {
         return false;
       }
 
-      // RSocket 연결
-      await locationRSocketService.connect();
+      // WebSocket 연결
+      await locationWebSocketService.connect();
 
       console.log(
         `🚀 Starting foreground location tracking (interval: ${intervalMs}ms)`
@@ -147,8 +147,8 @@ class LocationTrackingService {
         return this.startForegroundTracking(workspaceId);
       }
 
-      // RSocket 연결
-      await locationRSocketService.connect();
+      // WebSocket 연결
+      await locationWebSocketService.connect();
 
       console.log("🚀 Starting background location tracking");
 
@@ -206,8 +206,8 @@ class LocationTrackingService {
         accuracy: location.coords.accuracy,
       });
 
-      // RSocket으로 위치 전송 (Fire-and-Forget)
-      await locationRSocketService.updateLocation(
+      // WebSocket으로 위치 전송 (Fire-and-Forget)
+      await locationWebSocketService.updateLocation(
         workspaceId,
         latitude,
         longitude

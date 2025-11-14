@@ -1,4 +1,4 @@
-import locationRSocketService from "@/services/locationRSocketService";
+import locationWebSocketService from "@/services/locationWebSocketService";
 import { useAppStore } from "@/stores/appStore";
 import {
   NaverMapMarkerOverlay,
@@ -90,12 +90,12 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
       return;
     }
 
-    let subscription: any = null;
+    let subscription: { unsubscribe: () => void } | null = null;
 
     const startStreaming = async () => {
       try {
         // 스트림 구독
-        subscription = await locationRSocketService.streamLocations(
+        subscription = await locationWebSocketService.streamLocations(
           activeWorkspaceId,
           (locationData: any) => {
             // 위치 업데이트 수신
@@ -349,7 +349,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
             <Text style={styles.liveText}>
-              {locationRSocketService.isConnected() ? "실시간" : "연결 중"}
+              {locationWebSocketService.isConnected() ? "실시간" : "연결 중"}
             </Text>
           </View>
         </View>
