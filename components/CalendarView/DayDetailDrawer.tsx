@@ -248,7 +248,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               );
             })
         ) : (
-          <Text style={styles.emptyText}>No schedules for this day.</Text>
+          <Text style={styles.emptyText}>스케줄이 없습니다</Text>
         )}
       </BottomSheetScrollView>
     </BottomSheet>
