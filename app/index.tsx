@@ -2,6 +2,9 @@ import { useAppStore } from "@/stores/appStore";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { TextEncoder } from "text-encoding";
+
+global.TextEncoder = TextEncoder;
 
 export default function Index() {
   const { isAuthenticated } = useAppStore();

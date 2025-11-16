@@ -1,40 +1,11 @@
-// @ts-ignore - STOMP library will be available at runtime
 import { Client } from "@stomp/stompjs";
-import { w3cwebsocket as W3CWebSocket } from "websocket";
 import { apiService } from "./api";
-
-// ---- React Native / Node-like 환경에서 WebSocket polyfill ----
-const g: any = globalThis as any;
-if (typeof g.WebSocket === "undefined") {
-  console.log("🌐 WebSocket not found on globalThis. Applying W3CWebSocket polyfill.");
-  g.WebSocket = W3CWebSocket as any;
-} else {
-  console.log("🌐 Native WebSocket detected. Using existing implementation.");
-}
 
 // STOMP Client 타입
 type StompClient = Client;
 
-// 환경변수 (Expo에서는 Constants 사용 권장하지만 호환성을 위해 직접 정의)
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "";
-const EXPLICIT_WEBSOCKET_URL: string | undefined = undefined;
-const WEBSOCKET_PATH = "/websocket";
-
-const buildWebSocketUrl = (baseUrl: string): string => {
-  const url = new URL(baseUrl);
-  const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  const portSegment = url.port ? `:${url.port}` : "";
-  const normalizedPath = WEBSOCKET_PATH.startsWith("/")
-    ? WEBSOCKET_PATH
-    : `/${WEBSOCKET_PATH}`;
-  return `${protocol}//${url.hostname}${portSegment}${normalizedPath}`;
-};
-
-const resolveWebSocketUrl = (override?: string): string => {
-  if (override) return override;
-  if (EXPLICIT_WEBSOCKET_URL) return EXPLICIT_WEBSOCKET_URL;
-  return buildWebSocketUrl(API_BASE_URL);
-};
+// 환경변수 기반 WebSocket/STOMP 엔드포인트 (SockJS 미사용, 순수 WebSocket + STOMP)
+const API_BASE_URL = "wss://api.weave.io.kr/api/ws";
 
 interface PendingRequest {
   resolve: (value: any) => void;
@@ -50,17 +21,14 @@ class LocationWebSocketService {
   private streamSubscriptions = new Map<string, any>();
   private replySubscription: any = null;
 
-  // STOMP 연결
-  async connect(serverUrl?: string): Promise<StompClient> {
-    // 이미 연결되어 있으면 기존 연결 반환
+  // STOMP 연결 (순수 WebSocket + STOMP, SockJS 미사용)
+  async connect(): Promise<StompClient> {
     if (this.stompClient && this.stompClient.connected) {
-      console.log("✅ STOMP already connected");
       return this.stompClient;
     }
 
     // 연결 중이면 대기
     if (this.isConnecting) {
-      console.log("⏳ STOMP connection in progress, waiting...");
       // 연결이 완료될 때까지 대기
       while (this.isConnecting) {
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -73,29 +41,25 @@ class LocationWebSocketService {
     this.isConnecting = true;
 
     try {
-      const wsUrl = resolveWebSocketUrl(serverUrl);
+      const wsUrl = `${API_BASE_URL}`;
       const accessToken = apiService.getAccessToken();
 
       if (!accessToken) {
         throw new Error("No access token available for STOMP authentication");
       }
 
-      console.log("🌐 Connecting STOMP to:", wsUrl);
+      const wsUrlWithToken = `${wsUrl}?token=${accessToken}`;
 
+      // STOMP Client 생성 (순수 WebSocket + STOMP)
+      // 쿼리 파라미터로만 토큰 전달 (connectHeader는 비워둠)
       this.stompClient = new Client({
-        // RN/Expo에서도 동작하도록 WebSocket 인스턴스를 직접 생성
-        webSocketFactory: () => new W3CWebSocket(wsUrl),
-        // 브라우저 환경에서도 사용할 수 있도록 brokerURL도 설정 (polyfill이 있으면 사용됨)
-        brokerURL: wsUrl,
-        connectHeaders: {
-          Authorization: `Bearer ${accessToken}`,
+        // React Native의 네이티브 WebSocket 사용
+        webSocketFactory: () => {
+          const ws = new WebSocket(wsUrlWithToken);
+          return ws;
         },
-        debug: (str: string) => {
-          console.log("STOMP:", str);
-        },
-        reconnectDelay: 5000,
-        heartbeatIncoming: 4000,
-        heartbeatOutgoing: 4000,
+        forceBinaryWSFrames: true,
+        appendMissingNULLonIncoming: true,
       });
 
       return new Promise((resolve, reject) => {
@@ -105,81 +69,42 @@ class LocationWebSocketService {
         }
 
         this.stompClient.onConnect = (frame: any) => {
-          console.log("✅ STOMP connected successfully");
-
-          // 임시 응답 큐 구독 설정
-          this.setupReplyQueue();
-
           resolve(this.stompClient!);
         };
 
         this.stompClient.onStompError = (frame: any) => {
-          console.error("❌ STOMP error:", frame.headers.message);
-          reject(new Error(frame.headers.message));
+          reject(new Error(frame.headers?.message || "STOMP connection error"));
         };
 
-        this.stompClient.onWebSocketClose = () => {
-          console.log("🔌 STOMP WebSocket disconnected");
+        this.stompClient.onWebSocketError = (event: any) => {
+          console.error("WebSocket error:", event);
+        };
+
+        this.stompClient.onWebSocketClose = (event: any) => {
+          this.cleanup();
+          if (this.isConnecting) {
+            reject(
+              new Error(
+                `WebSocket closed during connection: ${
+                  event?.reason || "Unknown"
+                }`
+              )
+            );
+          }
+        };
+
+        this.stompClient.onDisconnect = () => {
           this.cleanup();
         };
 
         this.stompClient.activate();
       });
     } catch (error) {
-      console.error("❌ STOMP connection failed:", error);
-      console.error(
-        "💡 Hint: Check if server is running at:",
-        resolveWebSocketUrl()
-      );
-      console.error(
-        "💡 Hint: Server should expose a STOMP WebSocket endpoint (default: /websocket)"
-      );
       this.stompClient = null;
       throw error;
     } finally {
       this.isConnecting = false;
     }
-  }
-
-  // 임시 응답 큐 설정
-  private setupReplyQueue(): void {
-    if (!this.stompClient || !this.stompClient.connected) {
-      return;
-    }
-
-    const replyQueue = `/temp-queue/${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
-    this.replySubscription = this.stompClient.subscribe(
-      replyQueue,
-      (message: any) => {
-        try {
-          const response = JSON.parse(message.body);
-
-          if (
-            response.correlationId &&
-            this.pendingRequests.has(response.correlationId)
-          ) {
-            const request = this.pendingRequests.get(
-              response.correlationId
-            )!;
-            clearTimeout(request.timeout);
-            this.pendingRequests.delete(response.correlationId);
-
-            if (response.error) {
-              request.reject(new Error(response.error));
-            } else {
-              request.resolve(response.data);
-            }
-          }
-        } catch (error) {
-          console.error("❌ Failed to parse STOMP message:", error);
-        }
-      }
-    );
-
-    console.log(`✅ Subscribed to reply queue: ${replyQueue}`);
   }
 
   // STOMP 메시지 전송 헬퍼
@@ -197,44 +122,6 @@ class LocationWebSocketService {
       body: JSON.stringify(body),
       headers,
     });
-  }
-
-  // Request-Response 패턴 헬퍼
-  private async sendRequest(destination: string, body: any): Promise<any> {
-    if (!this.stompClient || !this.stompClient.connected) {
-      await this.connect();
-    }
-
-    if (!this.stompClient || !this.stompClient.connected) {
-      throw new Error("STOMP not connected");
-    }
-
-    const correlationId = this.generateId();
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingRequests.delete(correlationId);
-        reject(new Error("Request timeout"));
-      }, 30000);
-
-      this.pendingRequests.set(correlationId, {
-        resolve,
-        reject,
-        timeout,
-      });
-
-      this.sendStompMessage(destination, {
-        ...body,
-        correlationId,
-      });
-    });
-  }
-
-  // 고유 ID 생성 헬퍼
-  private generateId(): string {
-    return (
-      Date.now().toString() + Math.random().toString(36).substr(2, 9)
-    );
   }
 
   // 정리 헬퍼
@@ -265,19 +152,6 @@ class LocationWebSocketService {
 
   // 워크스페이스의 현재 위치 조회 (Request-Response)
   async getLocations(workspaceId: string) {
-    console.log(`📍 Requesting locations for workspace: ${workspaceId}`);
-
-    return this.sendRequest(`/app/locations.get.${workspaceId}`, {
-      workspaceId,
-    });
-  }
-
-  // 위치 업데이트 전송 (Fire-and-Forget)
-  async updateLocation(
-    workspaceId: string,
-    latitude: number,
-    longitude: number
-  ) {
     if (!this.stompClient || !this.stompClient.connected) {
       await this.connect();
     }
@@ -285,18 +159,84 @@ class LocationWebSocketService {
     if (!this.stompClient || !this.stompClient.connected) {
       throw new Error("STOMP not connected");
     }
+    return new Promise((resolve, reject) => {
+      // Spring이 자동으로 /user/{sessionId}/queue/locations로 변환
+      // 클라이언트는 /user/queue/locations를 구독
+      const replySubscription = this.stompClient!.subscribe(
+        `/user/queue/locations`,
+        (message: any) => {
+          try {
+            const locations = JSON.parse(message.body);
+            console.log("✅ Received locations:", locations);
+            replySubscription.unsubscribe();
+            resolve(locations);
+          } catch (error) {
+            console.error("❌ Failed to parse locations:", error);
+            replySubscription.unsubscribe();
+            reject(error);
+          }
+        }
+      );
+
+      // 위치 조회 요청 전송
+      this.sendStompMessage(`/app/workspace/${workspaceId}/locations`, {});
+
+      // 타임아웃 설정
+      setTimeout(() => {
+        replySubscription.unsubscribe();
+        reject(new Error("Get locations timeout"));
+      }, 10000);
+    });
+  }
+
+  // 위치 업데이트 전송 (Fire-and-Forget)
+  // 서버의 LocationRequestDto와 일치: { latitude: Double, longitude: Double }
+  async updateLocation(
+    workspaceId: string,
+    latitude: number,
+    longitude: number
+  ) {
+    // 연결이 없으면 연결 시도 (실패해도 조용히 실패)
+    if (!this.stompClient || !this.stompClient.connected) {
+      try {
+        await this.connect();
+      } catch (error) {
+        console.warn("⚠️ Failed to connect for location update:", error);
+        return;
+      }
+    }
+
+    if (!this.stompClient || !this.stompClient.connected) {
+      return;
+    }
+
+    // 서버 DTO 형식에 맞게 Double로 변환
+    const locationData = {
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+    };
+
+    // 유효성 검증
+    if (
+      isNaN(locationData.latitude) ||
+      isNaN(locationData.longitude) ||
+      locationData.latitude === null ||
+      locationData.longitude === null
+    ) {
+      throw new Error(
+        "Invalid location data: latitude and longitude must be valid numbers"
+      );
+    }
 
     console.log(`📤 Updating location for workspace ${workspaceId}:`, {
-      latitude,
-      longitude,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
     });
 
-    this.sendStompMessage(`/app/location.update.${workspaceId}`, {
-      workspaceId,
-      latitude,
-      longitude,
-      timestamp: new Date().toISOString(),
-    });
+    this.sendStompMessage(
+      `/app/workspace/${workspaceId}/location`,
+      locationData
+    );
   }
 
   // 실시간 위치 스트림 구독 (STOMP Stream)
@@ -323,29 +263,58 @@ class LocationWebSocketService {
       };
     }
 
-    const subscription = this.stompClient.subscribe(
-      `/topic/locations.${workspaceId}`,
+    // 먼저 현재 위치 데이터를 가져오기
+    try {
+      const initialLocations: any = await this.getLocations(workspaceId);
+
+      // 초기 위치들을 콜백으로 전달
+      if (Array.isArray(initialLocations)) {
+        initialLocations.forEach((location: any) => {
+          onLocation(location);
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch initial locations:", error);
+      // 에러가 나도 스트림 구독은 계속 진행
+    }
+
+    const initialSubscription = this.stompClient.subscribe(
+      `/user/queue/initial-locations`,
       (message: any) => {
         try {
-          const locationData = JSON.parse(message.body);
-          console.log("📍 Received location update:", locationData);
-          onLocation(locationData);
+          const locations = JSON.parse(message.body);
+          // 초기 위치들을 개별적으로 콜백 호출
+          if (Array.isArray(locations)) {
+            locations.forEach((location) => {
+              onLocation(location);
+            });
+          } else {
+            onLocation(locations);
+          }
         } catch (error) {
-          console.error("❌ Failed to parse location data:", error);
+          console.error("Failed to parse initial locations:", error);
         }
       }
     );
 
-    this.streamSubscriptions.set(workspaceId, subscription);
-
-    this.sendStompMessage(`/app/locations.stream.${workspaceId}`, {
-      workspaceId,
-      action: "start",
-    });
-
-    console.log(
-      `✅ Subscribed to location stream for workspace: ${workspaceId}`
+    // 실시간 위치 업데이트 구독 (서버에서 /topic/workspace/{workspaceId}/locations로 브로드캐스트)
+    const streamSubscription = this.stompClient.subscribe(
+      `/topic/workspace/${workspaceId}/locations`,
+      (message: any) => {
+        try {
+          const locationData = JSON.parse(message.body);
+          onLocation(locationData);
+        } catch (error) {
+          console.error("Failed to parse location data:", error);
+        }
+      }
     );
+
+    // 구독 정보 저장 (초기 위치 + 스트림)
+    this.streamSubscriptions.set(workspaceId, {
+      initial: initialSubscription,
+      stream: streamSubscription,
+    });
 
     return {
       unsubscribe: () => this.unsubscribeFromStream(workspaceId),
@@ -354,21 +323,15 @@ class LocationWebSocketService {
 
   // 스트림 구독 해제 헬퍼
   private unsubscribeFromStream(workspaceId: string): void {
-    console.log(
-      `🛑 Unsubscribing from location stream for workspace: ${workspaceId}`
-    );
-
     const subscription = this.streamSubscriptions.get(workspaceId);
     if (subscription) {
-      subscription.unsubscribe();
-      this.streamSubscriptions.delete(workspaceId);
-
-      if (this.stompClient && this.stompClient.connected) {
-        this.sendStompMessage(`/app/locations.stream.${workspaceId}`, {
-          workspaceId,
-          action: "stop",
-        });
+      if (subscription.initial) {
+        subscription.initial.unsubscribe();
       }
+      if (subscription.stream) {
+        subscription.stream.unsubscribe();
+      }
+      this.streamSubscriptions.delete(workspaceId);
     }
   }
 
@@ -379,10 +342,8 @@ class LocationWebSocketService {
 
   // 연결 종료
   disconnect() {
-    console.log("🔌 Disconnecting STOMP...");
     this.cleanup();
     this.isConnecting = false;
-    console.log("✅ STOMP disconnected");
   }
 }
 

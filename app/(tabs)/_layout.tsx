@@ -65,7 +65,7 @@ export default function TabLayout() {
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
           events={schedules || []}
-          onEventSelect={handleEventSelect}
+          onScheduleSelect={handleEventSelect}
         />
 
         {!isSidebarOpen && <BottomNav />}

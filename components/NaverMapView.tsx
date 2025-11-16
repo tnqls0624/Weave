@@ -45,12 +45,13 @@ type MarkerUser = {
   coordinates: {
     latitude: number;
     longitude: number;
-  };
+  } | null; // 위치가 없을 수 있음
   title: string;
   displayTitle: string;
   color: string;
-  avatarUrl?: string | null;
+  avatarUrl: string;
   isMe: boolean;
+  hasLocation: boolean; // 위치 유무 플래그
 };
 
 interface NaverMapViewProps {
@@ -84,7 +85,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
   const { data: currentUser } = useMyProfile();
   const mapRef = useRef<any>(null);
 
-  // RSocket 실시간 위치 스트리밍
   useEffect(() => {
     if (!activeWorkspaceId || !isActive) {
       return;
@@ -94,19 +94,38 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
     const startStreaming = async () => {
       try {
-        // 스트림 구독
+        // STOMP 스트림 구독
         subscription = await locationWebSocketService.streamLocations(
           activeWorkspaceId,
           (locationData: any) => {
             // 위치 업데이트 수신
+            console.log(
+              "🗺️ Received location data:",
+              JSON.stringify(locationData, null, 2)
+            );
+
             setRealtimeUsers((prevUsers) => {
+              console.log("📋 Current users before update:", prevUsers.length);
               const updatedUsers = [...prevUsers];
-              const userIndex = updatedUsers.findIndex(
-                (u) => u.id === locationData.userId
-              );
+
+              // 서버에서 오는 데이터 형식에 따라 userId 추출
+              const userId = locationData.userId || locationData.id;
+
+              if (!userId) {
+                console.warn(
+                  "⚠️ No userId found in location data:",
+                  locationData
+                );
+                return updatedUsers;
+              }
+
+              const userIndex = updatedUsers.findIndex((u) => u.id === userId);
 
               if (userIndex !== -1) {
                 // 기존 사용자 위치 업데이트
+                console.log(
+                  `✅ Updating location for user: ${updatedUsers[userIndex].name} (${userId})`
+                );
                 updatedUsers[userIndex] = {
                   ...updatedUsers[userIndex],
                   location: {
@@ -115,6 +134,10 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                   },
                 };
               } else {
+                console.log(
+                  `⚠️ User ${userId} not found in current users. Available users:`,
+                  updatedUsers.map((u) => ({ id: u.id, name: u.name }))
+                );
                 // 새 사용자 추가 (서버에서 전체 사용자 정보가 오는 경우)
                 if (locationData.user) {
                   updatedUsers.push({
@@ -134,17 +157,17 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           }
         );
       } catch (err) {
-        console.error("❌ RSocket streaming error:", err);
+        console.error("❌ STOMP streaming error:", err);
         setError(err as Error);
       }
     };
 
     startStreaming();
 
-    // 클린업: 구독 해제
+    // 클린업: STOMP 구독 해제
     return () => {
-      if (subscription && subscription.cancel) {
-        subscription.cancel();
+      if (subscription && subscription.unsubscribe) {
+        subscription.unsubscribe();
       }
     };
   }, [activeWorkspaceId, isActive]);
@@ -214,35 +237,40 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
   const displayUsers = realtimeUsers;
 
-  // 다른 멤버들 (나를 제외한 위치를 공유하는 멤버)
+  // 다른 멤버들 (나를 제외한 모든 멤버, 위치 유무 상관없이)
   const otherMembers = useMemo(() => {
-    return displayUsers.filter(
-      (user) =>
-        user.id !== currentUser?.id &&
-        user.location?.latitude &&
-        user.location?.longitude
-    );
+    displayUsers.forEach((user) => {});
+    // 위치 유무와 상관없이 나를 제외한 모든 멤버 표시
+    const filtered = displayUsers.filter((user) => user.id !== currentUser?.id);
+    return filtered;
   }, [displayUsers, currentUser?.id]);
 
-  // 다른 멤버 마커 생성
+  // 다른 멤버 마커/아이콘 생성 (위치 유무 상관없이)
   const otherMarkers = useMemo<MarkerUser[]>(() => {
-    return otherMembers.map((user) => ({
-      id: user.id,
-      coordinates: {
-        latitude: user.location!.latitude,
-        longitude: user.location!.longitude,
-      },
-      title: user.name,
-      displayTitle: user.name,
-      color: user.color || "#007AFF",
-      avatarUrl: user.avatarUrl,
-      isMe: false,
-    }));
+    return otherMembers.map((user) => {
+      const hasLocation =
+        user.location?.latitude != null && user.location?.longitude != null;
+      return {
+        id: user.id,
+        coordinates: hasLocation
+          ? {
+              latitude: user.location!.latitude,
+              longitude: user.location!.longitude,
+            }
+          : null,
+        title: user.name,
+        displayTitle: user.name,
+        color: user.color || "#007AFF",
+        avatarUrl: user.avatarUrl,
+        isMe: false,
+        hasLocation,
+      };
+    });
   }, [otherMembers]);
 
   // 내 마커
   const myMarker = useMemo<MarkerUser | null>(() => {
-    if (!myLocation || !currentUser) return null;
+    if (!currentUser) return null;
     return {
       id: currentUser.id,
       coordinates: myLocation,
@@ -251,6 +279,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
       color: "#ef4444", // 빨간색으로 특별 표시
       avatarUrl: currentUser.avatarUrl,
       isMe: true,
+      hasLocation: myLocation != null,
     };
   }, [myLocation, currentUser]);
 
@@ -286,23 +315,31 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
   // 멤버 아이콘 클릭 시 해당 위치로 이동
   const moveToMember = (latitude: number, longitude: number) => {
-    setCameraCenter({
-      latitude,
-      longitude,
-      zoom: 15,
-    });
+    if (mapRef.current) {
+      // mapRef를 사용하여 직접 카메라 애니메이션
+      mapRef.current.animateCameraTo({
+        latitude,
+        longitude,
+        zoom: 15,
+        duration: 500, // 0.5초 애니메이션
+      });
+    } else {
+      // fallback: mapRef가 없을 경우 상태 업데이트
+      setCameraCenter({
+        latitude,
+        longitude,
+        zoom: 15,
+      });
+    }
   };
 
   const renderMarker = (marker: MarkerUser) => {
-    const markerColor = marker.isMe ? marker.color : getColorCode(marker.color);
+    // 위치가 없으면 마커를 렌더링하지 않음
+    if (!marker.hasLocation || !marker.coordinates) {
+      return null;
+    }
+
     const size = marker.isMe ? 56 : 48;
-    const borderWidth = marker.isMe ? 4 : 3;
-    const wrapperKey = `${marker.id}-${
-      marker.avatarUrl ?? "no-avatar"
-    }-${size}`;
-    const hasAvatar =
-      typeof marker.avatarUrl === "string" &&
-      marker.avatarUrl.trim().length > 0;
 
     return (
       <NaverMapMarkerOverlay
@@ -311,34 +348,20 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
         longitude={marker.coordinates.longitude}
         width={size}
         height={size}
+        image={{ httpUri: marker.avatarUrl }}
+        isIconPerspectiveEnabled={true}
         caption={{
           text: marker.displayTitle,
           textSize: marker.isMe ? 13 : 12,
           color: "#111827",
         }}
-      >
-        {hasAvatar ? (
-          <Image
-            source={{ uri: marker.avatarUrl ?? "" }}
-            style={[
-              styles.markerImage,
-              { borderColor: markerColor, borderWidth },
-            ]}
-          />
-        ) : (
-          <View
-            style={[
-              styles.markerImage,
-              styles.markerPlaceholder,
-              { borderColor: markerColor, borderWidth },
-            ]}
-          />
-        )}
-      </NaverMapMarkerOverlay>
+      ></NaverMapMarkerOverlay>
     );
   };
 
-  const totalMembersWithLocation = (myMarker ? 1 : 0) + otherMarkers.length;
+  const totalMembersWithLocation =
+    (myMarker?.hasLocation ? 1 : 0) +
+    otherMarkers.filter((m) => m.hasLocation).length;
 
   return (
     <View style={styles.container}>
@@ -399,20 +422,30 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                     style={[
                       styles.memberItem,
                       member.isMe && styles.myMemberItem,
+                      !member.hasLocation && styles.memberItemDisabled, // 위치 없으면 비활성화 스타일
                     ]}
-                    onPress={() =>
-                      moveToMember(
-                        member.coordinates.latitude,
-                        member.coordinates.longitude
-                      )
-                    }
+                    onPress={() => {
+                      // 위치가 있을 때만 이동
+                      if (member.hasLocation && member.coordinates) {
+                        moveToMember(
+                          member.coordinates.latitude,
+                          member.coordinates.longitude
+                        );
+                      }
+                    }}
+                    disabled={!member.hasLocation} // 위치 없으면 클릭 불가
                   >
                     {hasAvatar ? (
                       <Image
-                        source={{ uri: member.avatarUrl }}
+                        source={{ uri: member.avatarUrl! }}
                         style={[
                           styles.memberAvatar,
-                          { borderColor: memberColor },
+                          {
+                            borderColor: member.hasLocation
+                              ? memberColor
+                              : "#d1d5db", // 회색
+                          },
+                          !member.hasLocation && styles.memberAvatarDisabled, // 위치 없으면 회색 필터
                         ]}
                       />
                     ) : (
@@ -420,11 +453,22 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                         style={[
                           styles.memberAvatar,
                           styles.memberAvatarPlaceholder,
-                          { borderColor: memberColor },
+                          {
+                            borderColor: member.hasLocation
+                              ? memberColor
+                              : "#d1d5db", // 회색
+                          },
+                          !member.hasLocation && styles.memberAvatarDisabled, // 위치 없으면 회색 필터
                         ]}
                       />
                     )}
-                    <Text style={styles.memberName} numberOfLines={1}>
+                    <Text
+                      style={[
+                        styles.memberName,
+                        !member.hasLocation && styles.memberNameDisabled, // 위치 없으면 회색 텍스트
+                      ]}
+                      numberOfLines={1}
+                    >
                       {member.displayTitle}
                     </Text>
                   </Pressable>
@@ -618,14 +662,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    height: 80, // 높이 고정
   },
   memberListContent: {
     paddingHorizontal: 16,
     flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "nowrap", // 줄바꿈 방지
   },
   memberItem: {
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    justifyContent: "center",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 16,
@@ -636,13 +683,8 @@ const styles = StyleSheet.create({
     elevation: 3,
     minWidth: 70,
     marginRight: 12,
-    position: "relative",
   },
-  myMemberItem: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)", // 빨간색 배경
-    borderWidth: 2,
-    borderColor: "#ef4444",
-  },
+  myMemberItem: {},
   memberAvatar: {
     width: 44,
     height: 44,
@@ -683,6 +725,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     maxWidth: 60,
     textAlign: "center",
+  },
+  memberItemDisabled: {
+    opacity: 0.5, // 위치 없는 멤버는 반투명
+  },
+  memberAvatarDisabled: {
+    opacity: 0.4, // 아바타도 더 흐리게
+  },
+  memberNameDisabled: {
+    color: "#9ca3af", // 회색 텍스트
   },
   meBadge: {
     position: "absolute",

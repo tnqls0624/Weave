@@ -233,11 +233,17 @@ class ApiService {
   }
 
   // ==================== Auth API ====================
-  async socialLogin(data: SocialLoginRequest): Promise<AuthResponse> {
+  async socialLogin(
+    loginType: "GOOGLE" | "APPLE" | "KAKAO",
+    accessToken: string
+  ): Promise<AuthResponse> {
     return this.request<AuthResponse>({
       url: "/api/auth/social-login",
       method: "POST",
-      data,
+      data: {
+        loginType,
+        accessToken,
+      },
     });
   }
 
@@ -341,21 +347,22 @@ class ApiService {
     // startDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
     if (scheduleData.startDate) {
       if (scheduleData.startTime) {
-        transformedData.startDate = `${scheduleData.startDate} ${scheduleData.startTime}:00`;
+        transformedData.startDate = `${scheduleData.startDate}T${scheduleData.startTime}:00`;
       } else {
-        transformedData.startDate = `${scheduleData.startDate} 00:00:00`;
+        transformedData.startDate = `${scheduleData.startDate}T00:00:00`;
       }
     }
 
     // endDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
     if (scheduleData.endDate) {
       if (scheduleData.endTime) {
-        transformedData.endDate = `${scheduleData.endDate} ${scheduleData.endTime}:00`;
+        transformedData.endDate = `${scheduleData.endDate}T${scheduleData.endTime}:00`;
       } else {
-        transformedData.endDate = `${scheduleData.endDate} 23:59:59`;
+        transformedData.endDate = `${scheduleData.endDate}T23:59:59`;
       }
     }
 
+    console.log("🔍 [Create Schedule] Transformed Data:", transformedData);
     const createdSchedule = await this.request<any>({
       url: "/api/schedule",
       method: "POST",

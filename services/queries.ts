@@ -27,10 +27,13 @@ export const queryKeys = {
 // ==================== Auth Queries ====================
 export const useSocialLogin = () => {
   return useMutation({
-    mutationFn: (data: {
-      provider: "google" | "apple" | "kakao";
-      token: string;
-    }) => apiService.socialLogin(data),
+    mutationFn: ({
+      loginType,
+      accessToken,
+    }: {
+      loginType: "GOOGLE" | "APPLE" | "KAKAO";
+      accessToken: string;
+    }) => apiService.socialLogin(loginType, accessToken),
     onSuccess: (response) => {
       // 로그인 성공 시 프로필 캐시 설정
       // Access Token 저장

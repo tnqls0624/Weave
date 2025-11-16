@@ -60,12 +60,13 @@ const SearchView: React.FC<SearchViewProps> = ({
 
   const formatEventDate = (schedule: Schedule) => {
     const date = new Date(`${schedule.startDate}T00:00:00`);
-    const datePart = date.toLocaleDateString("en-US", {
-      month: "short",
+    const datePart = date.toLocaleDateString("ko-KR", {
+      month: "long",
       day: "numeric",
       weekday: "short",
     });
-    return `${datePart} at ${schedule.startTime ?? "all day"}`;
+    const timePart = schedule.startTime ?? "종일";
+    return `${datePart} ${timePart}`;
   };
 
   if (!isOpen) {

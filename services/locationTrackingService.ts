@@ -79,7 +79,7 @@ class LocationTrackingService {
   // 포그라운드 위치 추적 시작
   async startForegroundTracking(
     workspaceId: string,
-    intervalMs: number = 30000 // 기본 30초
+    intervalMs: number = 1000 // 기본 5초
   ): Promise<boolean> {
     try {
       if (this.state.isTracking) {
@@ -105,7 +105,7 @@ class LocationTrackingService {
         {
           accuracy: Location.Accuracy.Balanced,
           timeInterval: intervalMs,
-          distanceInterval: 50, // 50미터 이동 시 업데이트
+          distanceInterval: 0,
         },
         (location) => {
           this.handleLocationUpdate(workspaceId, location);

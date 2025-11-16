@@ -3,10 +3,11 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
-import React, { useCallback, useRef } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useRef, useState } from "react";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isHoliday } from "../../constants/holidays";
+import { useDeleteSchedule } from "../../services/queries";
 import type { Schedule, User } from "../../types";
 
 interface DayDetailDrawerProps {
@@ -28,6 +29,10 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
+  const deleteScheduleMutation = useDeleteSchedule();
+  const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(
+    null
+  );
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -41,8 +46,37 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   );
 
   const handleClose = () => {
+    onClose();
     bottomSheetRef.current?.close();
-    setTimeout(onClose, 300);
+  };
+
+  const handleDeleteSchedule = (schedule: Schedule) => {
+    Alert.alert(
+      "스케줄 삭제",
+      `"${schedule.title}" 스케줄을 삭제하시겠습니까?`,
+      [
+        {
+          text: "취소",
+          style: "cancel",
+        },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingScheduleId(schedule.id);
+              await deleteScheduleMutation.mutateAsync(schedule.id);
+              // 삭제 성공 시 자동으로 캐시가 무효화되어 화면이 업데이트됨
+            } catch (error) {
+              console.error("Failed to delete schedule:", error);
+              Alert.alert("오류", "스케줄 삭제에 실패했습니다.");
+            } finally {
+              setDeletingScheduleId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getUser = (id: string) => users.find((u) => u.id === id);
@@ -159,7 +193,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                   </View>
                   <View style={styles.scheduleContent}>
                     <View style={styles.scheduleHeader}>
-                      <View>
+                      <View style={styles.titleContainer}>
                         <Text style={styles.scheduleTitle}>
                           {schedule.title}
                         </Text>
@@ -169,12 +203,34 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                           </Text>
                         )}
                       </View>
-                      <Pressable
-                        onPress={() => onStartEdit(schedule)}
-                        style={styles.editButton}
-                      >
-                        <MaterialIcons name="edit" size={20} color="#6b7280" />
-                      </Pressable>
+                      <View style={styles.actionButtons}>
+                        <Pressable
+                          onPress={() => onStartEdit(schedule)}
+                          style={styles.editButton}
+                          disabled={deletingScheduleId === schedule.id}
+                        >
+                          <MaterialIcons
+                            name="edit"
+                            size={18}
+                            color="#6b7280"
+                          />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleDeleteSchedule(schedule)}
+                          style={[
+                            styles.deleteButton,
+                            deletingScheduleId === schedule.id &&
+                              styles.deleteButtonDisabled,
+                          ]}
+                          disabled={deletingScheduleId === schedule.id}
+                        >
+                          <MaterialIcons
+                            name="delete"
+                            size={18}
+                            color={"#6b7280"}
+                          />
+                        </Pressable>
+                      </View>
                     </View>
                     {participants.length > 0 && (
                       <View style={styles.participants}>
@@ -228,21 +284,21 @@ const styles = StyleSheet.create({
   },
   scheduleCard: {
     flexDirection: "row",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 6,
   },
   timeColumn: {
-    width: 56,
+    width: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
-    marginRight: 10,
-    paddingVertical: 6,
+    borderRadius: 4,
+    marginRight: 8,
+    paddingVertical: 4,
   },
   timeText: {
-    fontSize: 12,
-    fontWeight: "bold",
+    fontSize: 11,
+    fontWeight: "700",
     color: "#fff",
   },
   scheduleContent: {
@@ -253,33 +309,48 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
+  titleContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
   scheduleTitle: {
     fontWeight: "600",
     color: "#1f2937",
-    fontSize: 14,
+    fontSize: 13,
   },
   scheduleDescription: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#6b7280",
-    marginTop: 2,
+    marginTop: 1,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
   },
   editButton: {
-    padding: 4,
-    borderRadius: 16,
+    padding: 2,
+    borderRadius: 12,
+  },
+  deleteButton: {
+    padding: 2,
+    borderRadius: 12,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.5,
   },
   participants: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 6,
+    paddingTop: 6,
   },
   participantAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 1,
     borderColor: "#fff",
-    marginLeft: -6,
   },
   emptyText: {
     color: "#6b7280",

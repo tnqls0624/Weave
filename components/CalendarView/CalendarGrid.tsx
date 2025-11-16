@@ -1,9 +1,14 @@
 import dayjs from "dayjs";
-import React, { useCallback, useMemo, useRef } from "react";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { CalendarList, DateData } from "react-native-calendars";
-// @ts-ignore
-import DoubleClick from "react-native-double-tap";
+import { Subject } from "rxjs";
 import { isHoliday } from "../../constants/holidays";
 import type { Schedule, User } from "../../types";
 
@@ -74,6 +79,11 @@ const DayCell = React.memo<DayCellProps>(
     eventLaneMap,
     eventsDateCache,
   }) => {
+    // 전역 핸들러 사용
+    const handlePress = useCallback(() => {
+      onSelectDay(dayDate);
+    }, [onSelectDay, dayDate]);
+
     let dateColor = isCurrentMonth ? "#374151" : "#d1d5db";
     if (isCurrentMonth) {
       if (dayOfWeek === 0 || isHoliday) dateColor = "#ef4444";
@@ -149,12 +159,8 @@ const DayCell = React.memo<DayCellProps>(
     );
 
     return (
-      <DoubleClick
-        dateKey={dayDateString}
-        immediateSingle={true}
-        singleTapImmediate={() => onSelectDay(dayDate)}
-        doubleTap={() => onDoubleTap(dayDate)}
-        delay={500}
+      <Pressable
+        onPress={handlePress}
         style={[
           styles.dayCell,
           { height: dayCellHeight, minHeight: dayCellHeight },
@@ -236,7 +242,7 @@ const DayCell = React.memo<DayCellProps>(
             <Text style={styles.moreEvents}>+{overflowCount}</Text>
           )}
         </View>
-      </DoubleClick>
+      </Pressable>
     );
   },
   (prevProps, nextProps) => {
@@ -304,6 +310,10 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   onAnimationEnd,
   selectedDate,
 }) => {
+  // RxJS Subject를 사용한 전역 더블탭 추적
+  const tapSubject = useRef(new Subject<Date>()).current;
+  const onSelectDayRef = useRef(onSelectDay);
+  const onDoubleTapRef = useRef(onDoubleTap);
   const { height: screenHeight } = useWindowDimensions();
   const calendarListRef = useRef<any>(null);
   const calendarHeight = useMemo(() => {
@@ -543,20 +553,73 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     [eventsDateCache]
   );
 
-  // onSelectDay를 ref로 저장하여 안정적인 참조 유지
-  const onSelectDayRef = useRef(onSelectDay);
-  onSelectDayRef.current = onSelectDay;
+  // RxJS로 더블탭 처리
+  useEffect(() => {
+    onSelectDayRef.current = onSelectDay;
+    onDoubleTapRef.current = onDoubleTap;
+  }, [onSelectDay, onDoubleTap]);
 
-  const stableOnSelectDay = useCallback((date: Date) => {
-    onSelectDayRef.current(date);
-  }, []);
+  useEffect(() => {
+    let lastTapTime = 0;
+    let timer: number | null = null;
 
-  // onDoubleTap을 ref로 저장하여 안정적인 참조 유지
-  const onDoubleTapRef = useRef(onDoubleTap);
-  onDoubleTapRef.current = onDoubleTap;
+    const subscription = tapSubject.subscribe((date) => {
+      const now = Date.now();
+      const timeSinceLastTap = now - lastTapTime;
 
-  const stableOnDoubleTap = useCallback((date: Date) => {
-    onDoubleTapRef.current(date);
+      // 400ms 이내 두 번째 탭 = 더블탭
+      if (timeSinceLastTap < 400 && lastTapTime > 0) {
+        // 타이머 취소
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        // 더블탭 후 현재 시간으로 업데이트 (연속 더블탭 가능하게)
+        lastTapTime = now;
+        // 더블탭: 날짜 선택 + drawer 열기 (순차적으로)
+        onSelectDayRef.current(date);
+        // 약간의 딜레이를 두고 drawer 열기 (자연스러운 순서)
+        setTimeout(() => {
+          onDoubleTapRef.current(date);
+        }, 10);
+
+        timer = setTimeout(() => {
+          lastTapTime = 0;
+          timer = null;
+        }, 400);
+      } else {
+        // 첫 번째 탭: 즉시 날짜 선택
+        lastTapTime = now;
+        onSelectDayRef.current(date);
+
+        if (timer) {
+          clearTimeout(timer);
+        }
+        timer = setTimeout(() => {
+          lastTapTime = 0;
+          timer = null;
+        }, 400);
+      }
+    });
+
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      subscription.unsubscribe();
+    };
+  }, [tapSubject]);
+
+  // 탭 이벤트를 Subject로 전달
+  const stableOnSelectDay = useCallback(
+    (date: Date) => {
+      tapSubject.next(date);
+    },
+    [tapSubject]
+  );
+
+  const stableOnDoubleTap = useCallback(() => {
+    // 더 이상 사용하지 않음 (stableOnSelectDay에서 처리)
   }, []);
 
   // getEventColor와 getEventForDay도 ref로 저장하여 안정적인 참조 유지
@@ -791,14 +854,13 @@ const styles = StyleSheet.create({
   },
   today: {
     backgroundColor: "#000",
-    borderRadius: 12,
-    paddingHorizontal: 6,
+    borderRadius: 15,
+    paddingHorizontal: 3,
     paddingVertical: 2,
     textAlign: "center",
     fontWeight: "bold",
     color: "#fff",
     overflow: "hidden",
-    marginBottom: 0,
   },
   eventsContainer: {
     width: "100%",

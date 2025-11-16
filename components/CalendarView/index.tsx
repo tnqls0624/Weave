@@ -14,7 +14,7 @@ interface CalendarViewProps {
   setCurrentDate: (date: Date) => void;
   selectedDate: Date | null;
   setSelectedDate: (date: Date | null) => void;
-  onStartEdit: (event: Event) => void;
+  onStartEdit: (schedule: Schedule) => void;
   onOpenSidebar: () => void;
   onOpenSearch: () => void;
   activeCalendarName: string;
@@ -44,6 +44,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     "left" | "right" | null
   >(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const previousSelectedDateRef = React.useRef<Date | null>(null);
 
   // 필터링된 사용자 ID (메모이제이션)
   const filteredUserIds = useMemo(() => users.map((u: User) => u.id), [users]);
@@ -60,7 +61,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     [schedules, filteredUserIds]
   );
 
-  // Single tap: 날짜 선택 (시각적 피드백만)
+  // Single tap: 날짜 선택 (시각적 피드백만, drawer는 건드리지 않음)
   const handleSelectDay = useCallback(
     (day: Date) => {
       // 선택한 날짜의 월로 currentDate도 업데이트
@@ -69,8 +70,9 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
 
+      // ref 업데이트를 통해 useEffect가 drawer를 다시 열지 않도록 함
+      previousSelectedDateRef.current = day;
       setSelectedDate(day);
-      setIsDrawerOpen(false);
 
       if (dayMonth !== currentMonth || dayYear !== currentYear) {
         const newDate = new Date(day);
@@ -90,6 +92,8 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
 
+      // ref 업데이트
+      previousSelectedDateRef.current = day;
       setSelectedDate(day);
       setIsDrawerOpen(true);
 
@@ -104,6 +108,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
 
   const handleCloseDrawer = useCallback(() => {
     setIsDrawerOpen(false);
+    // selectedDate는 유지 (날짜 선택 상태 유지)
   }, []);
 
   const handleChangeMonth = useCallback(
@@ -119,6 +124,22 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   const handleAnimationEnd = useCallback(() => {
     setAnimationDirection(null);
   }, []);
+
+  // selectedDate가 외부에서 변경되면 drawer 열기 (검색에서 선택한 경우)
+  // 단, 이전 값과 다른 경우에만 열기 (싱글 클릭과 구분)
+  useEffect(() => {
+    const prevDate = previousSelectedDateRef.current;
+    const isSameDate =
+      prevDate && selectedDate && prevDate.getTime() === selectedDate.getTime();
+
+    // 이전 날짜와 다른 날짜가 선택되고, drawer가 닫혀있을 때만 열기
+    if (selectedDate && !isSameDate && !isDrawerOpen) {
+      setIsDrawerOpen(true);
+    }
+
+    // 현재 selectedDate를 저장
+    previousSelectedDateRef.current = selectedDate;
+  }, [selectedDate, isDrawerOpen]);
 
   // currentDate가 변경될 때 selectedDate와 동기화
   useEffect(() => {
