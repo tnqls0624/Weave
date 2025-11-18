@@ -12,6 +12,34 @@ import { Subject } from "rxjs";
 import { isHoliday } from "../../constants/holidays";
 import type { Schedule, User } from "../../types";
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const PARTICIPANT_COLOR_MAP: Record<string, string> = {
+  red: "#ef4444",
+  orange: "#fb923c",
+  amber: "#f59e0b",
+  yellow: "#eab308",
+  lime: "#84cc16",
+  green: "#22c55e",
+  emerald: "#34d399",
+  teal: "#14b8a6",
+  cyan: "#06b6d4",
+  blue: "#60a5fa",
+  indigo: "#6366f1",
+  violet: "#a78bfa",
+  purple: "#a855f7",
+  fuchsia: "#d946ef",
+  pink: "#ec4899",
+  rose: "#f43f5e",
+  gray: "#9ca3af",
+};
+
+type ScheduleWithRange = {
+  schedule: Schedule;
+  startTime: number;
+  endTime: number;
+};
+
 interface CalendarGridProps {
   currentDate: Date;
   schedules: Schedule[];
@@ -364,6 +392,46 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     return 4;
   }, [numberOfWeeks]);
 
+  const scheduleRanges = useMemo<ScheduleWithRange[]>(() => {
+    return schedules.map((schedule: Schedule) => {
+      const startDateString = schedule.startDate || dayjs().format("YYYY-MM-DD");
+      const eventStart = new Date(`${startDateString}T00:00:00`);
+      const endDateString = schedule.endDate || startDateString;
+      const eventEnd = new Date(`${endDateString}T00:00:00`);
+
+      return {
+        schedule,
+        startTime: eventStart.getTime(),
+        endTime: eventEnd.getTime(),
+      };
+    });
+  }, [schedules]);
+
+  const visibleRange = useMemo(() => {
+    const start = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() - 1,
+      1
+    );
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 2,
+      0
+    );
+    end.setHours(23, 59, 59, 999);
+    return {
+      startTime: start.getTime(),
+      endTime: end.getTime(),
+    };
+  }, [currentDate]);
+
+  const visibleScheduleRanges = useMemo(() => {
+    return scheduleRanges.filter(({ startTime, endTime }) => {
+      return endTime >= visibleRange.startTime && startTime <= visibleRange.endTime;
+    });
+  }, [scheduleRanges, visibleRange]);
+
   // currentDate를 문자열로 변환
   const currentDateString = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -377,43 +445,28 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     return selectedDate.toDateString();
   }, [selectedDate]);
 
+  const userColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    users.forEach((user) => {
+      if (user.id) {
+        map.set(user.id, user.color || "gray");
+      }
+    });
+    return map;
+  }, [users]);
+
   const getEventColor = useCallback(
     (schedule: Schedule): string => {
-      let colorName = "gray";
-
-      // 스케줄의 첫 번째 참여자의 색상 사용
-      if (schedule.participants.length > 0) {
-        const firstParticipantId = schedule.participants[0];
-        const firstParticipant = users.find((u) => u.id === firstParticipantId);
-
-        if (firstParticipant && firstParticipant.color) {
-          colorName = firstParticipant.color;
-        }
+      const firstParticipantId = schedule.participants[0];
+      if (firstParticipantId && userColorMap.has(firstParticipantId)) {
+        const colorName = userColorMap.get(firstParticipantId)!;
+        return (
+          PARTICIPANT_COLOR_MAP[colorName] || PARTICIPANT_COLOR_MAP["gray"]
+        );
       }
-
-      const colorMap: { [key: string]: string } = {
-        red: "#ef4444",
-        orange: "#fb923c",
-        amber: "#f59e0b",
-        yellow: "#eab308",
-        lime: "#84cc16",
-        green: "#22c55e",
-        emerald: "#34d399",
-        teal: "#14b8a6",
-        cyan: "#06b6d4",
-        blue: "#60a5fa",
-        indigo: "#6366f1",
-        violet: "#a78bfa",
-        purple: "#a855f7",
-        fuchsia: "#d946ef",
-        pink: "#ec4899",
-        rose: "#f43f5e",
-        gray: "#9ca3af",
-      };
-
-      return colorMap[colorName] || colorMap["gray"];
+      return PARTICIPANT_COLOR_MAP["gray"];
     },
-    [users]
+    [userColorMap]
   );
 
   // 이벤트 날짜 정보를 사전 계산하여 캐시 (성능 최적화)
@@ -426,98 +479,65 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
 
   const eventsDateCache = useMemo(() => {
     const cache = new Map<string, EventDateInfo>();
-    schedules.forEach((schedule: Schedule) => {
-      const eventStart = new Date(schedule.startDate + "T00:00:00");
-      const eventEnd = schedule.endDate
-        ? new Date(schedule.endDate + "T00:00:00")
-        : eventStart;
+    visibleScheduleRanges.forEach(({ schedule, startTime, endTime }) => {
       cache.set(schedule.id, {
-        startTime: eventStart.getTime(),
-        endTime: eventEnd.getTime(),
+        startTime,
+        endTime,
         startDateStr: schedule.startDate || "",
         endDateStr: schedule.endDate || schedule.startDate || "",
       });
     });
     return cache;
-  }, [schedules]);
+  }, [visibleScheduleRanges]);
 
   // 날짜별 이벤트를 사전 계산하여 캐시 (성능 최적화)
   const eventsByDateCache = useMemo(() => {
     const cache = new Map<string, Schedule[]>();
-    schedules.forEach((schedule: Schedule) => {
-      const dateInfo = eventsDateCache.get(schedule.id);
-      if (!dateInfo) return;
-
-      const eventStart = dateInfo.startTime;
-      const eventEnd = dateInfo.endTime;
-
-      // 이벤트가 포함된 모든 날짜에 추가
-      let currentDate = eventStart;
-      while (currentDate <= eventEnd) {
+    visibleScheduleRanges.forEach(({ schedule, startTime, endTime }) => {
+      let currentDate = startTime;
+      while (currentDate <= endTime) {
         const dateStr = dayjs(currentDate).format("YYYY-MM-DD");
         if (!cache.has(dateStr)) {
           cache.set(dateStr, []);
         }
         cache.get(dateStr)!.push(schedule);
-        currentDate += 24 * 60 * 60 * 1000; // 다음 날
+        currentDate += DAY_IN_MS; // 다음 날
       }
     });
     return cache;
-  }, [schedules, eventsDateCache]);
+  }, [visibleScheduleRanges]);
 
   const eventLaneMap = useMemo(() => {
     const laneAssignments = new Map<string, number>();
     const laneEndTimes: number[] = [];
 
-    const schedWithDates = schedules
-      .map((schedule: Schedule) => {
-        const dateInfo = eventsDateCache.get(schedule.id);
-        if (!dateInfo) {
-          return null;
-        }
-        return {
-          schedule,
-          startTime: dateInfo.startTime,
-          endTime: dateInfo.endTime,
-        };
-      })
-      .filter(Boolean) as {
-      schedule: Schedule;
-      startTime: number;
-      endTime: number;
-    }[];
+    const sortedSchedules = [...visibleScheduleRanges].sort((a, b) => {
+      if (a.startTime !== b.startTime) {
+        return a.startTime - b.startTime;
+      }
+      return a.endTime - b.endTime;
+    });
 
-    schedWithDates
-      .sort((a, b) => {
-        if (a.startTime !== b.startTime) {
-          return a.startTime - b.startTime;
+    sortedSchedules.forEach(({ schedule, startTime, endTime }) => {
+      let assignedLane = -1;
+      for (let laneIndex = 0; laneIndex < laneEndTimes.length; laneIndex += 1) {
+        if (startTime > laneEndTimes[laneIndex]) {
+          assignedLane = laneIndex;
+          laneEndTimes[laneIndex] = endTime;
+          break;
         }
-        return a.endTime - b.endTime;
-      })
-      .forEach(({ schedule, startTime, endTime }) => {
-        let assignedLane = -1;
-        for (
-          let laneIndex = 0;
-          laneIndex < laneEndTimes.length;
-          laneIndex += 1
-        ) {
-          if (startTime > laneEndTimes[laneIndex]) {
-            assignedLane = laneIndex;
-            laneEndTimes[laneIndex] = endTime;
-            break;
-          }
-        }
+      }
 
-        if (assignedLane === -1) {
-          laneEndTimes.push(endTime);
-          assignedLane = laneEndTimes.length - 1;
-        }
+      if (assignedLane === -1) {
+        laneEndTimes.push(endTime);
+        assignedLane = laneEndTimes.length - 1;
+      }
 
-        laneAssignments.set(schedule.id, assignedLane);
-      });
+      laneAssignments.set(schedule.id, assignedLane);
+    });
 
     return laneAssignments;
-  }, [schedules, eventsDateCache]);
+  }, [visibleScheduleRanges]);
 
   const getDayEvents = useCallback(
     (day: Date): Schedule[] => {
