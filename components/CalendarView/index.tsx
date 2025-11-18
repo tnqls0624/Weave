@@ -46,17 +46,16 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const previousSelectedDateRef = React.useRef<Date | null>(null);
 
-  // 필터링된 사용자 ID (메모이제이션)
-  const filteredUserIds = useMemo(() => users.map((u: User) => u.id), [users]);
+  // 필터링된 사용자 ID (Set으로 저장하여 includes O(1)로 최적화)
+  const filteredUserIds = useMemo(() => {
+    return new Set(users.map((u: User) => u.id));
+  }, [users]);
 
-  // 필터링된 일정 (메모이제이션)
+  // 필터링된 일정 (Set lookup으로 성능 최적화)
   const filteredEvents = useMemo(
     () =>
-      schedules.filter(
-        (schedule: Schedule) =>
-          schedule.participants.some((id: string) =>
-            filteredUserIds.includes(id)
-          ) || false
+      schedules.filter((schedule: Schedule) =>
+        schedule.participants.some((id: string) => filteredUserIds.has(id))
       ),
     [schedules, filteredUserIds]
   );

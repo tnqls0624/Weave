@@ -5,7 +5,7 @@ import {
   NaverMapView as RNNaverMapView,
 } from "@mj-studio/react-native-naver-map";
 import * as Location from "expo-location";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   Pressable,
@@ -84,6 +84,24 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
   const { activeWorkspaceId } = useAppStore();
   const { data: currentUser } = useMyProfile();
   const mapRef = useRef<any>(null);
+
+  const sendLocationUpdate = useCallback(
+    async (latitude: number, longitude: number) => {
+      if (!activeWorkspaceId) {
+        return;
+      }
+      try {
+        await locationWebSocketService.updateLocation(
+          activeWorkspaceId,
+          latitude,
+          longitude
+        );
+      } catch (updateError) {
+        console.error("❌ Failed to push location update:", updateError);
+      }
+    },
+    [activeWorkspaceId]
+  );
 
   useEffect(() => {
     if (!activeWorkspaceId || !isActive) {
@@ -179,7 +197,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
   // 내 위치 추적
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || !activeWorkspaceId) return;
 
     let subscription: Location.LocationSubscription | null = null;
 
@@ -200,6 +218,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           longitude: initialLocation.coords.longitude,
         };
         setMyLocation(newLocation);
+        void sendLocationUpdate(newLocation.latitude, newLocation.longitude);
 
         // 초기 위치로 카메라 이동
         setCameraCenter({
@@ -219,6 +238,10 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
             });
+            void sendLocationUpdate(
+              location.coords.latitude,
+              location.coords.longitude
+            );
           }
         );
       } catch (error) {
@@ -233,7 +256,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
         subscription.remove();
       }
     };
-  }, [isActive]);
+  }, [isActive, activeWorkspaceId, sendLocationUpdate]);
 
   const displayUsers = realtimeUsers;
 
