@@ -504,6 +504,15 @@ class ApiService {
     });
   }
 
+  // 위치 공유 설정 업데이트
+  async updateLocationSharing(locationEnabled: boolean): Promise<User> {
+    return this.request<User>({
+      url: "/api/user/me",
+      method: "PUT",
+      data: { locationEnabled },
+    });
+  }
+
   // 서버 응답에서 추출한 사용자 정보를 저장 (외부에서 접근 가능)
   private cachedUsers = new Map<string, User>();
 

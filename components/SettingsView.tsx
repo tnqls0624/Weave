@@ -519,6 +519,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 onValueChange={async (value) => {
                   setLocationSharingEnabled(value);
                   try {
+                    // 서버에 위치 공유 설정 업데이트
+                    await apiService.updateLocationSharing(value);
+
                     if (value) {
                       // 위치 공유 시작
                       const success =
@@ -528,10 +531,26 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         );
                       if (!success) {
                         setLocationSharingEnabled(false);
+                        // 서버에도 다시 비활성화 상태로 업데이트
+                        await apiService.updateLocationSharing(false);
                         Alert.alert(
                           "위치 권한 필요",
                           "위치 공유를 사용하려면 위치 권한이 필요합니다. 설정에서 권한을 허용해주세요."
                         );
+                      } else {
+                        // 위치 공유 시작시 현재 위치 즉시 전송
+                        const currentLocation = await locationTrackingService.getCurrentLocation();
+                        if (currentLocation && workspaceId) {
+                          try {
+                            await apiService.saveLocationToWorkspace(workspaceId, {
+                              latitude: currentLocation.coords.latitude,
+                              longitude: currentLocation.coords.longitude,
+                            });
+                            console.log("✅ Initial location sent to server");
+                          } catch (error) {
+                            console.error("Failed to send initial location:", error);
+                          }
+                        }
                       }
                     } else {
                       // 위치 공유 중지
