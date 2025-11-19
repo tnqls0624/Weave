@@ -14,12 +14,29 @@ interface PendingRequest {
   replyQueue?: string;
 }
 
+// 피싱 알림 인터페이스
+interface PhishingAlert {
+  smsId: string;
+  sender: string;
+  message: string;
+  riskScore: number;
+  riskLevel: 'high' | 'medium' | 'low';
+  detectionReasons: string[];
+  timestamp: number;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
 class LocationWebSocketService {
   private stompClient: StompClient | null = null;
   private isConnecting: boolean = false;
   private pendingRequests = new Map<string, PendingRequest>();
   private streamSubscriptions = new Map<string, any>();
   private replySubscription: any = null;
+  private phishingAlertSubscription: any = null;
+  private phishingAlertCallbacks: ((alert: PhishingAlert) => void)[] = [];
 
   // STOMP 연결 (순수 WebSocket + STOMP, SockJS 미사용)
   async connect(): Promise<StompClient> {
@@ -340,11 +357,229 @@ class LocationWebSocketService {
     return this.stompClient !== null && this.stompClient.connected;
   }
 
+  // ===== 피싱 가드 관련 메서드 =====
+
+  /**
+   * 피싱 알림 구독
+   */
+  async subscribeToPhishingAlerts(
+    onAlert: (alert: PhishingAlert) => void
+  ): Promise<void> {
+    if (!this.stompClient || !this.stompClient.connected) {
+      await this.connect();
+    }
+
+    if (!this.stompClient || !this.stompClient.connected) {
+      throw new Error("STOMP not connected");
+    }
+
+    // 콜백 등록
+    this.phishingAlertCallbacks.push(onAlert);
+
+    // 이미 구독 중이면 리턴
+    if (this.phishingAlertSubscription) {
+      console.log("⚠️ Already subscribed to phishing alerts");
+      return;
+    }
+
+    console.log("🛡️ Subscribing to phishing alerts...");
+
+    // 피싱 알림 토픽 구독
+    this.phishingAlertSubscription = this.stompClient.subscribe(
+      '/topic/phishing.alerts',
+      (message: any) => {
+        try {
+          const alert: PhishingAlert = JSON.parse(message.body);
+          console.log("🚨 Phishing alert received:", alert);
+
+          // 모든 등록된 콜백 실행
+          this.phishingAlertCallbacks.forEach(callback => {
+            try {
+              callback(alert);
+            } catch (error) {
+              console.error("Error in phishing alert callback:", error);
+            }
+          });
+        } catch (error) {
+          console.error("Failed to parse phishing alert:", error);
+        }
+      }
+    );
+
+    // 사용자별 피싱 알림 구독 (선택적)
+    const userTopic = '/user/queue/phishing.personal';
+    this.stompClient.subscribe(userTopic, (message: any) => {
+      try {
+        const alert: PhishingAlert = JSON.parse(message.body);
+        console.log("🚨 Personal phishing alert received:", alert);
+
+        // 개인 알림 처리
+        this.phishingAlertCallbacks.forEach(callback => {
+          try {
+            callback(alert);
+          } catch (error) {
+            console.error("Error in personal phishing alert callback:", error);
+          }
+        });
+      } catch (error) {
+        console.error("Failed to parse personal phishing alert:", error);
+      }
+    });
+
+    console.log("✅ Subscribed to phishing alerts");
+  }
+
+  /**
+   * 피싱 알림 전송 (서버로)
+   */
+  async sendPhishingAlert(alert: PhishingAlert): Promise<void> {
+    if (!this.stompClient || !this.stompClient.connected) {
+      await this.connect();
+    }
+
+    if (!this.stompClient || !this.stompClient.connected) {
+      throw new Error("STOMP not connected");
+    }
+
+    console.log("📤 Sending phishing alert:", alert);
+
+    this.sendStompMessage('/app/phishing.report', {
+      ...alert,
+      reportedAt: new Date().toISOString(),
+      deviceInfo: {
+        platform: 'mobile',
+        version: '1.0.0'
+      }
+    });
+  }
+
+  /**
+   * 실시간 피싱 통계 스트림
+   */
+  async streamPhishingStats(
+    workspaceId: string,
+    onStats: (stats: any) => void
+  ): Promise<{ unsubscribe: () => void }> {
+    if (!this.stompClient || !this.stompClient.connected) {
+      await this.connect();
+    }
+
+    if (!this.stompClient || !this.stompClient.connected) {
+      throw new Error("STOMP not connected");
+    }
+
+    const statsKey = `phishing-stats-${workspaceId}`;
+
+    // 이미 구독 중이면 재사용
+    if (this.streamSubscriptions.has(statsKey)) {
+      console.log("⚠️ Already subscribed to phishing stats");
+      return {
+        unsubscribe: () => this.unsubscribePhishingStats(workspaceId)
+      };
+    }
+
+    console.log(`📊 Starting phishing stats stream for workspace: ${workspaceId}`);
+
+    const subscription = this.stompClient.subscribe(
+      `/topic/phishing.stats.${workspaceId}`,
+      (message: any) => {
+        try {
+          const stats = JSON.parse(message.body);
+          console.log("📊 Phishing stats update:", stats);
+          onStats(stats);
+        } catch (error) {
+          console.error("Failed to parse phishing stats:", error);
+        }
+      }
+    );
+
+    this.streamSubscriptions.set(statsKey, subscription);
+
+    // 통계 스트림 시작 요청
+    this.sendStompMessage(`/app/phishing.stats.stream`, {
+      workspaceId,
+      action: 'start'
+    });
+
+    return {
+      unsubscribe: () => this.unsubscribePhishingStats(workspaceId)
+    };
+  }
+
+  /**
+   * 피싱 통계 구독 해제
+   */
+  private unsubscribePhishingStats(workspaceId: string): void {
+    const statsKey = `phishing-stats-${workspaceId}`;
+    const subscription = this.streamSubscriptions.get(statsKey);
+
+    if (subscription) {
+      subscription.unsubscribe();
+      this.streamSubscriptions.delete(statsKey);
+
+      if (this.stompClient && this.stompClient.connected) {
+        this.sendStompMessage(`/app/phishing.stats.stream`, {
+          workspaceId,
+          action: 'stop'
+        });
+      }
+    }
+  }
+
+  /**
+   * 피싱 알림 구독 해제
+   */
+  unsubscribeFromPhishingAlerts(): void {
+    if (this.phishingAlertSubscription) {
+      this.phishingAlertSubscription.unsubscribe();
+      this.phishingAlertSubscription = null;
+    }
+    this.phishingAlertCallbacks = [];
+    console.log("✅ Unsubscribed from phishing alerts");
+  }
+
+  /**
+   * 피싱 위치 알림 전송 (지도에 표시용)
+   */
+  async sendPhishingLocationAlert(
+    workspaceId: string,
+    alert: PhishingAlert
+  ): Promise<void> {
+    if (!alert.location) {
+      console.warn("No location in phishing alert");
+      return;
+    }
+
+    if (!this.stompClient || !this.stompClient.connected) {
+      await this.connect();
+    }
+
+    console.log(`📍 Sending phishing location alert for workspace: ${workspaceId}`);
+
+    this.sendStompMessage(`/app/phishing.location.${workspaceId}`, {
+      workspaceId,
+      smsId: alert.smsId,
+      sender: alert.sender,
+      riskLevel: alert.riskLevel,
+      location: alert.location,
+      timestamp: alert.timestamp
+    });
+  }
+
   // 연결 종료
   disconnect() {
+    console.log("🔌 Disconnecting STOMP...");
+
+    // 피싱 알림 구독 해제
+    this.unsubscribeFromPhishingAlerts();
+
     this.cleanup();
     this.isConnecting = false;
   }
 }
 
-export default new LocationWebSocketService();
+const locationWebSocketService = new LocationWebSocketService();
+
+export default locationWebSocketService;
+export { locationWebSocketService };
+export type { PhishingAlert };
