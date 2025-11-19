@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { locationWebSocketService } from './locationWebSocketService';
 import { phishingDetectionEngine } from './phishingDetectionEngine';
+import { apiService } from './api';
 
 interface SMS {
   id: string;
@@ -308,25 +309,61 @@ class SMSPhishingGuardService {
    */
   private async reportToServer(alert: PhishingAlert): Promise<void> {
     try {
+      // 현재 워크스페이스 ID 가져오기 (필요시)
+      const currentWorkspace = await AsyncStorage.getItem('currentWorkspace');
+
       // API 서비스를 통해 서버에 보고
-      const response = await fetch('/api/phishing/report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await this.getAuthToken()}`
-        },
-        body: JSON.stringify({
-          alert,
-          deviceInfo: await this.getDeviceInfo(),
-          timestamp: Date.now()
-        })
+      await apiService.reportPhishing({
+        smsId: alert.smsId,
+        sender: alert.sender,
+        message: alert.message,
+        riskScore: alert.riskScore,
+        riskLevel: alert.riskLevel,
+        detectionReasons: alert.detectionReasons,
+        phishingType: this.detectPhishingType(alert.message),
+        workspaceId: currentWorkspace || undefined,
+        location: alert.location,
+        deviceInfo: await this.getDeviceInfo()
       });
 
-      if (!response.ok) {
-        throw new Error('서버 보고 실패');
-      }
+      console.log('✅ 피싱 신고가 서버에 성공적으로 전송되었습니다');
     } catch (error) {
-      console.error('피싱 보고 실패:', error);
+      console.error('❌ 피싱 보고 실패:', error);
+      // 오프라인일 경우 로컬에 저장하여 나중에 재시도
+      await this.saveOfflineReport(alert);
+    }
+  }
+
+  /**
+   * 피싱 타입 감지
+   */
+  private detectPhishingType(message: string): string {
+    if (message.includes('은행') || message.includes('송금') || message.includes('계좌')) {
+      return 'financial';
+    }
+    if (message.includes('정부') || message.includes('국세청') || message.includes('검찰')) {
+      return 'government';
+    }
+    if (message.includes('택배') || message.includes('배송')) {
+      return 'delivery';
+    }
+    if (message.includes('쇼핑') || message.includes('구매')) {
+      return 'shopping';
+    }
+    return 'other';
+  }
+
+  /**
+   * 오프라인 신고 저장
+   */
+  private async saveOfflineReport(alert: PhishingAlert): Promise<void> {
+    try {
+      const offlineReports = await AsyncStorage.getItem('offline_phishing_reports');
+      const reports = offlineReports ? JSON.parse(offlineReports) : [];
+      reports.push(alert);
+      await AsyncStorage.setItem('offline_phishing_reports', JSON.stringify(reports));
+    } catch (error) {
+      console.error('오프라인 신고 저장 실패:', error);
     }
   }
 
@@ -502,6 +539,13 @@ class SMSPhishingGuardService {
     }
 
     console.log('SMS 피싱 가드 중지됨');
+  }
+
+  /**
+   * 피싱 가드 활성화 상태 확인
+   */
+  public async isEnabled(): Promise<boolean> {
+    return this.config.enabled && this.isMonitoring;
   }
 
   /**
