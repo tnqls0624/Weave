@@ -357,6 +357,45 @@ class LocationWebSocketService {
     return this.stompClient !== null && this.stompClient.connected;
   }
 
+  // 채널 구독 (일반용)
+  async subscribeToChannel(channel: string, callback: (data: any) => void): Promise<void> {
+    if (!this.stompClient || !this.stompClient.connected) {
+      await this.connect();
+    }
+
+    if (!this.stompClient || !this.stompClient.connected) {
+      throw new Error("STOMP not connected");
+    }
+
+    // 이미 구독 중이면 먼저 해제
+    if (this.streamSubscriptions.has(channel)) {
+      const existing = this.streamSubscriptions.get(channel);
+      if (existing) {
+        existing.unsubscribe();
+      }
+    }
+
+    const subscription = this.stompClient.subscribe(channel, (message: any) => {
+      try {
+        const data = JSON.parse(message.body);
+        callback(data);
+      } catch (error) {
+        console.error(`Failed to parse message from ${channel}:`, error);
+      }
+    });
+
+    this.streamSubscriptions.set(channel, subscription);
+  }
+
+  // 채널 구독 해제
+  async unsubscribeFromChannel(channel: string): Promise<void> {
+    const subscription = this.streamSubscriptions.get(channel);
+    if (subscription) {
+      subscription.unsubscribe();
+      this.streamSubscriptions.delete(channel);
+    }
+  }
+
   // ===== 피싱 가드 관련 메서드 =====
 
   /**
