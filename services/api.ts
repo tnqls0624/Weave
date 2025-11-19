@@ -585,14 +585,29 @@ class ApiService {
 
   // ==================== Location API ====================
   // 워크스페이스 멤버들의 위치 정보 가져오기
-  async getWorkspaceUserLocations(workspaceId: string): Promise<User[]> {
-    return this.request<User[]>({
+  async getWorkspaceUserLocations(workspaceId: string): Promise<any[]> {
+    return this.request<any[]>({
       url: `/api/workspace/${workspaceId}/locations`,
       method: "GET",
     });
   }
 
-  // 현재 사용자 위치 업데이트
+  // 워크스페이스에 내 위치 전송 (서버 LocationController와 일치)
+  async saveLocationToWorkspace(
+    workspaceId: string,
+    location: {
+      latitude: number;
+      longitude: number;
+    }
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/workspace/${workspaceId}/locations`,
+      method: "POST",
+      data: location,
+    });
+  }
+
+  // 현재 사용자 위치 업데이트 (기존 메서드 유지 - 호환성)
   async updateMyLocation(location: {
     latitude: number;
     longitude: number;
