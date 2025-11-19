@@ -11,7 +11,6 @@ export default function Index() {
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    // 인증 상태 체크 (비동기 스토리지에서 로드될 때까지 대기)
     const timer = setTimeout(() => {
       setIsChecking(false);
     }, 100);

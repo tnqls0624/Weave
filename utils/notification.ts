@@ -1,3 +1,4 @@
+import { apiService } from "@/services/api";
 import { getApp } from "@react-native-firebase/app";
 import {
   AuthorizationStatus,
@@ -11,18 +12,18 @@ import {
 } from "@react-native-firebase/messaging";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { NotificationBehavior } from "expo-notifications";
 import { router } from "expo-router";
 import { Platform } from "react-native";
 
 // 알림 핸들러 설정 - 초기화 시에만 한 번 실행되도록 외부로 이동
 Notifications.setNotificationHandler({
-  handleNotification: async (): Promise<NotificationBehavior> => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification:
+    async (): Promise<Notifications.NotificationBehavior> => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
 });
 
 const messaging = getMessaging(getApp());
@@ -118,7 +119,7 @@ class NotificationManager {
     try {
       const permissionGranted = await this.requestPermissions();
       if (permissionGranted) {
-        await this.createAndroidChannel();
+        // await this.createAndroidChannel();
         console.log("알림 권한 획득 성공");
         this.setupListeners();
         this.isInitialized = true;
@@ -148,23 +149,44 @@ class NotificationManager {
         return false;
       }
 
-      // Firebase Messaging 권한 요청 (iOS에서는 별도 처리 필요)
+      // Firebase Messaging 권한 요청 (iOS에서는 APNS 설정 필요)
       try {
+        console.log("🔔 Firebase Messaging 권한 요청 시작...");
         const authStatus = await requestPermission(messaging);
+        console.log("🔔 Firebase 권한 상태:", authStatus);
+
         const enabled =
           authStatus === AuthorizationStatus.AUTHORIZED ||
           authStatus === AuthorizationStatus.PROVISIONAL;
 
         if (enabled) {
-          const fcmToken = await getToken(messaging);
-          console.log("FCM 토큰:", fcmToken);
+          try {
+            const fcmToken = await getToken(messaging);
+
+            // FCM 토큰을 서버에 전송
+            try {
+              await apiService.updateNotifications(true, fcmToken);
+            } catch (apiError: any) {
+              console.error(
+                "❌ FCM 토큰 서버 업데이트 실패:",
+                apiError.message
+              );
+            }
+          } catch (tokenError: any) {
+            console.error("❌ FCM 토큰 가져오기 실패");
+            console.error("에러 메시지:", tokenError.message);
+          }
         } else {
-          console.log("Firebase Messaging 권한 거부됨");
+          console.log("❌ Firebase Messaging 권한 거부됨");
+          // 권한이 거부되면 pushEnabled를 false로 업데이트
+          try {
+            await apiService.updateNotifications(false);
+          } catch (apiError: any) {
+            console.error("❌ 서버 업데이트 실패:", apiError.message);
+          }
         }
-      } catch (error) {
-        console.error("Firebase Messaging 권한 요청 오류:", error);
-        // iOS에서는 Firebase Messaging 권한 실패해도 Expo Notifications는 작동할 수 있음
-        // 따라서 여기서 에러가 발생해도 true 반환
+      } catch (error: any) {
+        console.error("❌ Firebase Messaging 초기화 실패");
       }
 
       return true;
@@ -226,7 +248,6 @@ class NotificationManager {
       this.unsubscribeMessage = onMessage(
         messaging,
         async (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
-          console.log("Foreground Message:", remoteMessage);
           if (remoteMessage?.notification) {
             const { title, body } = remoteMessage.notification;
             await this.showNotification(

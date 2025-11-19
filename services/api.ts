@@ -453,6 +453,7 @@ class ApiService {
     workspaceId: string,
     params?: WorkspaceScheduleParams
   ): Promise<Schedule[]> {
+    console.log("🔍 [Get Workspace Schedules] Params:", params);
     const response = await this.request<any>({
       url: `/api/workspace/${workspaceId}/schedule/`,
       method: "GET",
@@ -496,11 +497,19 @@ class ApiService {
   }
 
   // 알림 설정 업데이트
-  async updateNotifications(pushEnabled: boolean): Promise<User> {
+  async updateNotifications(
+    pushEnabled?: boolean,
+    fcmToken?: string,
+    locationEnabled?: boolean
+  ): Promise<User> {
     return this.request<User>({
       url: "/api/user/notifications",
       method: "PUT",
-      data: { pushEnabled },
+      data: {
+        ...(pushEnabled && { pushEnabled }),
+        ...(fcmToken && { fcmToken }),
+        ...(locationEnabled && { locationEnabled }),
+      },
     });
   }
 

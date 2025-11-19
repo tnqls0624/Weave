@@ -92,8 +92,8 @@ export const useWorkspaceSchedules = (
     queryKey: queryKeys.workspaceSchedules(workspaceId, params),
     queryFn: () => apiService.getWorkspaceSchedules(workspaceId, params),
     enabled: options?.enabled !== undefined ? options.enabled : !!workspaceId,
-    staleTime: 5 * 60 * 1000, // 5분 - 캐시 활용으로 성능 최적화
-    gcTime: 30 * 60 * 1000, // 30분
+    staleTime: 30 * 60 * 1000, // 30분 - 프리페치된 데이터 활용
+    gcTime: 60 * 60 * 1000, // 1시간 - 메모리에 오래 유지
   });
 };
 
@@ -266,8 +266,13 @@ export const useUpdateNotifications = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (pushEnabled: boolean) =>
-      apiService.updateNotifications(pushEnabled),
+    mutationFn: ({
+      pushEnabled,
+      fcmToken,
+    }: {
+      pushEnabled: boolean;
+      fcmToken?: string;
+    }) => apiService.updateNotifications(pushEnabled, fcmToken),
     onSuccess: () => {
       // 사용자 프로필 캐시 업데이트
       queryClient.invalidateQueries({ queryKey: queryKeys.profile });

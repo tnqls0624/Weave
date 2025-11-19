@@ -9,25 +9,23 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "supportsTablet": true,
       "bundleIdentifier": "com.weave.project",
-      "googleServicesFile": "./GoogleService-Info.plist",
+      "googleServicesFile": "../ios/Weave/GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": [
-              "weave-app"
-            ]
+            "CFBundleURLSchemes": ["weave-app"]
           }
         ],
         "NSLocationAlwaysUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "NSLocationWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "CFBundleIconName": "AppIcon",
-        "UIBackgroundModes": [
-          "remote-notification",
-          "location"
-        ],
+        "UIBackgroundModes": ["remote-notification", "location"],
         "NSCameraUsageDescription": "카메라 접근 권한이 필요합니다",
         "NSPhotoLibraryUsageDescription": "사진 접근 권한이 필요합니다",
         "NSPhotoLibraryAddUsageDescription": "사진 저장 권한이 필요합니다"

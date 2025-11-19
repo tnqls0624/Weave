@@ -16,6 +16,7 @@ export interface User {
   initialLocation?: Location;
   location?: Location;
   pushEnabled?: boolean;
+  fcmToken?: string;
 }
 
 export interface Calendar {

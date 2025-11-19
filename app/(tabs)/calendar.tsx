@@ -2,7 +2,7 @@ import CalendarView from "@/components/CalendarView";
 import { useAppData, useAppStore } from "@/stores";
 import { useRouter } from "expo-router";
 import React, { useCallback } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
@@ -65,7 +65,7 @@ export default function CalendarScreen() {
           },
         ]}
       >
-        <Text>Loading calendar...</Text>
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }

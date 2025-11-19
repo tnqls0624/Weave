@@ -5,7 +5,7 @@ import { Schedule, User } from "@/types";
 import dayjs from "dayjs";
 import { useRouter } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function FeedScreen() {
@@ -39,7 +39,7 @@ export default function FeedScreen() {
           },
         ]}
       >
-        <Text>Loading feed...</Text>
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }

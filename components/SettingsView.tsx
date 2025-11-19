@@ -493,7 +493,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 onValueChange={async (value) => {
                   setNotificationsEnabled(value);
                   try {
-                    await updateNotificationsMutation.mutateAsync(value);
+                    await updateNotificationsMutation.mutateAsync({
+                      pushEnabled: value,
+                      fcmToken: currentUser?.fcmToken,
+                    });
                   } catch (error) {
                     console.error("Failed to update notifications:", error);
                     // 실패 시 원래 값으로 되돌림

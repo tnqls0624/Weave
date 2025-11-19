@@ -149,9 +149,15 @@ class LocationWebSocketService {
     }
     this.pendingRequests.clear();
 
+    // streamSubscriptions는 { initial, stream } 객체 형태로 저장되어 있음
     for (const [, subscription] of this.streamSubscriptions) {
       if (subscription) {
-        subscription.unsubscribe();
+        if (subscription.initial) {
+          subscription.initial.unsubscribe();
+        }
+        if (subscription.stream) {
+          subscription.stream.unsubscribe();
+        }
       }
     }
     this.streamSubscriptions.clear();
