@@ -1,6 +1,7 @@
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import locationWebSocketService from "./locationWebSocketService";
+import { apiService } from "./api";
 
 const TASK_MANAGER_AVAILABLE =
   TaskManager &&
@@ -206,12 +207,28 @@ class LocationTrackingService {
         accuracy: location.coords.accuracy,
       });
 
-      // WebSocket으로 위치 전송 (Fire-and-Forget)
-      await locationWebSocketService.updateLocation(
-        workspaceId,
-        latitude,
-        longitude
-      );
+      // 1. REST API로 서버에 저장 (중요 - DB에 저장)
+      try {
+        await apiService.saveLocationToWorkspace(workspaceId, {
+          latitude,
+          longitude,
+        });
+        console.log("✅ Location saved to server via REST API");
+      } catch (apiError) {
+        console.error("❌ Failed to save location via REST API:", apiError);
+      }
+
+      // 2. WebSocket으로 실시간 브로드캐스트 (선택적 - 실시간 업데이트용)
+      try {
+        await locationWebSocketService.updateLocation(
+          workspaceId,
+          latitude,
+          longitude
+        );
+        console.log("✅ Location broadcasted via WebSocket");
+      } catch (wsError) {
+        console.error("❌ Failed to broadcast location via WebSocket:", wsError);
+      }
     } catch (error) {
       console.error("❌ Failed to send location update:", error);
     }

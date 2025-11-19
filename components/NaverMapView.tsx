@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import { useMyProfile } from "../services/queries";
+import { apiService } from "../services/api";
 import type { Schedule, User } from "../types";
 
 const COLOR_MAP: Record<string, string> = {
@@ -95,6 +96,14 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
         return;
       }
       try {
+        // REST API로 서버에 저장
+        await apiService.saveLocationToWorkspace(activeWorkspaceId, {
+          latitude,
+          longitude,
+        });
+        console.log("✅ Location saved to server");
+
+        // WebSocket으로 실시간 브로드캐스트
         await locationWebSocketService.updateLocation(
           activeWorkspaceId,
           latitude,
@@ -116,13 +125,49 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
     const startStreaming = async () => {
       try {
-        // STOMP 스트림 구독
+        // 1. REST API로 초기 위치 데이터 가져오기
+        console.log("📍 Fetching initial locations from REST API...");
+        try {
+          const initialLocations = await apiService.getWorkspaceUserLocations(
+            activeWorkspaceId
+          );
+
+          console.log("✅ Initial locations from API:", initialLocations);
+
+          // 초기 위치 데이터로 사용자 업데이트
+          if (Array.isArray(initialLocations)) {
+            setRealtimeUsers((prevUsers) => {
+              const updatedUsers = [...prevUsers];
+
+              initialLocations.forEach((locationData: any) => {
+                const userId = locationData.userId || locationData.id;
+                const userIndex = updatedUsers.findIndex((u) => u.id === userId);
+
+                if (userIndex !== -1 && locationData.latitude && locationData.longitude) {
+                  updatedUsers[userIndex] = {
+                    ...updatedUsers[userIndex],
+                    location: {
+                      latitude: locationData.latitude,
+                      longitude: locationData.longitude,
+                    },
+                  };
+                }
+              });
+
+              return updatedUsers;
+            });
+          }
+        } catch (apiError) {
+          console.error("❌ Failed to fetch initial locations:", apiError);
+        }
+
+        // 2. STOMP 스트림 구독 (실시간 업데이트)
         subscription = await locationWebSocketService.streamLocations(
           activeWorkspaceId,
           (locationData: any) => {
             // 위치 업데이트 수신
             console.log(
-              "🗺️ Received location data:",
+              "🗺️ Received real-time location update:",
               JSON.stringify(locationData, null, 2)
             );
 
