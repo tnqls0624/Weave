@@ -94,9 +94,20 @@ export default function PhishingGuardScreen() {
     try {
       setLoading(true);
 
-      // 피싱 가드 상태 확인
-      const guardStatus = await smsPhishingGuardService.isEnabled();
-      setIsEnabled(guardStatus);
+      // 서버에서 사용자 정보 가져오기 (피싱 가드 상태 포함)
+      const userProfile = await apiService.getMyProfile();
+      const serverGuardStatus = userProfile.phishingGuardEnabled ?? false;
+      setIsEnabled(serverGuardStatus);
+
+      // 서버 상태와 로컬 서비스 상태 동기화
+      const localGuardStatus = await smsPhishingGuardService.isEnabled();
+      if (serverGuardStatus && !localGuardStatus) {
+        // 서버에는 활성화되어 있는데 로컬은 비활성화된 경우
+        await smsPhishingGuardService.startMonitoring();
+      } else if (!serverGuardStatus && localGuardStatus) {
+        // 서버에는 비활성화되어 있는데 로컬은 활성화된 경우
+        await smsPhishingGuardService.stopMonitoring();
+      }
 
       // 통계 가져오기
       const stats = await apiService.getMyPhishingStatistics();

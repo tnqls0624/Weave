@@ -17,43 +17,26 @@ const BottomNav: React.FC = () => {
   const navItems = [
     { route: "feed", icon: "list", label: "피드" },
     { route: "calendar", icon: "event", label: "캘린더" },
-    { route: "create", icon: "add", label: "생성" },
     { route: "map", icon: "map", label: "지도" },
+    { route: "phishing", icon: "security", label: "보안" },
     { route: "settings", icon: "settings", label: "설정" },
   ];
 
   const handleNavigate = (route: string) => {
-    if (route === "create") {
-      router.push("/create");
-    } else {
-      // 같은 탭을 다시 누른 경우 초기 화면으로 리셋
-      if (currentRoute === route) {
-        if (route === "settings") {
-          resetSettingsPage();
-        }
-        // 다른 탭들도 필요시 여기에 리셋 로직 추가
+    // 같은 탭을 다시 누른 경우 초기 화면으로 리셋
+    if (currentRoute === route) {
+      if (route === "settings") {
+        resetSettingsPage();
       }
-      router.push(`/(tabs)/${route}` as any);
+      // 다른 탭들도 필요시 여기에 리셋 로직 추가
     }
+    router.push(`/(tabs)/${route}` as any);
   };
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.nav}>
         {navItems.map(({ route, icon, label }) => {
-          if (route === "create") {
-            return (
-              <View key={route} style={styles.createButtonContainer}>
-                <Pressable
-                  onPress={() => handleNavigate(route)}
-                  style={styles.createButton}
-                  android_ripple={{ color: "#007AFF" }}
-                >
-                  <MaterialIcons name="add" size={32} color="#fff" />
-                </Pressable>
-              </View>
-            );
-          }
           const isActive = currentRoute === route;
           return (
             <Pressable
@@ -93,7 +76,7 @@ const styles = StyleSheet.create({
   nav: {
     flexDirection: "row",
     height: 64,
-    maxWidth: 448,
+    maxWidth: 500, // Optimized for 5 items
     alignSelf: "center",
     width: "100%",
   },
@@ -103,29 +86,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 4,
   },
-  createButtonContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  createButton: {
-    position: "absolute",
-    top: -20,
-    width: 56,
-    height: 56,
-    backgroundColor: "#007AFF",
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
   label: {
-    fontSize: 12,
+    fontSize: 11, // Optimized for 5 items
     fontWeight: "500",
     color: "#6b7280",
   },

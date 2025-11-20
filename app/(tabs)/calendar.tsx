@@ -1,8 +1,9 @@
 import CalendarView from "@/components/CalendarView";
 import { useAppData, useAppStore } from "@/stores";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
@@ -102,6 +103,15 @@ export default function CalendarScreen() {
         onOpenSidebar={handleOpenSidebar}
         onOpenSearch={handleOpenSearch}
       />
+
+      {/* Floating Action Button */}
+      <Pressable
+        style={[styles.fab, { bottom: 80 + insets.bottom }]}
+        onPress={() => router.push("/create")}
+        android_ripple={{ color: "rgba(255, 255, 255, 0.3)" }}
+      >
+        <MaterialIcons name="add" size={28} color="#fff" />
+      </Pressable>
     </View>
   );
 }
@@ -110,5 +120,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
+  },
+  fab: {
+    position: "absolute",
+    right: 16,
+    width: 56,
+    height: 56,
+    backgroundColor: "#007AFF",
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 });

@@ -57,7 +57,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     currentUser?.pushEnabled ?? true
   );
   const [locationSharingEnabled, setLocationSharingEnabled] = useState(
-    locationTrackingService.isTracking()
+    currentUser?.locationEnabled ?? false
   );
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -216,6 +216,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     if (currentUser) {
       setProfileName(currentUser.name);
       setBirthDate(currentUser.birthday ?? null);
+      setNotificationsEnabled(currentUser.pushEnabled ?? true);
+      setLocationSharingEnabled(currentUser.locationEnabled ?? false);
     }
   }, [currentUser, users]);
 

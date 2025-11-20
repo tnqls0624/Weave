@@ -3,12 +3,17 @@
  * Meta의 React Native 베스트 프랙티스를 적용한 고성능 피싱 탐지 시스템
  */
 
-import { Platform, PermissionsAndroid, NativeModules, NativeEventEmitter } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
-import { locationWebSocketService } from './locationWebSocketService';
-import { phishingDetectionEngine } from './phishingDetectionEngine';
-import { apiService } from './api';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import {
+  NativeEventEmitter,
+  NativeModules,
+  PermissionsAndroid,
+  Platform,
+} from "react-native";
+import { apiService } from "./api";
+import { locationWebSocketService } from "./locationWebSocketService";
+import { phishingDetectionEngine } from "./phishingDetectionEngine";
 
 interface SMS {
   id: string;
@@ -24,7 +29,7 @@ interface PhishingAlert {
   sender: string;
   message: string;
   riskScore: number;
-  riskLevel: 'high' | 'medium' | 'low';
+  riskLevel: "high" | "medium" | "low";
   detectionReasons: string[];
   timestamp: number;
   location?: {
@@ -38,7 +43,7 @@ interface PhishingGuardConfig {
   autoBlockHighRisk: boolean;
   notificationEnabled: boolean;
   realtimeProtection: boolean;
-  sensitivityLevel: 'high' | 'medium' | 'low';
+  sensitivityLevel: "high" | "medium" | "low";
   whitelistedNumbers: string[];
   blacklistedPatterns: string[];
 }
@@ -51,6 +56,7 @@ class SMSPhishingGuardService {
   private detectedPhishingMessages: Map<string, PhishingAlert> = new Map();
   private smsListener: any = null;
   private lastProcessedSMSId: string | null = null;
+  private phishingAlertCallbacks: ((alert: PhishingAlert) => void)[] = [];
 
   // 성능 최적화를 위한 캐시
   private analysisCache: Map<string, any> = new Map();
@@ -62,9 +68,9 @@ class SMSPhishingGuardService {
       autoBlockHighRisk: true,
       notificationEnabled: true,
       realtimeProtection: true,
-      sensitivityLevel: 'medium',
+      sensitivityLevel: "medium",
       whitelistedNumbers: [],
-      blacklistedPatterns: []
+      blacklistedPatterns: [],
     };
 
     this.initialize();
@@ -83,9 +89,9 @@ class SMSPhishingGuardService {
       await this.loadConfig();
 
       // 플랫폼별 초기화
-      if (Platform.OS === 'android') {
+      if (Platform.OS === "android") {
         await this.initializeAndroid();
-      } else if (Platform.OS === 'ios') {
+      } else if (Platform.OS === "ios") {
         await this.initializeiOS();
       }
 
@@ -94,7 +100,7 @@ class SMSPhishingGuardService {
         await this.initializeWebSocket();
       }
     } catch (error) {
-      console.error('SMS 피싱 가드 초기화 실패:', error);
+      console.error("SMS 피싱 가드 초기화 실패:", error);
     }
   }
 
@@ -111,11 +117,11 @@ class SMSPhishingGuardService {
       ]);
 
       const allGranted = Object.values(granted).every(
-        permission => permission === PermissionsAndroid.RESULTS.GRANTED
+        (permission) => permission === PermissionsAndroid.RESULTS.GRANTED
       );
 
       if (!allGranted) {
-        console.warn('SMS 권한이 거부되었습니다');
+        console.warn("SMS 권한이 거부되었습니다");
         return;
       }
 
@@ -125,7 +131,7 @@ class SMSPhishingGuardService {
 
         // 새 SMS 수신 리스너
         this.smsListener = this.eventEmitter.addListener(
-          'onSMSReceived',
+          "onSMSReceived",
           this.handleNewSMS.bind(this)
         );
 
@@ -133,7 +139,7 @@ class SMSPhishingGuardService {
         NativeModules.SMSReader.startSMSMonitoring();
       }
     } catch (error) {
-      console.error('Android SMS 초기화 실패:', error);
+      console.error("Android SMS 초기화 실패:", error);
     }
   }
 
@@ -143,7 +149,7 @@ class SMSPhishingGuardService {
   private async initializeiOS(): Promise<void> {
     // iOS는 SMS 직접 읽기가 제한되므로
     // 푸시 알림과 ML Kit을 활용한 대안 방법 구현
-    console.log('iOS 피싱 가드: 푸시 알림 기반 모니터링 활성화');
+    console.log("iOS 피싱 가드: 푸시 알림 기반 모니터링 활성화");
   }
 
   /**
@@ -160,7 +166,39 @@ class SMSPhishingGuardService {
         }
       );
     } catch (error) {
-      console.error('WebSocket 초기화 실패:', error);
+      console.error("WebSocket 초기화 실패:", error);
+    }
+  }
+
+  /**
+   * WebSocket으로 받은 피싱 알림 처리
+   */
+  private async handlePhishingAlert(alert: PhishingAlert): Promise<void> {
+    console.log("🚨 피싱 알림 수신:", alert);
+
+    // 피싱 메시지 저장
+    this.detectedPhishingMessages.set(alert.smsId, alert);
+
+    // 로컬 저장소에 저장
+    await this.savePhishingAlert(alert);
+
+    // 고위험 알림 처리
+    if (alert.riskLevel === "high") {
+      await this.showHighRiskNotification(alert);
+    }
+
+    // 통계 업데이트
+    this.updateStatistics(alert);
+
+    // 콜백 실행 (UI 업데이트 등)
+    if (this.phishingAlertCallbacks.length > 0) {
+      this.phishingAlertCallbacks.forEach((callback) => {
+        try {
+          callback(alert);
+        } catch (error) {
+          console.error("피싱 알림 콜백 실행 실패:", error);
+        }
+      });
     }
   }
 
@@ -193,7 +231,7 @@ class SMSPhishingGuardService {
           riskLevel: this.calculateRiskLevel(analysis.riskScore),
           detectionReasons: analysis.reasons,
           timestamp: Date.now(),
-          location: await this.getCurrentLocation()
+          location: await this.getCurrentLocation(),
         };
 
         // 피싱 메시지 저장
@@ -209,7 +247,7 @@ class SMSPhishingGuardService {
         }
       }
     } catch (error) {
-      console.error('SMS 분석 실패:', error);
+      console.error("SMS 분석 실패:", error);
     }
   }
 
@@ -229,19 +267,21 @@ class SMSPhishingGuardService {
         sender: sms.sender,
         message: sms.body,
         timestamp: sms.timestamp,
-        sensitivityLevel: this.config.sensitivityLevel
+        sensitivityLevel: this.config.sensitivityLevel,
       });
 
       // 캐시 저장 (최대 크기 제한)
       if (this.analysisCache.size >= this.MAX_CACHE_SIZE) {
         const firstKey = this.analysisCache.keys().next().value;
-        this.analysisCache.delete(firstKey);
+        if (firstKey) {
+          this.analysisCache.delete(firstKey);
+        }
       }
       this.analysisCache.set(cacheKey, result);
 
       return result;
     } catch (error) {
-      console.error('피싱 분석 실패:', error);
+      console.error("피싱 분석 실패:", error);
       return { isPhishing: false, riskScore: 0, reasons: [] };
     }
   }
@@ -256,7 +296,7 @@ class SMSPhishingGuardService {
     }
 
     // 2. 고위험 메시지 자동 차단
-    if (this.config.autoBlockHighRisk && alert.riskLevel === 'high') {
+    if (this.config.autoBlockHighRisk && alert.riskLevel === "high") {
       await this.blockPhishingMessage(alert);
     }
 
@@ -273,15 +313,21 @@ class SMSPhishingGuardService {
    * 피싱 알림 표시
    */
   private async showPhishingNotification(alert: PhishingAlert): Promise<void> {
-    const riskEmoji = alert.riskLevel === 'high' ? '🚨' :
-                      alert.riskLevel === 'medium' ? '⚠️' : 'ℹ️';
+    const riskEmoji =
+      alert.riskLevel === "high"
+        ? "🚨"
+        : alert.riskLevel === "medium"
+        ? "⚠️"
+        : "ℹ️";
 
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `${riskEmoji} 피싱 의심 메시지 감지`,
-        body: `발신자: ${alert.sender}\n위험도: ${alert.riskLevel.toUpperCase()}`,
+        body: `발신자: ${
+          alert.sender
+        }\n위험도: ${alert.riskLevel.toUpperCase()}`,
         data: { alert },
-        sound: 'default',
+        sound: "default",
         badge: 1,
         priority: Notifications.AndroidNotificationPriority.HIGH,
       },
@@ -293,7 +339,7 @@ class SMSPhishingGuardService {
    * 피싱 메시지 차단
    */
   private async blockPhishingMessage(alert: PhishingAlert): Promise<void> {
-    if (Platform.OS === 'android' && NativeModules.SMSReader) {
+    if (Platform.OS === "android" && NativeModules.SMSReader) {
       await NativeModules.SMSReader.blockSMS(alert.smsId, alert.sender);
     }
 
@@ -310,7 +356,7 @@ class SMSPhishingGuardService {
   private async reportToServer(alert: PhishingAlert): Promise<void> {
     try {
       // 현재 워크스페이스 ID 가져오기 (필요시)
-      const currentWorkspace = await AsyncStorage.getItem('currentWorkspace');
+      const currentWorkspace = await AsyncStorage.getItem("currentWorkspace");
 
       // API 서비스를 통해 서버에 보고
       await apiService.reportPhishing({
@@ -323,12 +369,12 @@ class SMSPhishingGuardService {
         phishingType: this.detectPhishingType(alert.message),
         workspaceId: currentWorkspace || undefined,
         location: alert.location,
-        deviceInfo: await this.getDeviceInfo()
+        deviceInfo: await this.getDeviceInfo(),
       });
 
-      console.log('✅ 피싱 신고가 서버에 성공적으로 전송되었습니다');
+      console.log("✅ 피싱 신고가 서버에 성공적으로 전송되었습니다");
     } catch (error) {
-      console.error('❌ 피싱 보고 실패:', error);
+      console.error("❌ 피싱 보고 실패:", error);
       // 오프라인일 경우 로컬에 저장하여 나중에 재시도
       await this.saveOfflineReport(alert);
     }
@@ -338,19 +384,27 @@ class SMSPhishingGuardService {
    * 피싱 타입 감지
    */
   private detectPhishingType(message: string): string {
-    if (message.includes('은행') || message.includes('송금') || message.includes('계좌')) {
-      return 'financial';
+    if (
+      message.includes("은행") ||
+      message.includes("송금") ||
+      message.includes("계좌")
+    ) {
+      return "financial";
     }
-    if (message.includes('정부') || message.includes('국세청') || message.includes('검찰')) {
-      return 'government';
+    if (
+      message.includes("정부") ||
+      message.includes("국세청") ||
+      message.includes("검찰")
+    ) {
+      return "government";
     }
-    if (message.includes('택배') || message.includes('배송')) {
-      return 'delivery';
+    if (message.includes("택배") || message.includes("배송")) {
+      return "delivery";
     }
-    if (message.includes('쇼핑') || message.includes('구매')) {
-      return 'shopping';
+    if (message.includes("쇼핑") || message.includes("구매")) {
+      return "shopping";
     }
-    return 'other';
+    return "other";
   }
 
   /**
@@ -358,12 +412,17 @@ class SMSPhishingGuardService {
    */
   private async saveOfflineReport(alert: PhishingAlert): Promise<void> {
     try {
-      const offlineReports = await AsyncStorage.getItem('offline_phishing_reports');
+      const offlineReports = await AsyncStorage.getItem(
+        "offline_phishing_reports"
+      );
       const reports = offlineReports ? JSON.parse(offlineReports) : [];
       reports.push(alert);
-      await AsyncStorage.setItem('offline_phishing_reports', JSON.stringify(reports));
+      await AsyncStorage.setItem(
+        "offline_phishing_reports",
+        JSON.stringify(reports)
+      );
     } catch (error) {
-      console.error('오프라인 신고 저장 실패:', error);
+      console.error("오프라인 신고 저장 실패:", error);
     }
   }
 
@@ -382,9 +441,9 @@ class SMSPhishingGuardService {
   private async updateMapAlert(alert: PhishingAlert): Promise<void> {
     // 지도 컴포넌트에 이벤트 전송
     if (this.eventEmitter) {
-      this.eventEmitter.emit('phishingAlertOnMap', {
+      this.eventEmitter.emit("phishingAlertOnMap", {
         location: alert.location,
-        alert: alert
+        alert: alert,
       });
     }
   }
@@ -392,34 +451,38 @@ class SMSPhishingGuardService {
   /**
    * 위험도 계산
    */
-  private calculateRiskLevel(score: number): 'high' | 'medium' | 'low' {
-    if (score >= 0.8) return 'high';
-    if (score >= 0.5) return 'medium';
-    return 'low';
+  private calculateRiskLevel(score: number): "high" | "medium" | "low" {
+    if (score >= 0.8) return "high";
+    if (score >= 0.5) return "medium";
+    return "low";
   }
 
   /**
    * 화이트리스트 체크
    */
   private isWhitelisted(sender: string): boolean {
-    return this.config.whitelistedNumbers.some(number =>
-      sender.includes(number) || number.includes(sender)
+    return this.config.whitelistedNumbers.some(
+      (number) => sender.includes(number) || number.includes(sender)
     );
   }
 
   /**
    * 현재 위치 가져오기
    */
-  private async getCurrentLocation(): Promise<{ latitude: number; longitude: number } | undefined> {
+  private async getCurrentLocation(): Promise<
+    { latitude: number; longitude: number } | undefined
+  > {
     try {
       // locationTrackingService에서 위치 가져오기
       const location = await NativeModules.LocationModule?.getCurrentPosition();
-      return location ? {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      } : undefined;
+      return location
+        ? {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          }
+        : undefined;
     } catch (error) {
-      console.error('위치 가져오기 실패:', error);
+      console.error("위치 가져오기 실패:", error);
       return undefined;
     }
   }
@@ -428,7 +491,10 @@ class SMSPhishingGuardService {
    * 설정 저장
    */
   private async saveConfig(): Promise<void> {
-    await AsyncStorage.setItem('phishing_guard_config', JSON.stringify(this.config));
+    await AsyncStorage.setItem(
+      "phishing_guard_config",
+      JSON.stringify(this.config)
+    );
   }
 
   /**
@@ -436,12 +502,12 @@ class SMSPhishingGuardService {
    */
   private async loadConfig(): Promise<void> {
     try {
-      const saved = await AsyncStorage.getItem('phishing_guard_config');
+      const saved = await AsyncStorage.getItem("phishing_guard_config");
       if (saved) {
         this.config = { ...this.config, ...JSON.parse(saved) };
       }
     } catch (error) {
-      console.error('설정 로드 실패:', error);
+      console.error("설정 로드 실패:", error);
     }
   }
 
@@ -457,7 +523,10 @@ class SMSPhishingGuardService {
       alerts.shift();
     }
 
-    await AsyncStorage.setItem('phishing_alerts_history', JSON.stringify(alerts));
+    await AsyncStorage.setItem(
+      "phishing_alerts_history",
+      JSON.stringify(alerts)
+    );
   }
 
   /**
@@ -465,10 +534,10 @@ class SMSPhishingGuardService {
    */
   public async getPhishingHistory(): Promise<PhishingAlert[]> {
     try {
-      const saved = await AsyncStorage.getItem('phishing_alerts_history');
+      const saved = await AsyncStorage.getItem("phishing_alerts_history");
       return saved ? JSON.parse(saved) : [];
     } catch (error) {
-      console.error('히스토리 로드 실패:', error);
+      console.error("히스토리 로드 실패:", error);
       return [];
     }
   }
@@ -477,8 +546,8 @@ class SMSPhishingGuardService {
    * Auth 토큰 가져오기
    */
   private async getAuthToken(): Promise<string> {
-    const token = await AsyncStorage.getItem('access_token');
-    return token || '';
+    const token = await AsyncStorage.getItem("access_token");
+    return token || "";
   }
 
   /**
@@ -499,7 +568,7 @@ class SMSPhishingGuardService {
    */
   public async startMonitoring(): Promise<boolean> {
     if (this.isMonitoring) {
-      console.log('이미 모니터링 중입니다');
+      console.log("이미 모니터링 중입니다");
       return true;
     }
 
@@ -508,14 +577,14 @@ class SMSPhishingGuardService {
       this.config.enabled = true;
       await this.saveConfig();
 
-      if (Platform.OS === 'android' && NativeModules.SMSReader) {
+      if (Platform.OS === "android" && NativeModules.SMSReader) {
         await NativeModules.SMSReader.startSMSMonitoring();
       }
 
-      console.log('SMS 피싱 가드 시작됨');
+      console.log("SMS 피싱 가드 시작됨");
       return true;
     } catch (error) {
-      console.error('모니터링 시작 실패:', error);
+      console.error("모니터링 시작 실패:", error);
       this.isMonitoring = false;
       return false;
     }
@@ -529,7 +598,7 @@ class SMSPhishingGuardService {
     this.config.enabled = false;
     await this.saveConfig();
 
-    if (Platform.OS === 'android' && NativeModules.SMSReader) {
+    if (Platform.OS === "android" && NativeModules.SMSReader) {
       await NativeModules.SMSReader.stopSMSMonitoring();
     }
 
@@ -538,7 +607,7 @@ class SMSPhishingGuardService {
       this.smsListener = null;
     }
 
-    console.log('SMS 피싱 가드 중지됨');
+    console.log("SMS 피싱 가드 중지됨");
   }
 
   /**
@@ -551,12 +620,14 @@ class SMSPhishingGuardService {
   /**
    * 설정 업데이트
    */
-  public async updateConfig(newConfig: Partial<PhishingGuardConfig>): Promise<void> {
+  public async updateConfig(
+    newConfig: Partial<PhishingGuardConfig>
+  ): Promise<void> {
     this.config = { ...this.config, ...newConfig };
     await this.saveConfig();
 
     // 실시간 보호 설정 변경 시 WebSocket 재연결
-    if ('realtimeProtection' in newConfig) {
+    if ("realtimeProtection" in newConfig) {
       if (newConfig.realtimeProtection) {
         await this.initializeWebSocket();
       } else {
@@ -587,9 +658,9 @@ class SMSPhishingGuardService {
     return {
       totalScanned: history.length * 10, // 예시 값
       phishingDetected: history.length,
-      highRiskCount: history.filter(a => a.riskLevel === 'high').length,
-      mediumRiskCount: history.filter(a => a.riskLevel === 'medium').length,
-      lowRiskCount: history.filter(a => a.riskLevel === 'low').length,
+      highRiskCount: history.filter((a) => a.riskLevel === "high").length,
+      mediumRiskCount: history.filter((a) => a.riskLevel === "medium").length,
+      lowRiskCount: history.filter((a) => a.riskLevel === "low").length,
     };
   }
 
@@ -617,14 +688,76 @@ class SMSPhishingGuardService {
   }
 
   /**
+   * 고위험 피싱 알림 표시
+   */
+  private async showHighRiskNotification(alert: PhishingAlert): Promise<void> {
+    if (!this.config.notificationEnabled) return;
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "⚠️ 고위험 피싱 감지",
+          body: `발신자: ${alert.sender}\n위험도: ${(
+            alert.riskScore * 100
+          ).toFixed(0)}%`,
+          data: {
+            type: "phishing_alert",
+            alert: JSON.stringify(alert),
+          },
+          sound: true,
+          badge: 1,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+        },
+        trigger: null,
+      });
+    } catch (error) {
+      console.error("알림 표시 실패:", error);
+    }
+  }
+
+  /**
+   * 통계 업데이트
+   */
+  private updateStatistics(alert: PhishingAlert): void {
+    // AsyncStorage나 다른 상태 관리 시스템을 통해 통계 업데이트
+    // 여기서는 간단한 로깅만 수행
+    console.log("📊 통계 업데이트:", {
+      riskLevel: alert.riskLevel,
+      timestamp: new Date(alert.timestamp).toISOString(),
+    });
+  }
+
+  /**
+   * 피싱 알림 콜백 등록
+   */
+  public registerPhishingAlertCallback(
+    callback: (alert: PhishingAlert) => void
+  ): void {
+    this.phishingAlertCallbacks.push(callback);
+  }
+
+  /**
+   * 피싱 알림 콜백 해제
+   */
+  public unregisterPhishingAlertCallback(
+    callback: (alert: PhishingAlert) => void
+  ): void {
+    const index = this.phishingAlertCallbacks.indexOf(callback);
+    if (index > -1) {
+      this.phishingAlertCallbacks.splice(index, 1);
+    }
+  }
+
+  /**
    * 리소스 정리
    */
   public dispose(): void {
     this.stopMonitoring();
     this.analysisCache.clear();
     this.detectedPhishingMessages.clear();
+    this.phishingAlertCallbacks = [];
   }
 }
 
 export const smsPhishingGuardService = SMSPhishingGuardService.getInstance();
-export type { SMS, PhishingAlert, PhishingGuardConfig };
+export type { PhishingAlert, PhishingGuardConfig, SMS };

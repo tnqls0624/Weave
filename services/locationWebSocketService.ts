@@ -4,9 +4,6 @@ import { apiService } from "./api";
 // STOMP Client 타입
 type StompClient = Client;
 
-// 환경변수 기반 WebSocket/STOMP 엔드포인트 (SockJS 미사용, 순수 WebSocket + STOMP)
-const API_BASE_URL = "wss://api.weave.io.kr/api/ws";
-
 interface PendingRequest {
   resolve: (value: any) => void;
   reject: (error: any) => void;
@@ -20,7 +17,7 @@ interface PhishingAlert {
   sender: string;
   message: string;
   riskScore: number;
-  riskLevel: 'high' | 'medium' | 'low';
+  riskLevel: "high" | "medium" | "low";
   detectionReasons: string[];
   timestamp: number;
   location?: {
@@ -28,6 +25,8 @@ interface PhishingAlert {
     longitude: number;
   };
 }
+
+const API_BASE_URL = "wss://api.weave.io.kr/api/ws";
 
 class LocationWebSocketService {
   private stompClient: StompClient | null = null;
@@ -39,44 +38,72 @@ class LocationWebSocketService {
   private phishingAlertCallbacks: ((alert: PhishingAlert) => void)[] = [];
 
   // STOMP 연결 (순수 WebSocket + STOMP, SockJS 미사용)
-  async connect(): Promise<StompClient> {
+  async connect(retryCount: number = 0): Promise<StompClient> {
+    const MAX_RETRIES = 3;
+
     if (this.stompClient && this.stompClient.connected) {
+      console.log("✅ Already connected to STOMP");
       return this.stompClient;
     }
 
     // 연결 중이면 대기
     if (this.isConnecting) {
-      // 연결이 완료될 때까지 대기
-      while (this.isConnecting) {
+      console.log("⏳ Waiting for existing connection attempt...");
+      // 연결이 완료될 때까지 대기 (최대 10초)
+      let waitTime = 0;
+      const maxWaitTime = 10000;
+      while (this.isConnecting && waitTime < maxWaitTime) {
         await new Promise((resolve) => setTimeout(resolve, 100));
+        waitTime += 100;
       }
+
+      if (waitTime >= maxWaitTime) {
+        console.warn("⚠️ Connection wait timeout, resetting connection state");
+        this.isConnecting = false;
+      }
+
       if (this.stompClient && this.stompClient.connected) {
         return this.stompClient;
       }
     }
 
     this.isConnecting = true;
+    console.log(
+      `🔌 Starting STOMP connection... (Attempt ${retryCount + 1}/${
+        MAX_RETRIES + 1
+      })`
+    );
 
     try {
       const wsUrl = `${API_BASE_URL}`;
-      const accessToken = apiService.getAccessToken();
+
+      // AsyncStorage에서 토큰 로드 (async)
+      const accessToken = await apiService.getAccessToken();
 
       if (!accessToken) {
-        throw new Error("No access token available for STOMP authentication");
+        // 토큰이 없어도 연결 시도 (서버에서 처리)
+        console.warn("⚠️ No access token, attempting anonymous connection...");
       }
 
-      const wsUrlWithToken = `${wsUrl}?token=${accessToken}`;
+      const wsUrlWithToken = accessToken
+        ? `${wsUrl}?token=${accessToken}`
+        : wsUrl;
+
+      console.log(`🔗 WebSocket URL: ${wsUrl}`);
 
       // STOMP Client 생성 (순수 WebSocket + STOMP)
-      // 쿼리 파라미터로만 토큰 전달 (connectHeader는 비워둠)
       this.stompClient = new Client({
         // React Native의 네이티브 WebSocket 사용
         webSocketFactory: () => {
+          console.log(`🔌 Creating WebSocket connection to: ${wsUrlWithToken}`);
           const ws = new WebSocket(wsUrlWithToken);
           return ws;
         },
         forceBinaryWSFrames: true,
         appendMissingNULLonIncoming: true,
+        reconnectDelay: 5000, // 5초 후 재연결 시도
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000,
       });
 
       return new Promise((resolve, reject) => {
@@ -86,15 +113,33 @@ class LocationWebSocketService {
         }
 
         this.stompClient.onConnect = (frame: any) => {
+          console.log("✅ STOMP connected successfully!");
+          this.isConnecting = false;
           resolve(this.stompClient!);
         };
 
         this.stompClient.onStompError = (frame: any) => {
+          this.isConnecting = false;
           reject(new Error(frame.headers?.message || "STOMP connection error"));
         };
 
         this.stompClient.onWebSocketError = (event: any) => {
-          console.error("WebSocket error:", event);
+          this.isConnecting = false;
+
+          // 서버가 실행 중이지 않을 가능성
+          if (event?.target?.readyState === 3) {
+            // CLOSED
+            const errorMsg = `
+⚠️ WebSocket 연결 실패!
+
+가능한 원인:
+1. Spring Boot 서버가 실행 중이지 않습니다
+   → ./gradlew bootRun으로 서버를 시작하세요
+2. 잘못된 서버 주소 (현재: ${API_BASE_URL})
+            `;
+            console.error(errorMsg);
+            reject(new Error(errorMsg));
+          }
         };
 
         this.stompClient.onWebSocketClose = (event: any) => {
@@ -117,7 +162,17 @@ class LocationWebSocketService {
         this.stompClient.activate();
       });
     } catch (error) {
+      console.error(`❌ Connection attempt ${retryCount + 1} failed:`, error);
       this.stompClient = null;
+      this.isConnecting = false;
+
+      // 재시도 로직
+      if (retryCount < MAX_RETRIES) {
+        console.log(`⏳ Retrying connection in 2 seconds...`);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return this.connect(retryCount + 1);
+      }
+
       throw error;
     } finally {
       this.isConnecting = false;
@@ -149,15 +204,10 @@ class LocationWebSocketService {
     }
     this.pendingRequests.clear();
 
-    // streamSubscriptions는 { initial, stream } 객체 형태로 저장되어 있음
+    // streamSubscriptions 정리
     for (const [, subscription] of this.streamSubscriptions) {
-      if (subscription) {
-        if (subscription.initial) {
-          subscription.initial.unsubscribe();
-        }
-        if (subscription.stream) {
-          subscription.stream.unsubscribe();
-        }
+      if (subscription && subscription.stream) {
+        subscription.stream.unsubscribe();
       }
     }
     this.streamSubscriptions.clear();
@@ -219,13 +269,38 @@ class LocationWebSocketService {
     latitude: number,
     longitude: number
   ) {
-    // 연결이 없으면 연결 시도 (실패해도 조용히 실패)
-    if (!this.stompClient || !this.stompClient.connected) {
+    // 연결 재시도 로직 (빠른 실패 모드 - 위치 업데이트는 실시간성이 중요)
+    let connectionAttempts = 0;
+    const maxConnectionAttempts = 2; // 위치 업데이트는 빠르게 처리
+
+    while (
+      (!this.stompClient || !this.stompClient.connected) &&
+      connectionAttempts < maxConnectionAttempts
+    ) {
       try {
+        console.log(
+          `🔄 Attempting quick connection for location update... (Attempt ${
+            connectionAttempts + 1
+          }/${maxConnectionAttempts})`
+        );
         await this.connect();
+
+        // 짧은 대기 시간
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        if (this.stompClient && this.stompClient.connected) {
+          break;
+        }
       } catch (error) {
-        console.warn("⚠️ Failed to connect for location update:", error);
-        return;
+        console.warn(
+          `⚠️ Quick connection attempt ${connectionAttempts + 1} failed:`,
+          error
+        );
+        connectionAttempts++;
+
+        if (connectionAttempts < maxConnectionAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
     }
 
@@ -267,12 +342,53 @@ class LocationWebSocketService {
     workspaceId: string,
     onLocation: (location: any) => void
   ) {
-    if (!this.stompClient || !this.stompClient.connected) {
-      await this.connect();
+    // 연결 재시도 로직
+    let connectionAttempts = 0;
+    const maxConnectionAttempts = 3;
+
+    while (
+      (!this.stompClient || !this.stompClient.connected) &&
+      connectionAttempts < maxConnectionAttempts
+    ) {
+      try {
+        console.log(
+          `🔄 Attempting to establish STOMP connection... (Attempt ${
+            connectionAttempts + 1
+          }/${maxConnectionAttempts})`
+        );
+        await this.connect();
+
+        // 연결 후 잠시 대기하여 연결이 완전히 설정되도록 함
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        if (this.stompClient && this.stompClient.connected) {
+          console.log("✅ STOMP connection established successfully");
+          break;
+        }
+      } catch (error) {
+        console.error(
+          `❌ Connection attempt ${connectionAttempts + 1} failed:`,
+          error
+        );
+        connectionAttempts++;
+
+        if (connectionAttempts < maxConnectionAttempts) {
+          console.log(`⏳ Waiting 2 seconds before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
     }
 
     if (!this.stompClient || !this.stompClient.connected) {
-      throw new Error("STOMP not connected");
+      console.error(
+        "❌ Failed to establish STOMP connection after multiple attempts"
+      );
+      // 연결 실패해도 gracefully 처리
+      return {
+        unsubscribe: () => {
+          console.log("No subscription to unsubscribe (connection failed)");
+        },
+      };
     }
 
     console.log(`📡 Starting location stream for workspace: ${workspaceId}`);
@@ -286,39 +402,8 @@ class LocationWebSocketService {
       };
     }
 
-    // 먼저 현재 위치 데이터를 가져오기
-    try {
-      const initialLocations: any = await this.getLocations(workspaceId);
-
-      // 초기 위치들을 콜백으로 전달
-      if (Array.isArray(initialLocations)) {
-        initialLocations.forEach((location: any) => {
-          onLocation(location);
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch initial locations:", error);
-      // 에러가 나도 스트림 구독은 계속 진행
-    }
-
-    const initialSubscription = this.stompClient.subscribe(
-      `/user/queue/initial-locations`,
-      (message: any) => {
-        try {
-          const locations = JSON.parse(message.body);
-          // 초기 위치들을 개별적으로 콜백 호출
-          if (Array.isArray(locations)) {
-            locations.forEach((location) => {
-              onLocation(location);
-            });
-          } else {
-            onLocation(locations);
-          }
-        } catch (error) {
-          console.error("Failed to parse initial locations:", error);
-        }
-      }
-    );
+    // 초기 위치 구독 제거 (NaverMapView에서 REST API로 이미 가져옴)
+    // 중복 방지를 위해 STOMP 초기 위치 구독은 사용하지 않음
 
     // 실시간 위치 업데이트 구독 (서버에서 /topic/workspace/{workspaceId}/locations로 브로드캐스트)
     const streamSubscription = this.stompClient.subscribe(
@@ -333,9 +418,8 @@ class LocationWebSocketService {
       }
     );
 
-    // 구독 정보 저장 (초기 위치 + 스트림)
+    // 구독 정보 저장 (스트림만)
     this.streamSubscriptions.set(workspaceId, {
-      initial: initialSubscription,
       stream: streamSubscription,
     });
 
@@ -348,13 +432,13 @@ class LocationWebSocketService {
   private unsubscribeFromStream(workspaceId: string): void {
     const subscription = this.streamSubscriptions.get(workspaceId);
     if (subscription) {
-      if (subscription.initial) {
-        subscription.initial.unsubscribe();
-      }
       if (subscription.stream) {
         subscription.stream.unsubscribe();
       }
       this.streamSubscriptions.delete(workspaceId);
+      console.log(
+        `✅ Unsubscribed from location stream for workspace: ${workspaceId}`
+      );
     }
   }
 
@@ -364,7 +448,10 @@ class LocationWebSocketService {
   }
 
   // 채널 구독 (일반용)
-  async subscribeToChannel(channel: string, callback: (data: any) => void): Promise<void> {
+  async subscribeToChannel(
+    channel: string,
+    callback: (data: any) => void
+  ): Promise<void> {
     if (!this.stompClient || !this.stompClient.connected) {
       await this.connect();
     }
@@ -410,12 +497,48 @@ class LocationWebSocketService {
   async subscribeToPhishingAlerts(
     onAlert: (alert: PhishingAlert) => void
   ): Promise<void> {
-    if (!this.stompClient || !this.stompClient.connected) {
-      await this.connect();
+    // 연결 재시도 로직
+    let connectionAttempts = 0;
+    const maxConnectionAttempts = 3;
+
+    while (
+      (!this.stompClient || !this.stompClient.connected) &&
+      connectionAttempts < maxConnectionAttempts
+    ) {
+      try {
+        console.log(
+          `🔄 Attempting to establish STOMP connection for phishing alerts... (Attempt ${
+            connectionAttempts + 1
+          }/${maxConnectionAttempts})`
+        );
+        await this.connect();
+
+        // 연결 후 잠시 대기
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        if (this.stompClient && this.stompClient.connected) {
+          console.log("✅ STOMP connection established for phishing alerts");
+          break;
+        }
+      } catch (error) {
+        console.error(
+          `❌ Connection attempt ${connectionAttempts + 1} failed:`,
+          error
+        );
+        connectionAttempts++;
+
+        if (connectionAttempts < maxConnectionAttempts) {
+          console.log(`⏳ Waiting 2 seconds before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
     }
 
     if (!this.stompClient || !this.stompClient.connected) {
-      throw new Error("STOMP not connected");
+      console.error(
+        "❌ Failed to establish STOMP connection for phishing alerts"
+      );
+      return; // Gracefully fail without throwing
     }
 
     // 콜백 등록
@@ -431,14 +554,14 @@ class LocationWebSocketService {
 
     // 피싱 알림 토픽 구독
     this.phishingAlertSubscription = this.stompClient.subscribe(
-      '/topic/phishing.alerts',
+      "/topic/phishing.alerts",
       (message: any) => {
         try {
           const alert: PhishingAlert = JSON.parse(message.body);
           console.log("🚨 Phishing alert received:", alert);
 
           // 모든 등록된 콜백 실행
-          this.phishingAlertCallbacks.forEach(callback => {
+          this.phishingAlertCallbacks.forEach((callback) => {
             try {
               callback(alert);
             } catch (error) {
@@ -452,14 +575,14 @@ class LocationWebSocketService {
     );
 
     // 사용자별 피싱 알림 구독 (선택적)
-    const userTopic = '/user/queue/phishing.personal';
+    const userTopic = "/user/queue/phishing.personal";
     this.stompClient.subscribe(userTopic, (message: any) => {
       try {
         const alert: PhishingAlert = JSON.parse(message.body);
         console.log("🚨 Personal phishing alert received:", alert);
 
         // 개인 알림 처리
-        this.phishingAlertCallbacks.forEach(callback => {
+        this.phishingAlertCallbacks.forEach((callback) => {
           try {
             callback(alert);
           } catch (error) {
@@ -488,13 +611,13 @@ class LocationWebSocketService {
 
     console.log("📤 Sending phishing alert:", alert);
 
-    this.sendStompMessage('/app/phishing.report', {
+    this.sendStompMessage("/app/phishing.report", {
       ...alert,
       reportedAt: new Date().toISOString(),
       deviceInfo: {
-        platform: 'mobile',
-        version: '1.0.0'
-      }
+        platform: "mobile",
+        version: "1.0.0",
+      },
     });
   }
 
@@ -519,11 +642,13 @@ class LocationWebSocketService {
     if (this.streamSubscriptions.has(statsKey)) {
       console.log("⚠️ Already subscribed to phishing stats");
       return {
-        unsubscribe: () => this.unsubscribePhishingStats(workspaceId)
+        unsubscribe: () => this.unsubscribePhishingStats(workspaceId),
       };
     }
 
-    console.log(`📊 Starting phishing stats stream for workspace: ${workspaceId}`);
+    console.log(
+      `📊 Starting phishing stats stream for workspace: ${workspaceId}`
+    );
 
     const subscription = this.stompClient.subscribe(
       `/topic/phishing.stats.${workspaceId}`,
@@ -543,11 +668,11 @@ class LocationWebSocketService {
     // 통계 스트림 시작 요청
     this.sendStompMessage(`/app/phishing.stats.stream`, {
       workspaceId,
-      action: 'start'
+      action: "start",
     });
 
     return {
-      unsubscribe: () => this.unsubscribePhishingStats(workspaceId)
+      unsubscribe: () => this.unsubscribePhishingStats(workspaceId),
     };
   }
 
@@ -565,7 +690,7 @@ class LocationWebSocketService {
       if (this.stompClient && this.stompClient.connected) {
         this.sendStompMessage(`/app/phishing.stats.stream`, {
           workspaceId,
-          action: 'stop'
+          action: "stop",
         });
       }
     }
@@ -599,7 +724,9 @@ class LocationWebSocketService {
       await this.connect();
     }
 
-    console.log(`📍 Sending phishing location alert for workspace: ${workspaceId}`);
+    console.log(
+      `📍 Sending phishing location alert for workspace: ${workspaceId}`
+    );
 
     this.sendStompMessage(`/app/phishing.location.${workspaceId}`, {
       workspaceId,
@@ -607,7 +734,7 @@ class LocationWebSocketService {
       sender: alert.sender,
       riskLevel: alert.riskLevel,
       location: alert.location,
-      timestamp: alert.timestamp
+      timestamp: alert.timestamp,
     });
   }
 

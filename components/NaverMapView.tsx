@@ -1,23 +1,31 @@
-import locationWebSocketService, { PhishingAlert } from "@/services/locationWebSocketService";
+import locationWebSocketService, {
+  PhishingAlert,
+} from "@/services/locationWebSocketService";
 import { useAppStore } from "@/stores/appStore";
+import { Ionicons } from "@expo/vector-icons";
 import {
   NaverMapMarkerOverlay,
   NaverMapView as RNNaverMapView,
 } from "@mj-studio/react-native-naver-map";
 import * as Location from "expo-location";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  Alert,
 } from "react-native";
-import { Ionicons } from '@expo/vector-icons';
-import { useMyProfile } from "../services/queries";
 import { apiService } from "../services/api";
+import { useMyProfile } from "../services/queries";
 import type { Schedule, User } from "../types";
 
 const COLOR_MAP: Record<string, string> = {
@@ -85,7 +93,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     zoom: 13,
   });
   const [phishingAlerts, setPhishingAlerts] = useState<PhishingAlert[]>([]);
-  const [selectedPhishingAlert, setSelectedPhishingAlert] = useState<PhishingAlert | null>(null);
   const { activeWorkspaceId } = useAppStore();
   const { data: currentUser } = useMyProfile();
   const mapRef = useRef<any>(null);
@@ -141,9 +148,15 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
               initialLocations.forEach((locationData: any) => {
                 const userId = locationData.userId || locationData.id;
-                const userIndex = updatedUsers.findIndex((u) => u.id === userId);
+                const userIndex = updatedUsers.findIndex(
+                  (u) => u.id === userId
+                );
 
-                if (userIndex !== -1 && locationData.latitude && locationData.longitude) {
+                if (
+                  userIndex !== -1 &&
+                  locationData.latitude &&
+                  locationData.longitude
+                ) {
                   updatedUsers[userIndex] = {
                     ...updatedUsers[userIndex],
                     location: {
@@ -165,14 +178,8 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
         subscription = await locationWebSocketService.streamLocations(
           activeWorkspaceId,
           (locationData: any) => {
-            // 위치 업데이트 수신
-            console.log(
-              "🗺️ Received real-time location update:",
-              JSON.stringify(locationData, null, 2)
-            );
-
+            // 위치 업데이트 수신 (로그 최소화)
             setRealtimeUsers((prevUsers) => {
-              console.log("📋 Current users before update:", prevUsers.length);
               const updatedUsers = [...prevUsers];
 
               // 서버에서 오는 데이터 형식에 따라 userId 추출
@@ -190,9 +197,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
               if (userIndex !== -1) {
                 // 기존 사용자 위치 업데이트
-                console.log(
-                  `✅ Updating location for user: ${updatedUsers[userIndex].name} (${userId})`
-                );
                 updatedUsers[userIndex] = {
                   ...updatedUsers[userIndex],
                   location: {
@@ -318,20 +322,20 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           (alert: PhishingAlert) => {
             // 위치 정보가 있는 알림만 지도에 표시
             if (alert.location) {
-              setPhishingAlerts(prev => {
+              setPhishingAlerts((prev) => {
                 // 중복 제거
-                const filtered = prev.filter(a => a.smsId !== alert.smsId);
+                const filtered = prev.filter((a) => a.smsId !== alert.smsId);
                 return [...filtered, alert];
               });
 
               // 고위험 알림은 팝업으로 알림
-              if (alert.riskLevel === 'high') {
+              if (alert.riskLevel === "high") {
                 Alert.alert(
-                  '🚨 피싱 위험 감지',
+                  "🚨 피싱 위험 감지",
                   `발신자: ${alert.sender}\n위치: 현재 위치 근처`,
                   [
                     {
-                      text: '확인',
+                      text: "확인",
                       onPress: () => {
                         // 해당 위치로 카메라 이동
                         if (mapRef.current) {
@@ -341,8 +345,8 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                             zoom: 15,
                           });
                         }
-                      }
-                    }
+                      },
+                    },
                   ]
                 );
               }
@@ -355,12 +359,12 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           await locationWebSocketService.streamPhishingStats(
             activeWorkspaceId,
             (stats: any) => {
-              console.log('피싱 통계 업데이트:', stats);
+              // 피싱 통계 수신 (로그 최소화)
             }
           );
         }
       } catch (error) {
-        console.error('피싱 알림 구독 실패:', error);
+        console.error("피싱 알림 구독 실패:", error);
       }
     };
 
@@ -501,27 +505,27 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
     const getRiskColor = () => {
       switch (alert.riskLevel) {
-        case 'high':
-          return '#FF3B30';
-        case 'medium':
-          return '#FF9500';
-        case 'low':
-          return '#FFCC00';
+        case "high":
+          return "#FF3B30";
+        case "medium":
+          return "#FF9500";
+        case "low":
+          return "#FFCC00";
         default:
-          return '#8E8E93';
+          return "#8E8E93";
       }
     };
 
     const getRiskIcon = () => {
       switch (alert.riskLevel) {
-        case 'high':
-          return 'warning';
-        case 'medium':
-          return 'alert-circle';
-        case 'low':
-          return 'information-circle';
+        case "high":
+          return "warning";
+        case "medium":
+          return "alert-circle";
+        case "low":
+          return "information-circle";
         default:
-          return 'help-circle';
+          return "help-circle";
       }
     };
 
@@ -537,35 +541,11 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           textSize: 11,
           color: getRiskColor(),
         }}
-        onPress={() => {
-          setSelectedPhishingAlert(alert);
-          Alert.alert(
-            '🚨 피싱 알림',
-            `발신자: ${alert.sender}\n위험도: ${alert.riskLevel.toUpperCase()}\n점수: ${(alert.riskScore * 100).toFixed(0)}%\n이유: ${alert.detectionReasons.join(', ')}`,
-            [
-              { text: '확인', style: 'cancel' },
-              {
-                text: '상세 보기',
-                onPress: () => {
-                  // 피싱 가드 화면으로 이동 로직
-                  console.log('피싱 상세 보기:', alert);
-                }
-              }
-            ]
-          );
-        }}
       >
         <View
-          style={[
-            styles.phishingMarker,
-            { backgroundColor: getRiskColor() }
-          ]}
+          style={[styles.phishingMarker, { backgroundColor: getRiskColor() }]}
         >
-          <Ionicons
-            name={getRiskIcon()}
-            size={24}
-            color="#FFF"
-          />
+          <Ionicons name={getRiskIcon()} size={24} color="#FFF" />
         </View>
       </NaverMapMarkerOverlay>
     );

@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -166,7 +167,9 @@ class ApiService {
   // 토큰 설정
   setTokens(accessToken: string, refreshToken: string) {
     this.accessToken = accessToken;
+    AsyncStorage.setItem("access_token", accessToken);
     this.refreshToken = refreshToken;
+    AsyncStorage.setItem("refresh_token", refreshToken);
   }
 
   // 토큰 제거
@@ -175,8 +178,29 @@ class ApiService {
     this.refreshToken = null;
   }
 
-  // 현재 액세스 토큰 가져오기
-  getAccessToken(): string | null {
+  // 현재 액세스 토큰 가져오기 (AsyncStorage에서도 확인)
+  async getAccessToken(): Promise<string | null> {
+    // 메모리에 있으면 반환
+    if (this.accessToken) {
+      return this.accessToken;
+    }
+
+    // AsyncStorage에서 로드 시도
+    try {
+      const token = await AsyncStorage.getItem("access_token");
+      if (token) {
+        this.accessToken = token;
+        return token;
+      }
+    } catch (error) {
+      console.error("❌ Failed to load access token from storage:", error);
+    }
+
+    return null;
+  }
+
+  // 동기 버전 (하위 호환성)
+  getAccessTokenSync(): string | null {
     return this.accessToken;
   }
 
