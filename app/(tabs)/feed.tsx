@@ -56,7 +56,7 @@ export default function FeedScreen() {
           },
         ]}
       >
-        <Text>Error loading feed: {error.message}</Text>
+        <Text>피드를 불러오는 중 오류가 발생했습니다: {error.message}</Text>
       </View>
     );
   }
@@ -76,7 +76,6 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f9fafb",
   },
 });

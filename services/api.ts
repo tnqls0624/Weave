@@ -80,13 +80,17 @@ class ApiService {
   }[] = [];
 
   private constructor() {
-    // Axios 인스턴스 생성
+    // Axios 인스턴스 생성 (최적화)
     this.axiosInstance = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000,
+      timeout: 5000, // 30초 → 5초로 단축
       headers: {
         "Content-Type": "application/json",
+        "Accept-Encoding": "gzip, deflate", // 압축 활성화
+        "Keep-Alive": "timeout=5, max=100", // Keep-Alive 최적화
       },
+      decompress: true, // 자동 압축 해제
+      maxRedirects: 2, // 리다이렉트 제한
     });
 
     // Request Interceptor: 모든 요청에 토큰 추가
@@ -310,6 +314,14 @@ class ApiService {
     });
   }
 
+  async updateProfile(userData: Partial<User>): Promise<User> {
+    return this.request<User>({
+      url: "/api/user/me",
+      method: "PUT",
+      data: userData,
+    });
+  }
+
   async uploadProfileImage(imageUri: string): Promise<string> {
     try {
       const formData = new FormData();
@@ -386,7 +398,6 @@ class ApiService {
       }
     }
 
-    console.log("🔍 [Create Schedule] Transformed Data:", transformedData);
     const createdSchedule = await this.request<any>({
       url: "/api/schedule",
       method: "POST",
@@ -464,12 +475,6 @@ class ApiService {
       url: `/api/workspace/${workspaceId}`,
       method: "GET",
     });
-
-    console.log(
-      "🏢 [Workspace Detail] Response:",
-      JSON.stringify(workspace, null, 2)
-    );
-
     return workspace;
   }
 
@@ -477,7 +482,6 @@ class ApiService {
     workspaceId: string,
     params?: WorkspaceScheduleParams
   ): Promise<Schedule[]> {
-    console.log("🔍 [Get Workspace Schedules] Params:", params);
     const response = await this.request<any>({
       url: `/api/workspace/${workspaceId}/schedule/`,
       method: "GET",
@@ -662,150 +666,152 @@ class ApiService {
   }
 
   // ==================== Phishing Guard API ====================
+  // TEMPORARILY DISABLED - Security features commented out
 
-  // 피싱 신고
-  async reportPhishing(data: {
-    smsId: string;
-    sender: string;
-    message: string;
-    workspaceId?: string;
-    riskScore: number;
-    riskLevel: string;
-    detectionReasons: string[];
-    phishingType?: string;
-    location?: { latitude: number; longitude: number };
-    deviceInfo?: any;
-  }): Promise<any> {
-    return this.request<any>({
-      url: "/api/phishing/report",
-      method: "POST",
-      data,
-    });
-  }
+  // // 피싱 신고
+  // async reportPhishing(data: {
+  //   smsId: string;
+  //   sender: string;
+  //   message: string;
+  //   workspaceId?: string;
+  //   riskScore: number;
+  //   riskLevel: string;
+  //   detectionReasons: string[];
+  //   phishingType?: string;
+  //   location?: { latitude: number; longitude: number };
+  //   deviceInfo?: any;
+  //   autoBlocked?: boolean;
+  // }): Promise<any> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/report",
+  //     method: "POST",
+  //     data,
+  //   });
+  // }
 
-  // 피싱 탐지 요청
-  async detectPhishing(data: {
-    sender: string;
-    message: string;
-    sensitivityLevel?: string;
-  }): Promise<{
-    isPhishing: boolean;
-    riskScore: number;
-    riskLevel: string;
-    detectionReasons: string[];
-    phishingType: string;
-    confidence: number;
-  }> {
-    return this.request<any>({
-      url: "/api/phishing/detect",
-      method: "POST",
-      data,
-    });
-  }
+  // // 피싱 탐지 요청
+  // async detectPhishing(data: {
+  //   sender: string;
+  //   message: string;
+  //   sensitivityLevel?: string;
+  // }): Promise<{
+  //   isPhishing: boolean;
+  //   riskScore: number;
+  //   riskLevel: string;
+  //   detectionReasons: string[];
+  //   phishingType: string;
+  //   confidence: number;
+  // }> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/detect",
+  //     method: "POST",
+  //     data,
+  //   });
+  // }
 
-  // 내 피싱 신고 목록 조회
-  async getMyPhishingReports(params?: {
-    page?: number;
-    size?: number;
-  }): Promise<any> {
-    return this.request<any>({
-      url: "/api/phishing/reports/me",
-      method: "GET",
-      params,
-    });
-  }
+  // // 내 피싱 신고 목록 조회
+  // async getMyPhishingReports(params?: {
+  //   page?: number;
+  //   size?: number;
+  // }): Promise<any> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/reports/me",
+  //     method: "GET",
+  //     params,
+  //   });
+  // }
 
-  // 워크스페이스 피싱 신고 조회
-  async getWorkspacePhishingReports(
-    workspaceId: string,
-    params?: { page?: number; size?: number }
-  ): Promise<any> {
-    return this.request<any>({
-      url: `/api/phishing/reports/workspace/${workspaceId}`,
-      method: "GET",
-      params,
-    });
-  }
+  // // 워크스페이스 피싱 신고 조회
+  // async getWorkspacePhishingReports(
+  //   workspaceId: string,
+  //   params?: { page?: number; size?: number }
+  // ): Promise<any> {
+  //   return this.request<any>({
+  //     url: `/api/phishing/reports/workspace/${workspaceId}`,
+  //     method: "GET",
+  //     params,
+  //   });
+  // }
 
-  // 피싱 신고 상세 조회
-  async getPhishingReport(reportId: string): Promise<any> {
-    return this.request<any>({
-      url: `/api/phishing/reports/${reportId}`,
-      method: "GET",
-    });
-  }
+  // // 피싱 신고 상세 조회
+  // async getPhishingReport(reportId: string): Promise<any> {
+  //   return this.request<any>({
+  //     url: `/api/phishing/reports/${reportId}`,
+  //     method: "GET",
+  //   });
+  // }
 
-  // 피싱 신고 피드백 추가
-  async addPhishingFeedback(reportId: string, feedback: string): Promise<any> {
-    return this.request<any>({
-      url: `/api/phishing/reports/${reportId}/feedback`,
-      method: "PUT",
-      data: { feedback },
-    });
-  }
+  // // 피싱 신고 피드백 추가
+  // async addPhishingFeedback(reportId: string, feedback: string): Promise<any> {
+  //   return this.request<any>({
+  //     url: `/api/phishing/reports/${reportId}/feedback`,
+  //     method: "PUT",
+  //     data: { feedback },
+  //   });
+  // }
 
-  // 내 피싱 통계 조회
-  async getMyPhishingStatistics(): Promise<any> {
-    return this.request<any>({
-      url: "/api/phishing/statistics/me",
-      method: "GET",
-    });
-  }
+  // // 내 피싱 통계 조회
+  // async getMyPhishingStatistics(): Promise<any> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/statistics/me",
+  //     method: "GET",
+  //   });
+  // }
 
-  // 워크스페이스 피싱 통계 조회
-  async getWorkspacePhishingStatistics(workspaceId: string): Promise<any> {
-    return this.request<any>({
-      url: `/api/phishing/statistics/workspace/${workspaceId}`,
-      method: "GET",
-    });
-  }
+  // // 워크스페이스 피싱 통계 조회
+  // async getWorkspacePhishingStatistics(workspaceId: string): Promise<any> {
+  //   return this.request<any>({
+  //     url: `/api/phishing/statistics/workspace/${workspaceId}`,
+  //     method: "GET",
+  //   });
+  // }
 
-  // 근처 피싱 알림 조회
-  async getNearbyPhishingReports(
-    latitude: number,
-    longitude: number,
-    radius?: number
-  ): Promise<any> {
-    return this.request<any>({
-      url: "/api/phishing/reports/nearby",
-      method: "GET",
-      params: { latitude, longitude, radius: radius || 5000 },
-    });
-  }
+  // // 근처 피싱 알림 조회
+  // async getNearbyPhishingReports(
+  //   latitude: number,
+  //   longitude: number,
+  //   radius?: number
+  // ): Promise<any> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/reports/nearby",
+  //     method: "GET",
+  //     params: { latitude, longitude, radius: radius || 5000 },
+  //   });
+  // }
 
-  // 피싱 패턴 목록 조회 (관리자용)
-  async getPhishingPatterns(params?: {
-    category?: string;
-    language?: string;
-    activeOnly?: boolean;
-  }): Promise<any> {
-    return this.request<any>({
-      url: "/api/phishing/patterns",
-      method: "GET",
-      params,
-    });
-  }
+  // // 피싱 패턴 목록 조회 (관리자용)
+  // async getPhishingPatterns(params?: {
+  //   category?: string;
+  //   language?: string;
+  //   activeOnly?: boolean;
+  // }): Promise<any> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/patterns",
+  //     method: "GET",
+  //     params,
+  //   });
+  // }
 
-  // 고위험 미처리 신고 조회 (관리자용)
-  async getHighRiskPendingReports(): Promise<any> {
-    return this.request<any>({
-      url: "/api/phishing/reports/high-risk/pending",
-      method: "GET",
-    });
-  }
+  // // 고위험 미처리 신고 조회 (관리자용)
+  // async getHighRiskPendingReports(): Promise<any> {
+  //   return this.request<any>({
+  //     url: "/api/phishing/reports/high-risk/pending",
+  //     method: "GET",
+  //   });
+  // }
 
-  // 피싱 신고 상태 변경 (관리자용)
-  async updatePhishingReportStatus(
-    reportId: string,
-    status: string,
-    adminNote?: string
-  ): Promise<any> {
-    return this.request<any>({
-      url: `/api/phishing/reports/${reportId}/status`,
-      method: "PUT",
-      data: { status, adminNote },
-    });
-  }
+  // // 피싱 신고 상태 변경 (관리자용)
+  // async updatePhishingReportStatus(
+  //   reportId: string,
+  //   status: string,
+  //   adminNote?: string
+  // ): Promise<any> {
+  //   return this.request<any>({
+  //     url: `/api/phishing/reports/${reportId}/status`,
+  //     method: "PUT",
+  //     data: { status, adminNote },
+  //   });
+  // }
 }
 
 export const apiService = ApiService.getInstance();

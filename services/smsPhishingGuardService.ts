@@ -11,7 +11,6 @@ import {
   PermissionsAndroid,
   Platform,
 } from "react-native";
-import { apiService } from "./api";
 import { locationWebSocketService } from "./locationWebSocketService";
 import { phishingDetectionEngine } from "./phishingDetectionEngine";
 
@@ -109,6 +108,12 @@ class SMSPhishingGuardService {
    */
   private async initializeAndroid(): Promise<void> {
     try {
+      // Native 모듈 확인
+      if (!NativeModules.SMSReader) {
+        console.error("SMSReader 네이티브 모듈을 찾을 수 없습니다");
+        return;
+      }
+
       // SMS 읽기 권한 요청
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.READ_SMS,
@@ -122,21 +127,32 @@ class SMSPhishingGuardService {
 
       if (!allGranted) {
         console.warn("SMS 권한이 거부되었습니다");
+        // 네이티브 모듈을 통해서도 권한 요청
+        try {
+          await NativeModules.SMSReader.requestSMSPermissions();
+        } catch (e) {
+          console.error("네이티브 권한 요청 실패:", e);
+        }
         return;
       }
 
+      console.log("✅ SMS 권한이 승인되었습니다");
+
       // Native 모듈 이벤트 리스너 설정
-      if (NativeModules.SMSReader) {
-        this.eventEmitter = new NativeEventEmitter(NativeModules.SMSReader);
+      this.eventEmitter = new NativeEventEmitter(NativeModules.SMSReader);
 
-        // 새 SMS 수신 리스너
-        this.smsListener = this.eventEmitter.addListener(
-          "onSMSReceived",
-          this.handleNewSMS.bind(this)
-        );
+      // 새 SMS 수신 리스너
+      this.smsListener = this.eventEmitter.addListener(
+        "onSMSReceived",
+        this.handleNewSMS.bind(this)
+      );
 
-        // 백그라운드 SMS 모니터링 시작
-        NativeModules.SMSReader.startSMSMonitoring();
+      // 백그라운드 SMS 모니터링 시작
+      try {
+        const started = await NativeModules.SMSReader.startSMSMonitoring();
+        console.log("📱 SMS 모니터링 시작:", started);
+      } catch (error) {
+        console.error("SMS 모니터링 시작 실패:", error);
       }
     } catch (error) {
       console.error("Android SMS 초기화 실패:", error);
@@ -149,7 +165,7 @@ class SMSPhishingGuardService {
   private async initializeiOS(): Promise<void> {
     // iOS는 SMS 직접 읽기가 제한되므로
     // 푸시 알림과 ML Kit을 활용한 대안 방법 구현
-    console.log("iOS 피싱 가드: 푸시 알림 기반 모니터링 활성화");
+    // console.log("iOS 피싱 가드: 푸시 알림 기반 모니터링 활성화");
   }
 
   /**
@@ -340,7 +356,12 @@ class SMSPhishingGuardService {
    */
   private async blockPhishingMessage(alert: PhishingAlert): Promise<void> {
     if (Platform.OS === "android" && NativeModules.SMSReader) {
-      await NativeModules.SMSReader.blockSMS(alert.smsId, alert.sender);
+      try {
+        await NativeModules.SMSReader.blockSMS(alert.smsId, alert.sender);
+        console.log(`🚫 SMS 차단됨 - 발신자: ${alert.sender}`);
+      } catch (error) {
+        console.error("SMS 차단 실패:", error);
+      }
     }
 
     // 블랙리스트에 추가
@@ -358,21 +379,28 @@ class SMSPhishingGuardService {
       // 현재 워크스페이스 ID 가져오기 (필요시)
       const currentWorkspace = await AsyncStorage.getItem("currentWorkspace");
 
-      // API 서비스를 통해 서버에 보고
-      await apiService.reportPhishing({
-        smsId: alert.smsId,
-        sender: alert.sender,
-        message: alert.message,
-        riskScore: alert.riskScore,
-        riskLevel: alert.riskLevel,
-        detectionReasons: alert.detectionReasons,
-        phishingType: this.detectPhishingType(alert.message),
-        workspaceId: currentWorkspace || undefined,
-        location: alert.location,
-        deviceInfo: await this.getDeviceInfo(),
-      });
+      // 자동 차단 여부 결정
+      const autoBlocked =
+        this.config.autoBlockHighRisk && alert.riskLevel === "high";
 
-      console.log("✅ 피싱 신고가 서버에 성공적으로 전송되었습니다");
+      // API 서비스를 통해 서버에 보고
+      // await apiService.reportPhishing({
+      //   smsId: alert.smsId,
+      //   sender: alert.sender,
+      //   message: alert.message,
+      //   riskScore: alert.riskScore,
+      //   riskLevel: alert.riskLevel,
+      //   detectionReasons: alert.detectionReasons,
+      //   phishingType: this.detectPhishingType(alert.message),
+      //   workspaceId: currentWorkspace || undefined,
+      //   location: alert.location,
+      //   deviceInfo: await this.getDeviceInfo(),
+      //   autoBlocked: autoBlocked,
+      // });
+
+      // console.log(
+      //   `✅ 피싱 신고가 서버에 성공적으로 전송되었습니다 (자동차단: ${autoBlocked})`
+      // );
     } catch (error) {
       console.error("❌ 피싱 보고 실패:", error);
       // 오프라인일 경우 로컬에 저장하여 나중에 재시도
@@ -578,7 +606,13 @@ class SMSPhishingGuardService {
       await this.saveConfig();
 
       if (Platform.OS === "android" && NativeModules.SMSReader) {
-        await NativeModules.SMSReader.startSMSMonitoring();
+        try {
+          const started = await NativeModules.SMSReader.startSMSMonitoring();
+          console.log("📱 네이티브 SMS 모니터링 시작:", started);
+        } catch (error) {
+          console.error("네이티브 모니터링 시작 실패:", error);
+          throw error;
+        }
       }
 
       console.log("SMS 피싱 가드 시작됨");
@@ -599,7 +633,12 @@ class SMSPhishingGuardService {
     await this.saveConfig();
 
     if (Platform.OS === "android" && NativeModules.SMSReader) {
-      await NativeModules.SMSReader.stopSMSMonitoring();
+      try {
+        await NativeModules.SMSReader.stopSMSMonitoring();
+        console.log("📱 네이티브 SMS 모니터링 중지됨");
+      } catch (error) {
+        console.error("네이티브 모니터링 중지 실패:", error);
+      }
     }
 
     if (this.smsListener) {

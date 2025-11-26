@@ -151,9 +151,7 @@ class NotificationManager {
 
       // Firebase Messaging 권한 요청 (iOS에서는 APNS 설정 필요)
       try {
-        console.log("🔔 Firebase Messaging 권한 요청 시작...");
         const authStatus = await requestPermission(messaging);
-        console.log("🔔 Firebase 권한 상태:", authStatus);
 
         const enabled =
           authStatus === AuthorizationStatus.AUTHORIZED ||
@@ -177,8 +175,6 @@ class NotificationManager {
             console.error("에러 메시지:", tokenError.message);
           }
         } else {
-          console.log("❌ Firebase Messaging 권한 거부됨");
-          // 권한이 거부되면 pushEnabled를 false로 업데이트
           try {
             await apiService.updateNotifications(false);
           } catch (apiError: any) {

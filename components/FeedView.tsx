@@ -1,15 +1,23 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import dayjs from "dayjs";
-import React from "react";
+import "dayjs/locale/ko";
+import relativeTime from "dayjs/plugin/relativeTime";
+import React, { useMemo, useCallback, memo } from "react";
 import {
   Image,
   Pressable,
-  ScrollView,
+  RefreshControl,
+  FlatList,
   StyleSheet,
   Text,
   View,
+  ListRenderItem,
 } from "react-native";
 import type { Schedule, User } from "../types";
+
+// dayjs 한글 설정
+dayjs.locale("ko");
+dayjs.extend(relativeTime);
 
 interface FeedViewProps {
   schedules: Schedule[];
@@ -29,25 +37,79 @@ const FeedView: React.FC<FeedViewProps> = ({
 
   const currentUserId = currentUser?.id;
 
-  const upcomingEvents = schedules
-    .filter((schedule: Schedule) => {
-      if (!schedule.startDate) {
-        return false;
+  const formatDate = (dateString: string) => {
+    const eventDate = dayjs(dateString);
+    const today = dayjs().startOf("day");
+    const tomorrow = today.add(1, "day");
+    const dayAfterTomorrow = today.add(2, "day");
+    const nextWeek = today.add(7, "day");
+
+    if (eventDate.isSame(today, "day")) {
+      return "오늘";
+    }
+    if (eventDate.isSame(tomorrow, "day")) {
+      return "내일";
+    }
+    if (eventDate.isSame(dayAfterTomorrow, "day")) {
+      return "모레";
+    }
+    if (eventDate.isBefore(nextWeek)) {
+      return eventDate.format("dddd"); // 요일 (월요일, 화요일 등)
+    }
+
+    // 이번 달인 경우
+    if (eventDate.isSame(today, "month")) {
+      return eventDate.format("MM월 DD일 (ddd)");
+    }
+
+    // 다른 달인 경우
+    return eventDate.format("MM월 DD일");
+  };
+
+  // 일정을 날짜별로 그룹화
+  const groupedEvents = useMemo(() => {
+    const filtered = schedules
+      .filter((schedule: Schedule) => {
+        if (!schedule.startDate) {
+          return false;
+        }
+
+        if (currentUserId && !schedule.participants.includes(currentUserId)) {
+          return false;
+        }
+
+        const eventDate = dayjs(schedule.startDate).startOf("day");
+        // 오늘 이후의 일정만 표시 (오늘 포함)
+        return !eventDate.isBefore(today);
+      })
+      .sort((a, b) => {
+        const dateA = a.startDate ? dayjs(a.startDate) : dayjs();
+        const dateB = b.startDate ? dayjs(b.startDate) : dayjs();
+        return dateA.diff(dateB);
+      });
+
+    // 날짜별로 그룹화
+    const groups: { [key: string]: { title: string; events: Schedule[] } } = {};
+
+    filtered.forEach((schedule) => {
+      const date = dayjs(schedule.startDate).format("YYYY-MM-DD");
+      const title = formatDate(schedule.startDate || "");
+
+      if (!groups[date]) {
+        groups[date] = {
+          title,
+          events: [],
+        };
       }
 
-      if (currentUserId && !schedule.participants.includes(currentUserId)) {
-        return false;
-      }
-
-      const eventDate = dayjs(schedule.startDate).startOf("day");
-      // 오늘 이후의 일정만 표시 (오늘 포함)
-      return !eventDate.isBefore(today);
-    })
-    .sort((a, b) => {
-      const dateA = a.startDate ? dayjs(a.startDate) : dayjs();
-      const dateB = b.startDate ? dayjs(b.startDate) : dayjs();
-      return dateA.diff(dateB);
+      groups[date].events.push(schedule);
     });
+
+    return Object.entries(groups).map(([date, data]) => ({
+      date,
+      ...data,
+    }));
+  }, [schedules, currentUserId, today]);
 
   const getUser = (id: string) => users.find((u) => u.id === id);
 
@@ -61,24 +123,19 @@ const FeedView: React.FC<FeedViewProps> = ({
     return "gray";
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString + "T00:00:00");
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  const formatTime = (startDate: string, endDate?: string) => {
+    // startDate가 YYYY-MM-DD 형식인지 HH:mm 형식인지 확인
+    const isTimeFormat = startDate && startDate.includes(":");
 
-    if (date.getTime() === today.getTime()) {
-      return "Today";
+    if (!isTimeFormat) {
+      return "종일";
     }
-    if (date.getTime() === tomorrow.getTime()) {
-      return "Tomorrow";
+
+    if (endDate) {
+      return `${startDate} - ${endDate}`;
     }
-    return date.toLocaleDateString(undefined, {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    });
+
+    return startDate;
   };
 
   const getColorCode = (colorName: string) => {
@@ -104,157 +161,314 @@ const FeedView: React.FC<FeedViewProps> = ({
     return colorMap[colorName] || colorMap["gray"];
   };
 
-  return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>일정 목록</Text>
-      <View style={styles.eventsList}>
-        {upcomingEvents.length > 0 ? (
-          upcomingEvents.map((schedule: Schedule) => {
-            const participants = schedule.participants
-              .map((id: string) => getUser(id))
-              .filter(Boolean) as User[];
-            const eventColor = getEventColor(schedule);
-            const borderColor = getColorCode(eventColor);
+  // Memoized event card component
+  const EventCard = memo<{
+    schedule: Schedule;
+    isLast: boolean;
+  }>(({ schedule, isLast }) => {
+    const participants = schedule.participants
+      .map((id: string) => getUser(id))
+      .filter(Boolean) as User[];
+    const eventColor = getEventColor(schedule);
+    const borderColor = getColorCode(eventColor);
 
-            return (
-              <Pressable
-                key={schedule.id}
-                onPress={() => onEventSelect(schedule)}
-                style={[styles.eventCard, { borderLeftColor: borderColor }]}
-              >
-                <Text style={styles.eventTitle}>{schedule.title}</Text>
-                <Text style={[styles.eventDate, { color: borderColor }]}>
-                  {formatDate(schedule.startDate || "")}
-                </Text>
+    return (
+      <Pressable
+        onPress={() => onEventSelect(schedule)}
+        style={({ pressed }) => [
+          styles.eventCard,
+          {
+            borderLeftColor: borderColor,
+            opacity: pressed ? 0.8 : 1,
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+          },
+          isLast && styles.lastCard,
+        ]}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.eventTitle} numberOfLines={2}>
+            {schedule.title}
+          </Text>
+          <View style={[styles.colorDot, { backgroundColor: borderColor }]} />
+        </View>
 
-                <View style={styles.eventDetails}>
-                  {schedule.startDate && (
-                    <View style={styles.timeRow}>
-                      <MaterialIcons
-                        name="access-time"
-                        size={16}
-                        color="#6b7280"
-                      />
-                      <Text style={styles.timeText}>
-                        {schedule.startDate}{" "}
-                        {schedule.endDate && `- ${schedule.endDate}`}
-                      </Text>
-                    </View>
-                  )}
-                  {schedule.memo && (
-                    <Text style={styles.description}>{schedule.memo}</Text>
-                  )}
-                  {participants.length > 0 && (
-                    <View style={styles.participants}>
-                      {participants.map((p: User, idx: number) => (
-                        <Image
-                          key={p.id}
-                          source={{ uri: p.avatarUrl }}
-                          style={[
-                            styles.avatar,
-                            idx > 0 && styles.avatarOverlap,
-                          ]}
-                        />
-                      ))}
-                    </View>
-                  )}
-                </View>
-              </Pressable>
-            );
-          })
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No upcoming events.</Text>
-            <Text style={styles.emptySubtext}>
-              Create one from the &apos;+&apos; button below!
-            </Text>
-          </View>
-        )}
+        <View style={styles.eventDetails}>
+          {schedule.startDate && (
+            <View style={styles.timeRow}>
+              <MaterialIcons
+                name="access-time"
+                size={14}
+                color="#9ca3af"
+              />
+              <Text style={styles.timeText}>
+                {formatTime(schedule.startDate, schedule.endDate)}
+              </Text>
+            </View>
+          )}
+
+          {schedule.memo && (
+            <View style={styles.memoRow}>
+              <MaterialIcons
+                name="notes"
+                size={14}
+                color="#9ca3af"
+              />
+              <Text style={styles.description} numberOfLines={2}>
+                {schedule.memo}
+              </Text>
+            </View>
+          )}
+
+          {participants.length > 0 && (
+            <View style={styles.participantsRow}>
+              <View style={styles.participants}>
+                {participants.slice(0, 4).map((p: User, idx: number) => (
+                  <Image
+                    key={p.id}
+                    source={{ uri: p.avatarUrl }}
+                    style={[
+                      styles.avatar,
+                      idx > 0 && styles.avatarOverlap,
+                    ]}
+                  />
+                ))}
+                {participants.length > 4 && (
+                  <View style={[styles.moreParticipants, styles.avatarOverlap]}>
+                    <Text style={styles.moreText}>+{participants.length - 4}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.participantNames}>
+                {participants.slice(0, 3).map(p => p.name).join(", ")}
+                {participants.length > 3 && " 외"}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
+    );
+  });
+
+  // Render date section
+  const renderDateSection: ListRenderItem<typeof groupedEvents[0]> = useCallback(({ item: group }) => (
+    <View style={styles.dateSection}>
+      <View style={styles.dateHeader}>
+        <Text style={styles.dateTitle}>{group.title}</Text>
+        <View style={styles.dateBadge}>
+          <Text style={styles.dateCount}>{group.events.length}개</Text>
+        </View>
       </View>
-    </ScrollView>
+      {group.events.map((schedule: Schedule, index: number) => (
+        <EventCard
+          key={schedule.id}
+          schedule={schedule}
+          isLast={index === group.events.length - 1}
+        />
+      ))}
+    </View>
+  ), []);
+
+  // Key extractor for FlatList
+  const keyExtractor = useCallback((item: typeof groupedEvents[0]) => item.date, []);
+
+  // List header component
+  const ListHeaderComponent = useCallback(() => (
+    <Text style={styles.mainTitle}>다가오는 일정</Text>
+  ), []);
+
+  // Empty component
+  const ListEmptyComponent = useCallback(() => (
+    <View style={styles.emptyState}>
+      <MaterialIcons name="event" size={48} color="#d1d5db" />
+      <Text style={styles.emptyText}>예정된 일정이 없습니다</Text>
+      <Text style={styles.emptySubtext}>
+        캘린더에서 새로운 일정을 추가해보세요
+      </Text>
+    </View>
+  ), []);
+
+  return (
+    <FlatList
+      style={styles.container}
+      data={groupedEvents}
+      renderItem={renderDateSection}
+      keyExtractor={keyExtractor}
+      ListHeaderComponent={ListHeaderComponent}
+      ListEmptyComponent={ListEmptyComponent}
+      showsVerticalScrollIndicator={false}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      updateCellsBatchingPeriod={50}
+      initialNumToRender={5}
+      windowSize={10}
+      getItemLayout={(data, index) => ({
+        length: 200, // 예상 아이템 높이
+        offset: 200 * index,
+        index,
+      })}
+    />
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f9fafb",
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1f2937",
-    marginBottom: 16,
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  eventsList: {
-    gap: 10,
+  dateSection: {
+    marginBottom: 24,
+  },
+  dateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  dateTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  dateBadge: {
+    backgroundColor: "#e5e7eb",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  dateCount: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
   },
   eventCard: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 3,
+    backgroundColor: "#ffffff",
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1.5,
-    elevation: 1.5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  lastCard: {
+    marginBottom: 0,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
   eventTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 6,
+    color: "#111827",
+    flex: 1,
+    marginRight: 8,
+    lineHeight: 22,
   },
-  eventDate: {
-    fontSize: 13,
-    fontWeight: "500",
-    marginBottom: 8,
+  colorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: 7,
   },
   eventDetails: {
-    gap: 6,
+    gap: 8,
   },
   timeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   timeText: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#6b7280",
+    fontWeight: "500",
+  },
+  memoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
   },
   description: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#6b7280",
-    lineHeight: 16,
+    lineHeight: 18,
+    flex: 1,
+  },
+  participantsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
   },
   participants: {
     flexDirection: "row",
-    paddingTop: 6,
+    alignItems: "center",
   },
   avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: "#fff",
   },
   avatarOverlap: {
-    marginLeft: -6,
+    marginLeft: -8,
+  },
+  moreParticipants: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  moreText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#6b7280",
+  },
+  participantNames: {
+    fontSize: 12,
+    color: "#9ca3af",
+    flex: 1,
+    textAlign: "right",
+    marginLeft: 8,
   },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 64,
+    paddingVertical: 100,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 17,
     color: "#6b7280",
+    marginTop: 16,
     marginBottom: 8,
+    fontWeight: "600",
   },
   emptySubtext: {
     fontSize: 14,
     color: "#9ca3af",
+    textAlign: "center",
+    paddingHorizontal: 40,
+    lineHeight: 20,
   },
 });
 

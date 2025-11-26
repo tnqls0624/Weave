@@ -1,9 +1,17 @@
 import CalendarView from "@/components/CalendarView";
+import { apiService } from "@/services/api";
+import locationWebSocketService from "@/services/locationWebSocketService";
 import { useAppData, useAppStore } from "@/stores";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
@@ -17,10 +25,43 @@ export default function CalendarScreen() {
     setIsSidebarOpen,
     setIsSearchOpen,
     setScheduleToEdit,
+    activeWorkspaceId,
   } = useAppStore();
 
   const { schedules, users, currentUser, activeWorkspace, isLoading, error } =
     useAppData();
+
+  // 위치 데이터 프리페치 (지도 탭 진입 시 빠른 로딩을 위해)
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+
+    const prefetchLocationData = async () => {
+      try {
+        console.log("📍 [Prefetch] Prefetching location data for map tab...");
+
+        // 1. REST API로 위치 데이터 미리 가져오기
+        const startTime = Date.now();
+        await apiService.getWorkspaceUserLocations(activeWorkspaceId);
+        const elapsed = Date.now() - startTime;
+        console.log(`✅ [Prefetch] Location data fetched (${elapsed}ms)`);
+
+        // 2. WebSocket 연결 미리 설정 (연결만 하고 구독은 지도 탭에서)
+        if (!locationWebSocketService.isConnected()) {
+          console.log("📡 [Prefetch] Pre-connecting WebSocket...");
+          await locationWebSocketService.connect();
+          console.log("✅ [Prefetch] WebSocket connected");
+        }
+      } catch (error) {
+        console.error("❌ [Prefetch] Failed to prefetch location data:", error);
+        // 에러 발생해도 무시 (지도 탭에서 다시 시도할 것임)
+      }
+    };
+
+    // 약간의 지연을 두고 프리페치 (캘린더 렌더링 우선)
+    const timeoutId = setTimeout(prefetchLocationData, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [activeWorkspaceId]);
 
   // setCalendarDate를 useCallback으로 메모이제이션
   const handleSetCalendarDate = useCallback(
@@ -93,7 +134,7 @@ export default function CalendarScreen() {
       <CalendarView
         schedules={schedules || []}
         users={users || []}
-        activeCalendarName={activeWorkspace?.name || ""}
+        activeCalendarName={activeWorkspace?.title || ""}
         currentUser={currentUser}
         currentDate={calendarDate}
         setCurrentDate={handleSetCalendarDate}

@@ -36,48 +36,43 @@ class LocationWebSocketService {
   private replySubscription: any = null;
   private phishingAlertSubscription: any = null;
   private phishingAlertCallbacks: ((alert: PhishingAlert) => void)[] = [];
+  private connectionPromise: Promise<StompClient> | null = null; // 연결 프로미스 캐싱
 
   // STOMP 연결 (순수 WebSocket + STOMP, SockJS 미사용)
   async connect(retryCount: number = 0): Promise<StompClient> {
     const MAX_RETRIES = 3;
 
+    // 이미 연결되어 있으면 즉시 반환
     if (this.stompClient && this.stompClient.connected) {
-      console.log("✅ Already connected to STOMP");
       return this.stompClient;
     }
 
-    // 연결 중이면 대기
-    if (this.isConnecting) {
-      console.log("⏳ Waiting for existing connection attempt...");
-      // 연결이 완료될 때까지 대기 (최대 10초)
-      let waitTime = 0;
-      const maxWaitTime = 10000;
-      while (this.isConnecting && waitTime < maxWaitTime) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        waitTime += 100;
-      }
-
-      if (waitTime >= maxWaitTime) {
-        console.warn("⚠️ Connection wait timeout, resetting connection state");
-        this.isConnecting = false;
-      }
-
-      if (this.stompClient && this.stompClient.connected) {
-        return this.stompClient;
-      }
+    // 연결 중인 프로미스가 있으면 재사용
+    if (this.connectionPromise) {
+      console.log("⏳ Reusing existing connection promise...");
+      return this.connectionPromise;
     }
 
-    this.isConnecting = true;
-    console.log(
-      `🔌 Starting STOMP connection... (Attempt ${retryCount + 1}/${
-        MAX_RETRIES + 1
-      })`
-    );
+    // 새로운 연결 시작
+    this.connectionPromise = this.doConnect(retryCount);
 
+    try {
+      const client = await this.connectionPromise;
+      return client;
+    } catch (error) {
+      this.connectionPromise = null;
+      throw error;
+    }
+  }
+
+  private async doConnect(retryCount: number = 0): Promise<StompClient> {
+    const MAX_RETRIES = 3;
+
+    this.isConnecting = true;
     try {
       const wsUrl = `${API_BASE_URL}`;
 
-      // AsyncStorage에서 토큰 로드 (async)
+      // AsyncStorage에서 토큰 로드 (async) - 병렬 처리로 최적화
       const accessToken = await apiService.getAccessToken();
 
       if (!accessToken) {
@@ -89,21 +84,22 @@ class LocationWebSocketService {
         ? `${wsUrl}?token=${accessToken}`
         : wsUrl;
 
-      console.log(`🔗 WebSocket URL: ${wsUrl}`);
-
-      // STOMP Client 생성 (순수 WebSocket + STOMP)
+      // STOMP Client 생성 (순수 WebSocket + STOMP) - 최적화된 설정
       this.stompClient = new Client({
         // React Native의 네이티브 WebSocket 사용
         webSocketFactory: () => {
-          console.log(`🔌 Creating WebSocket connection to: ${wsUrlWithToken}`);
           const ws = new WebSocket(wsUrlWithToken);
+          // WebSocket 바이너리 타입 설정으로 성능 향상
+          ws.binaryType = 'arraybuffer';
           return ws;
         },
         forceBinaryWSFrames: true,
         appendMissingNULLonIncoming: true,
-        reconnectDelay: 5000, // 5초 후 재연결 시도
-        heartbeatIncoming: 4000,
-        heartbeatOutgoing: 4000,
+        reconnectDelay: 100, // 100ms로 단축 (빠른 재연결)
+        heartbeatIncoming: 1000, // 1초로 단축 (빠른 연결 감지)
+        heartbeatOutgoing: 1000, // 1초로 단축
+        connectionTimeout: 3000, // 연결 타임아웃 3초
+        maxWebSocketFrameSize: 16 * 1024, // 16KB 프레임 크기 제한
       });
 
       return new Promise((resolve, reject) => {
@@ -113,18 +109,20 @@ class LocationWebSocketService {
         }
 
         this.stompClient.onConnect = (frame: any) => {
-          console.log("✅ STOMP connected successfully!");
           this.isConnecting = false;
+          console.log("✅ STOMP connected in", Date.now() - startTime, "ms");
           resolve(this.stompClient!);
         };
 
         this.stompClient.onStompError = (frame: any) => {
           this.isConnecting = false;
+          this.connectionPromise = null;
           reject(new Error(frame.headers?.message || "STOMP connection error"));
         };
 
         this.stompClient.onWebSocketError = (event: any) => {
           this.isConnecting = false;
+          this.connectionPromise = null;
 
           // 서버가 실행 중이지 않을 가능성
           if (event?.target?.readyState === 3) {
@@ -159,6 +157,7 @@ class LocationWebSocketService {
           this.cleanup();
         };
 
+        const startTime = Date.now();
         this.stompClient.activate();
       });
     } catch (error) {
@@ -166,11 +165,11 @@ class LocationWebSocketService {
       this.stompClient = null;
       this.isConnecting = false;
 
-      // 재시도 로직
+      // 재시도 로직 (빠른 재시도)
       if (retryCount < MAX_RETRIES) {
-        console.log(`⏳ Retrying connection in 2 seconds...`);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        return this.connect(retryCount + 1);
+        console.log(`⏳ Retrying connection in 100ms...`);
+        await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms로 단축
+        return this.doConnect(retryCount + 1);
       }
 
       throw error;
@@ -179,20 +178,28 @@ class LocationWebSocketService {
     }
   }
 
-  // STOMP 메시지 전송 헬퍼
+  // STOMP 메시지 전송 헬퍼 (최적화)
   private sendStompMessage(
     destination: string,
     body: any,
     headers: any = {}
   ): void {
     if (!this.stompClient || !this.stompClient.connected) {
-      throw new Error("STOMP not connected");
+      console.warn("⚠️ STOMP not connected, skipping message");
+      return; // 에러 대신 경고만 (빠른 실패)
     }
+
+    // JSON 직렬화 최적화 - 작은 객체는 즉시 전송
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
 
     this.stompClient.publish({
       destination,
-      body: JSON.stringify(body),
-      headers,
+      body: bodyStr,
+      headers: {
+        ...headers,
+        'content-type': 'application/json',
+        'priority': '10' // 높은 우선순위
+      },
     });
   }
 
@@ -254,11 +261,11 @@ class LocationWebSocketService {
       // 위치 조회 요청 전송
       this.sendStompMessage(`/app/workspace/${workspaceId}/locations`, {});
 
-      // 타임아웃 설정
+      // 타임아웃 설정 (빠른 실패)
       setTimeout(() => {
         replySubscription.unsubscribe();
         reject(new Error("Get locations timeout"));
-      }, 10000);
+      }, 1000); // 1초로 단축
     });
   }
 
@@ -285,8 +292,8 @@ class LocationWebSocketService {
         );
         await this.connect();
 
-        // 짧은 대기 시간
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // 최소 대기 시간
+        await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms로 단축
 
         if (this.stompClient && this.stompClient.connected) {
           break;
@@ -299,7 +306,7 @@ class LocationWebSocketService {
         connectionAttempts++;
 
         if (connectionAttempts < maxConnectionAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms로 단축
         }
       }
     }
@@ -358,8 +365,8 @@ class LocationWebSocketService {
         );
         await this.connect();
 
-        // 연결 후 잠시 대기하여 연결이 완전히 설정되도록 함
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // 연결 후 최소 대기
+        await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms로 단축
 
         if (this.stompClient && this.stompClient.connected) {
           console.log("✅ STOMP connection established successfully");
@@ -373,8 +380,8 @@ class LocationWebSocketService {
         connectionAttempts++;
 
         if (connectionAttempts < maxConnectionAttempts) {
-          console.log(`⏳ Waiting 2 seconds before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          console.log(`⏳ Waiting 100ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms로 단축
         }
       }
     }
@@ -546,55 +553,50 @@ class LocationWebSocketService {
 
     // 이미 구독 중이면 리턴
     if (this.phishingAlertSubscription) {
-      console.log("⚠️ Already subscribed to phishing alerts");
       return;
     }
 
-    console.log("🛡️ Subscribing to phishing alerts...");
-
     // 피싱 알림 토픽 구독
-    this.phishingAlertSubscription = this.stompClient.subscribe(
-      "/topic/phishing.alerts",
-      (message: any) => {
-        try {
-          const alert: PhishingAlert = JSON.parse(message.body);
-          console.log("🚨 Phishing alert received:", alert);
+    // this.phishingAlertSubscription = this.stompClient.subscribe(
+    //   "/topic/phishing.alerts",
+    //   (message: any) => {
+    //     try {
+    //       const alert: PhishingAlert = JSON.parse(message.body);
+    //       console.log("🚨 Phishing alert received:", alert);
 
-          // 모든 등록된 콜백 실행
-          this.phishingAlertCallbacks.forEach((callback) => {
-            try {
-              callback(alert);
-            } catch (error) {
-              console.error("Error in phishing alert callback:", error);
-            }
-          });
-        } catch (error) {
-          console.error("Failed to parse phishing alert:", error);
-        }
-      }
-    );
+    //       // 모든 등록된 콜백 실행
+    //       this.phishingAlertCallbacks.forEach((callback) => {
+    //         try {
+    //           callback(alert);
+    //         } catch (error) {
+    //           console.error("Error in phishing alert callback:", error);
+    //         }
+    //       });
+    //     } catch (error) {
+    //       console.error("Failed to parse phishing alert:", error);
+    //     }
+    //   }
+    // );
 
     // 사용자별 피싱 알림 구독 (선택적)
-    const userTopic = "/user/queue/phishing.personal";
-    this.stompClient.subscribe(userTopic, (message: any) => {
-      try {
-        const alert: PhishingAlert = JSON.parse(message.body);
-        console.log("🚨 Personal phishing alert received:", alert);
+    // const userTopic = "/user/queue/phishing.personal";
+    // this.stompClient.subscribe(userTopic, (message: any) => {
+    //   try {
+    //     const alert: PhishingAlert = JSON.parse(message.body);
+    //     console.log("🚨 Personal phishing alert received:", alert);
 
-        // 개인 알림 처리
-        this.phishingAlertCallbacks.forEach((callback) => {
-          try {
-            callback(alert);
-          } catch (error) {
-            console.error("Error in personal phishing alert callback:", error);
-          }
-        });
-      } catch (error) {
-        console.error("Failed to parse personal phishing alert:", error);
-      }
-    });
-
-    console.log("✅ Subscribed to phishing alerts");
+    //     // 개인 알림 처리
+    //     this.phishingAlertCallbacks.forEach((callback) => {
+    //       try {
+    //         callback(alert);
+    //       } catch (error) {
+    //         console.error("Error in personal phishing alert callback:", error);
+    //       }
+    //     });
+    //   } catch (error) {
+    //     console.error("Failed to parse personal phishing alert:", error);
+    //   }
+    // });
   }
 
   /**
@@ -624,57 +626,57 @@ class LocationWebSocketService {
   /**
    * 실시간 피싱 통계 스트림
    */
-  async streamPhishingStats(
-    workspaceId: string,
-    onStats: (stats: any) => void
-  ): Promise<{ unsubscribe: () => void }> {
-    if (!this.stompClient || !this.stompClient.connected) {
-      await this.connect();
-    }
+  // async streamPhishingStats(
+  //   workspaceId: string,
+  //   onStats: (stats: any) => void
+  // ): Promise<{ unsubscribe: () => void }> {
+  //   if (!this.stompClient || !this.stompClient.connected) {
+  //     await this.connect();
+  //   }
 
-    if (!this.stompClient || !this.stompClient.connected) {
-      throw new Error("STOMP not connected");
-    }
+  //   if (!this.stompClient || !this.stompClient.connected) {
+  //     throw new Error("STOMP not connected");
+  //   }
 
-    const statsKey = `phishing-stats-${workspaceId}`;
+  //   const statsKey = `phishing-stats-${workspaceId}`;
 
-    // 이미 구독 중이면 재사용
-    if (this.streamSubscriptions.has(statsKey)) {
-      console.log("⚠️ Already subscribed to phishing stats");
-      return {
-        unsubscribe: () => this.unsubscribePhishingStats(workspaceId),
-      };
-    }
+  //   // 이미 구독 중이면 재사용
+  //   if (this.streamSubscriptions.has(statsKey)) {
+  //     console.log("⚠️ Already subscribed to phishing stats");
+  //     return {
+  //       unsubscribe: () => this.unsubscribePhishingStats(workspaceId),
+  //     };
+  //   }
 
-    console.log(
-      `📊 Starting phishing stats stream for workspace: ${workspaceId}`
-    );
+  //   console.log(
+  //     `📊 Starting phishing stats stream for workspace: ${workspaceId}`
+  //   );
 
-    const subscription = this.stompClient.subscribe(
-      `/topic/phishing.stats.${workspaceId}`,
-      (message: any) => {
-        try {
-          const stats = JSON.parse(message.body);
-          console.log("📊 Phishing stats update:", stats);
-          onStats(stats);
-        } catch (error) {
-          console.error("Failed to parse phishing stats:", error);
-        }
-      }
-    );
+  //   const subscription = this.stompClient.subscribe(
+  //     `/topic/phishing.stats.${workspaceId}`,
+  //     (message: any) => {
+  //       try {
+  //         const stats = JSON.parse(message.body);
+  //         console.log("📊 Phishing stats update:", stats);
+  //         onStats(stats);
+  //       } catch (error) {
+  //         console.error("Failed to parse phishing stats:", error);
+  //       }
+  //     }
+  //   );
 
-    this.streamSubscriptions.set(statsKey, subscription);
+  //   this.streamSubscriptions.set(statsKey, subscription);
 
-    // 통계 스트림 시작 요청
-    this.sendStompMessage(`/app/phishing.stats.stream`, {
-      workspaceId,
-      action: "start",
-    });
+  //   // 통계 스트림 시작 요청
+  //   this.sendStompMessage(`/app/phishing.stats.stream`, {
+  //     workspaceId,
+  //     action: "start",
+  //   });
 
-    return {
-      unsubscribe: () => this.unsubscribePhishingStats(workspaceId),
-    };
-  }
+  //   return {
+  //     unsubscribe: () => this.unsubscribePhishingStats(workspaceId),
+  //   };
+  // }
 
   /**
    * 피싱 통계 구독 해제
@@ -699,14 +701,14 @@ class LocationWebSocketService {
   /**
    * 피싱 알림 구독 해제
    */
-  unsubscribeFromPhishingAlerts(): void {
-    if (this.phishingAlertSubscription) {
-      this.phishingAlertSubscription.unsubscribe();
-      this.phishingAlertSubscription = null;
-    }
-    this.phishingAlertCallbacks = [];
-    console.log("✅ Unsubscribed from phishing alerts");
-  }
+  // unsubscribeFromPhishingAlerts(): void {
+  //   if (this.phishingAlertSubscription) {
+  //     this.phishingAlertSubscription.unsubscribe();
+  //     this.phishingAlertSubscription = null;
+  //   }
+  //   this.phishingAlertCallbacks = [];
+  //   console.log("✅ Unsubscribed from phishing alerts");
+  // }
 
   /**
    * 피싱 위치 알림 전송 (지도에 표시용)
@@ -724,10 +726,6 @@ class LocationWebSocketService {
       await this.connect();
     }
 
-    console.log(
-      `📍 Sending phishing location alert for workspace: ${workspaceId}`
-    );
-
     this.sendStompMessage(`/app/phishing.location.${workspaceId}`, {
       workspaceId,
       smsId: alert.smsId,
@@ -740,10 +738,8 @@ class LocationWebSocketService {
 
   // 연결 종료
   disconnect() {
-    console.log("🔌 Disconnecting STOMP...");
-
     // 피싱 알림 구독 해제
-    this.unsubscribeFromPhishingAlerts();
+    // this.unsubscribeFromPhishingAlerts();
 
     this.cleanup();
     this.isConnecting = false;

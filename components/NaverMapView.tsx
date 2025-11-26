@@ -7,6 +7,7 @@ import {
   NaverMapMarkerOverlay,
   NaverMapView as RNNaverMapView,
 } from "@mj-studio/react-native-naver-map";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Location from "expo-location";
 import React, {
   useCallback,
@@ -16,7 +17,6 @@ import React, {
   useState,
 } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -25,7 +25,7 @@ import {
   View,
 } from "react-native";
 import { apiService } from "../services/api";
-import { useMyProfile } from "../services/queries";
+import { useMyProfile, useWorkspaceUserLocations } from "../services/queries";
 import type { Schedule, User } from "../types";
 
 const COLOR_MAP: Record<string, string> = {
@@ -48,8 +48,10 @@ const COLOR_MAP: Record<string, string> = {
   gray: "#9ca3af",
 };
 
-const getColorCode = (colorName: string): string =>
-  COLOR_MAP[colorName] || "#007AFF";
+const getColorCode = (colorName: string): string => {
+  // 캘린더와 동일한 방식으로 처리
+  return COLOR_MAP[colorName] || COLOR_MAP["gray"];
+};
 
 type MarkerUser = {
   id: string;
@@ -77,7 +79,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
   isActive = true,
 }) => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [realtimeUsers, setRealtimeUsers] = useState<User[]>(users);
   const [error, setError] = useState<Error | null>(null);
   const [myLocation, setMyLocation] = useState<{
     latitude: number;
@@ -93,9 +94,95 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     zoom: 13,
   });
   const [phishingAlerts, setPhishingAlerts] = useState<PhishingAlert[]>([]);
+  const [cachedImages, setCachedImages] = useState<Record<string, string>>({});
   const { activeWorkspaceId } = useAppStore();
   const { data: currentUser } = useMyProfile();
   const mapRef = useRef<any>(null);
+
+  // React Query로 실시간 위치 데이터 가져오기 (앱 레벨에서 WebSocket 구독 중)
+  const { data: locationData } = useWorkspaceUserLocations(
+    activeWorkspaceId || "",
+    {
+      enabled: !!activeWorkspaceId && isActive,
+      refetchInterval: 0, // WebSocket으로 실시간 업데이트되므로 폴링 불필요
+    }
+  );
+
+  // 위치 데이터를 users와 병합하여 realtimeUsers 생성
+  const realtimeUsers = useMemo(() => {
+    if (!locationData || !Array.isArray(locationData)) {
+      return users;
+    }
+
+    // users 배열을 복사하고 위치 데이터 병합
+    return users.map((user) => {
+      const userLocation = locationData.find(
+        (loc: any) => (loc.userId || loc.id) === user.id
+      );
+
+      if (userLocation && userLocation.latitude && userLocation.longitude) {
+        return {
+          ...user,
+          location: {
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+          },
+        };
+      }
+
+      return user;
+    });
+  }, [users, locationData]);
+
+  // 이미지 캐싱 함수
+  const cacheImage = useCallback(async (uri: string, userId: string) => {
+    try {
+      const filename = `avatar_${userId}.jpg`;
+      const localUri = `${FileSystem.cacheDirectory}${filename}`;
+
+      // 이미 캐시된 파일이 있는지 확인
+      const fileInfo = await FileSystem.getInfoAsync(localUri);
+      if (fileInfo.exists) {
+        return localUri;
+      }
+
+      const downloadResult = await FileSystem.downloadAsync(uri, localUri);
+      return downloadResult.uri;
+    } catch (error) {
+      console.error(`[Cache] ❌ Failed to cache image for ${userId}:`, error);
+      return null;
+    }
+  }, []);
+
+  // 사용자 아바타 이미지 캐싱
+  useEffect(() => {
+    const cacheAllImages = async () => {
+      const newCachedImages: Record<string, string> = {};
+
+      for (const user of realtimeUsers) {
+        if (user.avatarUrl && user.avatarUrl.startsWith("http")) {
+          const localUri = await cacheImage(user.avatarUrl, user.id);
+          if (localUri) {
+            newCachedImages[user.id] = localUri;
+          }
+        }
+      }
+
+      if (currentUser?.avatarUrl && currentUser.avatarUrl.startsWith("http")) {
+        const localUri = await cacheImage(
+          currentUser.avatarUrl,
+          currentUser.id
+        );
+        if (localUri) {
+          newCachedImages[currentUser.id] = localUri;
+        }
+      }
+
+      setCachedImages(newCachedImages);
+    };
+
+    cacheAllImages();
+  }, [realtimeUsers, currentUser, cacheImage]);
 
   const sendLocationUpdate = useCallback(
     async (latitude: number, longitude: number) => {
@@ -108,7 +195,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           latitude,
           longitude,
         });
-        console.log("✅ Location saved to server");
 
         // WebSocket으로 실시간 브로드캐스트
         await locationWebSocketService.updateLocation(
@@ -123,130 +209,12 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     [activeWorkspaceId]
   );
 
+  // 위치 데이터가 업데이트될 때마다 lastUpdate 갱신
   useEffect(() => {
-    if (!activeWorkspaceId || !isActive) {
-      return;
+    if (locationData) {
+      setLastUpdate(new Date());
     }
-
-    let subscription: { unsubscribe: () => void } | null = null;
-
-    const startStreaming = async () => {
-      try {
-        // 1. REST API로 초기 위치 데이터 가져오기
-        console.log("📍 Fetching initial locations from REST API...");
-        try {
-          const initialLocations = await apiService.getWorkspaceUserLocations(
-            activeWorkspaceId
-          );
-
-          console.log("✅ Initial locations from API:", initialLocations);
-
-          // 초기 위치 데이터로 사용자 업데이트
-          if (Array.isArray(initialLocations)) {
-            setRealtimeUsers((prevUsers) => {
-              const updatedUsers = [...prevUsers];
-
-              initialLocations.forEach((locationData: any) => {
-                const userId = locationData.userId || locationData.id;
-                const userIndex = updatedUsers.findIndex(
-                  (u) => u.id === userId
-                );
-
-                if (
-                  userIndex !== -1 &&
-                  locationData.latitude &&
-                  locationData.longitude
-                ) {
-                  updatedUsers[userIndex] = {
-                    ...updatedUsers[userIndex],
-                    location: {
-                      latitude: locationData.latitude,
-                      longitude: locationData.longitude,
-                    },
-                  };
-                }
-              });
-
-              return updatedUsers;
-            });
-          }
-        } catch (apiError) {
-          console.error("❌ Failed to fetch initial locations:", apiError);
-        }
-
-        // 2. STOMP 스트림 구독 (실시간 업데이트)
-        subscription = await locationWebSocketService.streamLocations(
-          activeWorkspaceId,
-          (locationData: any) => {
-            // 위치 업데이트 수신 (로그 최소화)
-            setRealtimeUsers((prevUsers) => {
-              const updatedUsers = [...prevUsers];
-
-              // 서버에서 오는 데이터 형식에 따라 userId 추출
-              const userId = locationData.userId || locationData.id;
-
-              if (!userId) {
-                console.warn(
-                  "⚠️ No userId found in location data:",
-                  locationData
-                );
-                return updatedUsers;
-              }
-
-              const userIndex = updatedUsers.findIndex((u) => u.id === userId);
-
-              if (userIndex !== -1) {
-                // 기존 사용자 위치 업데이트
-                updatedUsers[userIndex] = {
-                  ...updatedUsers[userIndex],
-                  location: {
-                    latitude: locationData.latitude,
-                    longitude: locationData.longitude,
-                  },
-                };
-              } else {
-                console.log(
-                  `⚠️ User ${userId} not found in current users. Available users:`,
-                  updatedUsers.map((u) => ({ id: u.id, name: u.name }))
-                );
-                // 새 사용자 추가 (서버에서 전체 사용자 정보가 오는 경우)
-                if (locationData.user) {
-                  updatedUsers.push({
-                    ...locationData.user,
-                    location: {
-                      latitude: locationData.latitude,
-                      longitude: locationData.longitude,
-                    },
-                  });
-                }
-              }
-
-              return updatedUsers;
-            });
-            setLastUpdate(new Date());
-            setError(null);
-          }
-        );
-      } catch (err) {
-        console.error("❌ STOMP streaming error:", err);
-        setError(err as Error);
-      }
-    };
-
-    startStreaming();
-
-    // 클린업: STOMP 구독 해제
-    return () => {
-      if (subscription && subscription.unsubscribe) {
-        subscription.unsubscribe();
-      }
-    };
-  }, [activeWorkspaceId, isActive]);
-
-  // 초기 사용자 데이터 동기화
-  useEffect(() => {
-    setRealtimeUsers(users);
-  }, [users]);
+  }, [locationData]);
 
   // 내 위치 추적
   useEffect(() => {
@@ -312,68 +280,68 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
   }, [isActive, activeWorkspaceId, sendLocationUpdate]);
 
   // 피싱 알림 스트림 구독
-  useEffect(() => {
-    if (!activeWorkspaceId || !isActive) return;
+  // useEffect(() => {
+  //   if (!activeWorkspaceId || !isActive) return;
 
-    const setupPhishingAlerts = async () => {
-      try {
-        // 피싱 알림 구독
-        await locationWebSocketService.subscribeToPhishingAlerts(
-          (alert: PhishingAlert) => {
-            // 위치 정보가 있는 알림만 지도에 표시
-            if (alert.location) {
-              setPhishingAlerts((prev) => {
-                // 중복 제거
-                const filtered = prev.filter((a) => a.smsId !== alert.smsId);
-                return [...filtered, alert];
-              });
+  //   const setupPhishingAlerts = async () => {
+  //     try {
+  //       // 피싱 알림 구독
+  //       await locationWebSocketService.subscribeToPhishingAlerts(
+  //         (alert: PhishingAlert) => {
+  //           // 위치 정보가 있는 알림만 지도에 표시
+  //           if (alert.location) {
+  //             setPhishingAlerts((prev) => {
+  //               // 중복 제거
+  //               const filtered = prev.filter((a) => a.smsId !== alert.smsId);
+  //               return [...filtered, alert];
+  //             });
 
-              // 고위험 알림은 팝업으로 알림
-              if (alert.riskLevel === "high") {
-                Alert.alert(
-                  "🚨 피싱 위험 감지",
-                  `발신자: ${alert.sender}\n위치: 현재 위치 근처`,
-                  [
-                    {
-                      text: "확인",
-                      onPress: () => {
-                        // 해당 위치로 카메라 이동
-                        if (mapRef.current) {
-                          setCameraCenter({
-                            latitude: alert.location!.latitude,
-                            longitude: alert.location!.longitude,
-                            zoom: 15,
-                          });
-                        }
-                      },
-                    },
-                  ]
-                );
-              }
-            }
-          }
-        );
+  //             // 고위험 알림은 팝업으로 알림
+  //             if (alert.riskLevel === "high") {
+  //               Alert.alert(
+  //                 "🚨 피싱 위험 감지",
+  //                 `발신자: ${alert.sender}\n위치: 현재 위치 근처`,
+  //                 [
+  //                   {
+  //                     text: "확인",
+  //                     onPress: () => {
+  //                       // 해당 위치로 카메라 이동
+  //                       if (mapRef.current) {
+  //                         setCameraCenter({
+  //                           latitude: alert.location!.latitude,
+  //                           longitude: alert.location!.longitude,
+  //                           zoom: 15,
+  //                         });
+  //                       }
+  //                     },
+  //                   },
+  //                 ]
+  //               );
+  //             }
+  //           }
+  //         }
+  //       );
 
-        // 피싱 위치 알림 스트림 (선택적)
-        if (activeWorkspaceId) {
-          await locationWebSocketService.streamPhishingStats(
-            activeWorkspaceId,
-            (stats: any) => {
-              // 피싱 통계 수신 (로그 최소화)
-            }
-          );
-        }
-      } catch (error) {
-        console.error("피싱 알림 구독 실패:", error);
-      }
-    };
+  //       // 피싱 위치 알림 스트림 (선택적)
+  //       // if (activeWorkspaceId) {
+  //       //   await locationWebSocketService.streamPhishingStats(
+  //       //     activeWorkspaceId,
+  //       //     (stats: any) => {
+  //       //       // 피싱 통계 수신 (로그 최소화)
+  //       //     }
+  //       //   );
+  //       // }
+  //     } catch (error) {
+  //       console.error("피싱 알림 구독 실패:", error);
+  //     }
+  //   };
 
-    setupPhishingAlerts();
+  //   setupPhishingAlerts();
 
-    return () => {
-      locationWebSocketService.unsubscribeFromPhishingAlerts();
-    };
-  }, [activeWorkspaceId, isActive]);
+  //   return () => {
+  //     // locationWebSocketService.unsubscribeFromPhishingAlerts();
+  //   };
+  // }, [activeWorkspaceId, isActive]);
 
   const displayUsers = realtimeUsers;
 
@@ -400,7 +368,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           : null,
         title: user.name,
         displayTitle: user.name,
-        color: user.color || "#007AFF",
+        color: user.color || "gray", // 색상 이름 사용
         avatarUrl: user.avatarUrl,
         isMe: false,
         hasLocation,
@@ -411,17 +379,21 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
   // 내 마커
   const myMarker = useMemo<MarkerUser | null>(() => {
     if (!currentUser) return null;
+
+    // users 배열에서 현재 사용자를 찾아서 color 정보를 가져옴
+    const userWithColor = users.find((u) => u.id === currentUser.id);
+
     return {
       id: currentUser.id,
       coordinates: myLocation,
       title: currentUser.name,
       displayTitle: `${currentUser.name}`,
-      color: "#ef4444", // 빨간색으로 특별 표시
+      color: userWithColor?.color || currentUser.color || "gray", // users에서 color 가져오기
       avatarUrl: currentUser.avatarUrl,
       isMe: true,
       hasLocation: myLocation != null,
     };
-  }, [myLocation, currentUser]);
+  }, [myLocation, currentUser, users]);
 
   // 모든 멤버 아이콘 리스트 (나 + 다른 멤버들)
   const allMemberIcons = useMemo<MarkerUser[]>(() => {
@@ -480,7 +452,27 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     }
 
     const size = marker.isMe ? 56 : 48;
+    const borderWidth = marker.isMe ? 3 : 2.5;
+    const borderColor = getColorCode(marker.color);
+    const localImageUri = cachedImages[marker.id];
 
+    // 프로필 이미지가 있으면 image prop 사용
+    if (localImageUri) {
+      return (
+        <NaverMapMarkerOverlay
+          key={marker.id}
+          latitude={marker.coordinates.latitude}
+          longitude={marker.coordinates.longitude}
+          image={{ httpUri: localImageUri }}
+          width={size}
+          height={size}
+          anchor={{ x: 0.5, y: 0.5 }}
+          isIconPerspectiveEnabled={true}
+        />
+      );
+    }
+
+    // 프로필 이미지 없으면 기본 마커
     return (
       <NaverMapMarkerOverlay
         key={marker.id}
@@ -488,14 +480,77 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
         longitude={marker.coordinates.longitude}
         width={size}
         height={size}
-        image={{ httpUri: marker.avatarUrl }}
+        anchor={{ x: 0.5, y: 0.5 }}
         isIconPerspectiveEnabled={true}
-        caption={{
-          text: marker.displayTitle,
-          textSize: marker.isMe ? 13 : 12,
-          color: "#111827",
-        }}
-      ></NaverMapMarkerOverlay>
+      >
+        {/* 색상 테두리가 있는 원형 컨테이너 */}
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: borderColor,
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 5,
+          }}
+        >
+          <View
+            style={{
+              width: size - borderWidth * 2,
+              height: size - borderWidth * 2,
+              borderRadius: (size - borderWidth * 2) / 2,
+              backgroundColor: "#e5e7eb",
+              overflow: "hidden",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: marker.isMe ? 20 : 16,
+                fontWeight: "700",
+                color: "#000000",
+              }}
+            >
+              {marker.title.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+
+          {/* 온라인 표시 */}
+          <View
+            style={{
+              position: "absolute",
+              right: -2,
+              bottom: -2,
+              width: 14,
+              height: 14,
+              borderRadius: 7,
+              backgroundColor: "#ffffff",
+              justifyContent: "center",
+              alignItems: "center",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.2,
+              shadowRadius: 2,
+              elevation: 3,
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: "#22c55e",
+              }}
+            />
+          </View>
+        </View>
+      </NaverMapMarkerOverlay>
     );
   };
 
@@ -612,9 +667,7 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
               contentContainerStyle={styles.memberListContent}
             >
               {allMemberIcons.map((member) => {
-                const memberColor = member.isMe
-                  ? member.color // 내 색상은 이미 hex 코드
-                  : getColorCode(member.color); // 다른 멤버는 변환 필요
+                const memberColor = getColorCode(member.color); // 모든 색상 변환
                 const hasAvatar =
                   typeof member.avatarUrl === "string" &&
                   member.avatarUrl.trim().length > 0;
@@ -665,6 +718,18 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
                         ]}
                       />
                     )}
+                    {/* 색상 띠 */}
+                    <View
+                      style={[
+                        styles.colorStrip,
+                        {
+                          backgroundColor: member.hasLocation
+                            ? memberColor
+                            : "#d1d5db",
+                        },
+                        !member.hasLocation && styles.colorStripDisabled,
+                      ]}
+                    />
                     <Text
                       style={[
                         styles.memberName,
@@ -770,11 +835,47 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   markerContainer: {
-    borderRadius: 999,
-    overflow: "hidden",
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  markerShadow: {
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#ffffff",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  markerBorder: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+  },
+  markerImage: {
+    resizeMode: "cover",
+  },
+  onlineIndicator: {
+    position: "absolute",
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  onlineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#22c55e",
   },
   myMarkerContainer: {
     shadowColor: "#ef4444",
@@ -782,11 +883,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 6,
-  },
-  markerImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 999,
   },
   markerPlaceholder: {
     backgroundColor: "#ffffff",
@@ -943,7 +1039,7 @@ const styles = StyleSheet.create({
   },
   memberName: {
     fontSize: 12,
-    color: "#374151",
+    color: "#000000",
     fontWeight: "600",
     maxWidth: 60,
     textAlign: "center",
@@ -956,6 +1052,16 @@ const styles = StyleSheet.create({
   },
   memberNameDisabled: {
     color: "#9ca3af", // 회색 텍스트
+  },
+  colorStrip: {
+    width: 32,
+    height: 3,
+    borderRadius: 1.5,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  colorStripDisabled: {
+    opacity: 0.4,
   },
   meBadge: {
     position: "absolute",
@@ -970,6 +1076,27 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 10,
     fontWeight: "bold",
+  },
+  userMarker: {
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  onlineBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
   },
   phishingMarker: {
     width: 48,

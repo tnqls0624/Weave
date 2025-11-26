@@ -203,11 +203,15 @@ export const useAppData = () => {
         // user가 객체인 경우
         if (typeof user === "object" && user.id) {
           const hexColor = participantColors[user.id];
-          const finalColor = hexColor ? hexToColorName(hexColor) : "blue";
+          // participantColors에 없으면 user.color를 사용, 그것도 없으면 gray
+          const finalColor = hexColor
+            ? hexToColorName(hexColor)
+            : user.color || "gray";
 
           userMap.set(user.id, {
             id: user.id,
             name: user.name || "",
+            birthday: user.birthday || "",
             avatarUrl: user.avatarUrl || "",
             color: finalColor,
           });
@@ -220,7 +224,7 @@ export const useAppData = () => {
       const hexColor = participantColors[currentUserProfile.id];
       const finalColor = hexColor
         ? hexToColorName(hexColor)
-        : currentUserProfile.color || "blue";
+        : currentUserProfile.color || "gray"; // blue 대신 gray 기본값
 
       userMap.set(currentUserProfile.id, {
         id: currentUserProfile.id,

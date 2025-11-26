@@ -16,7 +16,13 @@ export interface User {
   initialLocation?: Location;
   location?: Location;
   pushEnabled?: boolean;
+  locationEnabled?: boolean;
+  // TEMPORARILY DISABLED - Security features
+  // phishingGuardEnabled?: boolean;
+  // phishingAutoBlock?: boolean;
+  // phishingSensitivityLevel?: string;
   fcmToken?: string;
+  email?: string;
 }
 
 export interface Calendar {

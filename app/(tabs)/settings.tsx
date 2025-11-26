@@ -1,4 +1,5 @@
 import SettingsView from "@/components/SettingsView";
+import { useWorkspaceSchedules } from "@/services/queries";
 import { useAppData, useAppStore, useUpdateUser } from "@/stores";
 import { User } from "@/types";
 import { useRouter } from "expo-router";
@@ -12,6 +13,16 @@ export default function SettingsScreen() {
   const { users, currentUser, isLoading, error } = useAppData();
   const { clearAuth, activeWorkspaceId } = useAppStore();
   const updateUserMutation = useUpdateUser();
+
+  // 일정 개수를 가져오기 위해 schedules 조회
+  const { data: schedules = [], isLoading: schedulesLoading } =
+    useWorkspaceSchedules(
+      activeWorkspaceId,
+      {},
+      {
+        enabled: !!activeWorkspaceId,
+      }
+    );
 
   const handleUpdateUser = async (userId: string, userData: any) => {
     try {
@@ -66,6 +77,8 @@ export default function SettingsScreen() {
         users={users as unknown as User[]}
         currentUser={currentUser}
         workspaceId={activeWorkspaceId}
+        scheduleCount={schedules.length}
+        schedulesLoading={schedulesLoading}
         onUpdateUser={handleUpdateUser}
         onLogout={handleLogout}
       />

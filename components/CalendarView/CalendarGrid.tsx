@@ -8,7 +8,6 @@ import {
   View,
 } from "react-native";
 import { CalendarList, DateData } from "react-native-calendars";
-import { Subject } from "rxjs";
 import { isHoliday } from "../../constants/holidays";
 import type { Schedule, User } from "../../types";
 
@@ -66,9 +65,9 @@ interface DayCellProps {
   dayOfWeek: number;
   dayEvents: Schedule[];
   dayCellHeight: number;
+  dayCellWidth: number;
   maxVisibleRows: number;
-  onSelectDay: (date: Date) => void;
-  onDoubleTap: (date: Date) => void;
+  onPress: (date: Date) => void; // 싱글/더블탭 통합 핸들러
   getEventColor: (schedule: Schedule) => string;
   getEventForDay: (
     schedule: Schedule,
@@ -99,18 +98,18 @@ const DayCell = React.memo<DayCellProps>(
     dayOfWeek,
     dayEvents,
     dayCellHeight,
+    dayCellWidth,
     maxVisibleRows,
-    onSelectDay,
-    onDoubleTap,
+    onPress,
     getEventColor,
     getEventForDay,
     eventLaneMap,
     eventsDateCache,
   }) => {
-    // 전역 핸들러 사용
+    // 부모에서 전달받은 onPress 함수를 직접 사용
     const handlePress = useCallback(() => {
-      onSelectDay(dayDate);
-    }, [onSelectDay, dayDate]);
+      onPress(dayDate);
+    }, [onPress, dayDate]);
 
     let dateColor = isCurrentMonth ? "#374151" : "#d1d5db";
     if (isCurrentMonth) {
@@ -237,6 +236,11 @@ const DayCell = React.memo<DayCellProps>(
             const isMultiDay =
               dateInfo && dateInfo.startTime !== dateInfo.endTime;
 
+            // 멀티데이 이벤트의 경우 날짜 수 계산
+            const dayCount = isMultiDay && dateInfo
+              ? Math.ceil((dateInfo.endTime - dateInfo.startTime) / DAY_IN_MS) + 1
+              : 1;
+
             return (
               <View
                 key={schedule.id}
@@ -296,6 +300,9 @@ const DayCell = React.memo<DayCellProps>(
     if (prevProps.dayCellHeight !== nextProps.dayCellHeight) {
       return false;
     }
+    if (prevProps.dayCellWidth !== nextProps.dayCellWidth) {
+      return false;
+    }
     if (prevProps.maxVisibleRows !== nextProps.maxVisibleRows) {
       return false;
     }
@@ -338,17 +345,25 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   onAnimationEnd,
   selectedDate,
 }) => {
-  // RxJS Subject를 사용한 전역 더블탭 추적
-  const tapSubject = useRef(new Subject<Date>()).current;
+  // 함수 참조를 ref로 저장하여 안정적인 참조 유지
   const onSelectDayRef = useRef(onSelectDay);
   const onDoubleTapRef = useRef(onDoubleTap);
-  const { height: screenHeight } = useWindowDimensions();
+
+  // 더블탭 감지를 부모 레벨로 이동 (모든 날짜 공유)
+  const lastTapTimeRef = useRef<number>(0);
+  const lastTapDateRef = useRef<Date | null>(null);
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const calendarListRef = useRef<any>(null);
   const calendarHeight = useMemo(() => {
     // dayNames 높이 (약 33px) 제외하고 나머지 공간을 모두 사용
     const dayNamesHeight = 240;
     return screenHeight - dayNamesHeight;
   }, [screenHeight]);
+
+  // 각 날짜 셀의 너비 계산 (화면 너비 / 7)
+  const dayCellWidth = useMemo(() => screenWidth / 7, [screenWidth]);
 
   // 현재 월의 실제 주 수 계산
   const numberOfWeeks = useMemo(() => {
@@ -394,7 +409,8 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
 
   const scheduleRanges = useMemo<ScheduleWithRange[]>(() => {
     return schedules.map((schedule: Schedule) => {
-      const startDateString = schedule.startDate || dayjs().format("YYYY-MM-DD");
+      const startDateString =
+        schedule.startDate || dayjs().format("YYYY-MM-DD");
       const eventStart = new Date(`${startDateString}T00:00:00`);
       const endDateString = schedule.endDate || startDateString;
       const eventEnd = new Date(`${endDateString}T00:00:00`);
@@ -428,7 +444,9 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
 
   const visibleScheduleRanges = useMemo(() => {
     return scheduleRanges.filter(({ startTime, endTime }) => {
-      return endTime >= visibleRange.startTime && startTime <= visibleRange.endTime;
+      return (
+        endTime >= visibleRange.startTime && startTime <= visibleRange.endTime
+      );
     });
   }, [scheduleRanges, visibleRange]);
 
@@ -573,74 +591,63 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     [eventsDateCache]
   );
 
-  // RxJS로 더블탭 처리
+  // ref 업데이트
   useEffect(() => {
     onSelectDayRef.current = onSelectDay;
     onDoubleTapRef.current = onDoubleTap;
   }, [onSelectDay, onDoubleTap]);
 
+  // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
-    let lastTapTime = 0;
-    let timer: number | null = null;
-
-    const subscription = tapSubject.subscribe((date) => {
-      const now = Date.now();
-      const timeSinceLastTap = now - lastTapTime;
-
-      // 400ms 이내 두 번째 탭 = 더블탭
-      if (timeSinceLastTap < 400 && lastTapTime > 0) {
-        // 타이머 취소
-        if (timer) {
-          clearTimeout(timer);
-          timer = null;
-        }
-        // 더블탭 후 현재 시간으로 업데이트 (연속 더블탭 가능하게)
-        lastTapTime = now;
-        // 더블탭: 날짜 선택 + drawer 열기 (순차적으로)
-        onSelectDayRef.current(date);
-        // 약간의 딜레이를 두고 drawer 열기 (자연스러운 순서)
-        setTimeout(() => {
-          onDoubleTapRef.current(date);
-        }, 10);
-
-        timer = setTimeout(() => {
-          lastTapTime = 0;
-          timer = null;
-        }, 400);
-      } else {
-        // 첫 번째 탭: 즉시 날짜 선택
-        lastTapTime = now;
-        onSelectDayRef.current(date);
-
-        if (timer) {
-          clearTimeout(timer);
-        }
-        timer = setTimeout(() => {
-          lastTapTime = 0;
-          timer = null;
-        }, 400);
-      }
-    });
-
     return () => {
-      if (timer) {
-        clearTimeout(timer);
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
       }
-      subscription.unsubscribe();
     };
-  }, [tapSubject]);
-
-  // 탭 이벤트를 Subject로 전달
-  const stableOnSelectDay = useCallback(
-    (date: Date) => {
-      tapSubject.next(date);
-    },
-    [tapSubject]
-  );
-
-  const stableOnDoubleTap = useCallback(() => {
-    // 더 이상 사용하지 않음 (stableOnSelectDay에서 처리)
   }, []);
+
+  // DayCell에서 직접 호출할 안정적인 콜백
+  const stableOnSelectDay = useCallback((date: Date) => {
+    onSelectDayRef.current(date);
+  }, []);
+
+  const stableOnDoubleTap = useCallback((date: Date) => {
+    onDoubleTapRef.current(date);
+  }, []);
+
+  // 부모 레벨에서 더블탭 감지 처리
+  const handleDayPress = useCallback(
+    (dayDate: Date) => {
+      const now = Date.now();
+      const timeSinceLastTap = now - lastTapTimeRef.current;
+      const isSameDate =
+        lastTapDateRef.current &&
+        lastTapDateRef.current.getTime() === dayDate.getTime();
+
+      // 이전 싱글탭 타이머 취소
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+
+      if (timeSinceLastTap < 350 && isSameDate) {
+        // 더블탭 감지됨 - 같은 날짜를 350ms 이내에 다시 탭
+        stableOnDoubleTap(dayDate);
+        // 더블탭 후 초기화
+        lastTapTimeRef.current = 0;
+        lastTapDateRef.current = null;
+      } else {
+        // 싱글탭 - 250ms 지연 후 처리 (더블탭 기다림)
+        singleTapTimerRef.current = setTimeout(() => {
+          stableOnSelectDay(dayDate);
+        }, 250);
+
+        lastTapTimeRef.current = now;
+        lastTapDateRef.current = dayDate;
+      }
+    },
+    [stableOnSelectDay, stableOnDoubleTap]
+  );
 
   // getEventColor와 getEventForDay도 ref로 저장하여 안정적인 참조 유지
   const getEventColorRef = useRef(getEventColor);
@@ -705,9 +712,9 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
           dayOfWeek={dayOfWeek}
           dayEvents={dayEvents}
           dayCellHeight={dayCellHeight}
+          dayCellWidth={dayCellWidth}
           maxVisibleRows={maxVisibleEventRows}
-          onSelectDay={stableOnSelectDay}
-          onDoubleTap={stableOnDoubleTap}
+          onPress={handleDayPress}
           getEventColor={stableGetEventColor}
           getEventForDay={stableGetEventForDay}
           eventLaneMap={eventLaneMap}
@@ -717,11 +724,11 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     },
     [
       dayCellHeight,
+      dayCellWidth,
       currentDate,
       selectedDateString,
       getDayEvents,
-      stableOnSelectDay,
-      stableOnDoubleTap,
+      handleDayPress,
       stableGetEventColor,
       stableGetEventForDay,
       maxVisibleEventRows,
@@ -847,38 +854,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
     overflow: "visible",
+    zIndex: 1,
   },
   selectedDayCell: {
     backgroundColor: "#f3f4f6",
   },
   dayNumberContainer: {
     alignItems: "center",
+    justifyContent: "center",
     width: "100%",
-    marginBottom: 2,
+    height: 26,
+    marginBottom: 0,
   },
   dayNumber: {
-    fontSize: 16,
-    marginHorizontal: 4,
+    fontSize: 12,
+    marginHorizontal: 3,
     fontWeight: "500",
   },
   holidayLabelSlot: {
-    height: 12,
+    height: 8,
     justifyContent: "center",
     alignItems: "center",
     width: "100%",
   },
   holidayName: {
-    fontSize: 8,
+    fontSize: 6,
     color: "#ef4444",
     fontWeight: "600",
   },
   today: {
     backgroundColor: "#000",
-    borderRadius: 15,
-    paddingHorizontal: 3,
-    paddingVertical: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     textAlign: "center",
+    textAlignVertical: "center",
+    lineHeight: 20,
     fontWeight: "bold",
+    fontSize: 11,
     color: "#fff",
     overflow: "hidden",
   },
@@ -886,41 +899,43 @@ const styles = StyleSheet.create({
     width: "100%",
     flex: 1,
     overflow: "visible",
+    zIndex: 10,
   },
   eventsContainerTight: {
     paddingHorizontal: 1,
   },
   eventBarPlaceholder: {
-    height: 18,
-    marginBottom: 2,
+    height: 20,
+    marginBottom: 3,
     width: "100%",
     paddingHorizontal: 4,
   },
   eventBar: {
-    height: 18,
-    paddingHorizontal: 4,
+    height: 20,
+    paddingHorizontal: 3,
     justifyContent: "center",
-    marginBottom: 2,
-    overflow: "visible",
-    width: "100%",
+    marginBottom: 3,
+    marginHorizontal: 2,
+    overflow: "hidden",
+    zIndex: 5,
   },
   eventBarStart: {
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
+    borderTopLeftRadius: 3,
+    borderBottomLeftRadius: 3,
   },
   eventBarEnd: {
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
   },
   eventBarContinuation: {
     borderTopLeftRadius: 0,
     borderBottomLeftRadius: 0,
-    marginLeft: -1,
+    marginLeft: -2,
   },
   eventBarNotEnd: {
     borderTopRightRadius: 0,
     borderBottomRightRadius: 0,
-    marginRight: -1,
+    marginRight: -2,
   },
   eventBarText: {
     fontSize: 10,

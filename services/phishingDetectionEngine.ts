@@ -136,14 +136,11 @@ class PhishingDetectionEngine {
   ): Promise<AnalysisResult> {
     try {
       // 서버의 /api/phishing/detect 엔드포인트 호출
-      const response = await apiService.post<any>("/phishing/detect", {
+      const serverData = await apiService.detectPhishing({
         sender: request.sender,
         message: request.message,
         sensitivityLevel: request.sensitivityLevel,
       });
-
-      // 서버 응답을 AnalysisResult 형식으로 변환
-      const serverData = response.data;
 
       return {
         isPhishing: serverData.isPhishing || serverData.phishing,

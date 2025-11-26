@@ -18,7 +18,8 @@ const BottomNav: React.FC = () => {
     { route: "feed", icon: "list", label: "피드" },
     { route: "calendar", icon: "event", label: "캘린더" },
     { route: "map", icon: "map", label: "지도" },
-    { route: "phishing", icon: "security", label: "보안" },
+    // TEMPORARILY DISABLED - Security features
+    // { route: "phishing", icon: "security", label: "보안" },
     { route: "settings", icon: "settings", label: "설정" },
   ];
 

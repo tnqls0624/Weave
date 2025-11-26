@@ -85,16 +85,25 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   // Double tap: 상세 스케줄 열기
   const handleDoubleTap = useCallback(
     (day: Date) => {
+      console.log("🔴 handleDoubleTap 호출됨:", day.toDateString());
+      console.log("  현재 selectedDate:", selectedDate?.toDateString());
+      console.log("  현재 isDrawerOpen:", isDrawerOpen);
+
       // 선택한 날짜의 월로 currentDate도 업데이트
       const dayMonth = day.getMonth();
       const dayYear = day.getFullYear();
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
 
-      // ref 업데이트
-      previousSelectedDateRef.current = day;
+      // 먼저 날짜를 선택하고
       setSelectedDate(day);
-      setIsDrawerOpen(true);
+      console.log("  setSelectedDate 호출됨");
+
+      // drawer는 다음 틱에서 열기 (상태 업데이트 보장)
+      setTimeout(() => {
+        console.log("  🟢 setTimeout 실행 - setIsDrawerOpen(true) 호출");
+        setIsDrawerOpen(true);
+      }, 0);
 
       if (dayMonth !== currentMonth || dayYear !== currentYear) {
         const newDate = new Date(day);
@@ -102,7 +111,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         setCurrentDate(newDate);
       }
     },
-    [currentDate, setCurrentDate, setSelectedDate]
+    [currentDate, setCurrentDate, setSelectedDate, selectedDate, isDrawerOpen]
   );
 
   const handleCloseDrawer = useCallback(() => {
@@ -124,14 +133,11 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     setAnimationDirection(null);
   }, []);
 
-  // selectedDate가 외부에서 변경되면 drawer 열기 (검색에서 선택한 경우)
-  // 단, 이전 값과 다른 경우에만 열기 (싱글 클릭과 구분)
   useEffect(() => {
     const prevDate = previousSelectedDateRef.current;
     const isSameDate =
       prevDate && selectedDate && prevDate.getTime() === selectedDate.getTime();
 
-    // 이전 날짜와 다른 날짜가 선택되고, drawer가 닫혀있을 때만 열기
     if (selectedDate && !isSameDate && !isDrawerOpen) {
       setIsDrawerOpen(true);
     }
@@ -205,7 +211,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         onAnimationEnd={handleAnimationEnd}
         selectedDate={selectedDate}
       />
-      {selectedDate && isDrawerOpen && (
+      {isDrawerOpen && selectedDate && (
         <DayDetailDrawer
           date={selectedDate}
           events={filteredEvents}

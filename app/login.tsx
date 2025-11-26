@@ -46,10 +46,10 @@ export default function LoginScreen() {
 
       const { accessToken: kakaoAccessToken } = kakaoToken;
 
-      const authResponse = await apiService.socialLogin({
-        loginType: "KAKAO",
-        accessToken: kakaoAccessToken,
-      });
+      const authResponse = await apiService.socialLogin(
+        "KAKAO",
+        kakaoAccessToken
+      );
 
       setTokens(authResponse.accessToken, authResponse.refreshToken);
       apiService.setTokens(authResponse.accessToken, authResponse.refreshToken);
@@ -74,7 +74,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         {/* 로고 영역 */}
         <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>Weave</Text>
+          <Text style={styles.logoText}>모두의캘린더</Text>
           <Text style={styles.subtitle}>함께 만드는 우리의 일정</Text>
         </View>
 
@@ -113,7 +113,7 @@ export default function LoginScreen() {
 
         {/* 추후 소셜 로그인 버튼들 */}
         <View style={styles.socialButtonsPlaceholder}>
-          <Text style={styles.placeholderText}>소셜 로그인</Text>
+          {/* <Text style={styles.placeholderText}>소셜 로그인</Text> */}
           {/* <View style={[styles.button, styles.disabledButton]}>
               <Text style={[styles.buttonText, styles.disabledText]}>
                 Google 로그인
@@ -124,11 +124,11 @@ export default function LoginScreen() {
                 Apple 로그인
               </Text>
             </View> */}
-          <View style={[styles.button, styles.disabledButton]}>
+          {/* <View style={[styles.button, styles.disabledButton]}>
             <Text style={[styles.buttonText, styles.disabledText]}>
               Kakao 로그인
             </Text>
-          </View>
+          </View> */}
         </View>
       </View>
     </SafeAreaView>
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     marginBottom: 80,
   },
   logoText: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: "bold",
     color: "#007AFF",
     marginBottom: 8,

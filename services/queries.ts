@@ -47,8 +47,10 @@ export const useMyProfile = () => {
   return useQuery({
     queryKey: queryKeys.profile,
     queryFn: () => apiService.getMyProfile(),
-    staleTime: 10 * 60 * 1000, // 10분 - 프로필은 자주 변경되지 않음
-    gcTime: 60 * 60 * 1000, // 1시간
+    staleTime: 30 * 60 * 1000, // 30분 - 프로필은 자주 변경되지 않음
+    gcTime: 2 * 60 * 60 * 1000, // 2시간 - 메모리에 더 오래 보관
+    refetchOnWindowFocus: false, // 포커스 시 재요청 방지
+    refetchOnReconnect: false, // 재연결 시 재요청 방지
   });
 };
 
@@ -58,8 +60,9 @@ export const useSchedule = (scheduleId: string) => {
     queryKey: queryKeys.schedule(scheduleId),
     queryFn: () => apiService.getSchedule(scheduleId),
     enabled: !!scheduleId,
-    staleTime: 5 * 60 * 1000, // 5분
-    gcTime: 10 * 60 * 1000, // 10분
+    staleTime: 10 * 60 * 1000, // 10분
+    gcTime: 30 * 60 * 1000, // 30분
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -68,8 +71,10 @@ export const useMyWorkspaces = () => {
   return useQuery({
     queryKey: queryKeys.workspaces,
     queryFn: () => apiService.getMyWorkspaces(),
-    staleTime: 5 * 60 * 1000, // 5분 - 캐시 활용으로 성능 최적화
-    gcTime: 60 * 60 * 1000, // 1시간
+    staleTime: 15 * 60 * 1000, // 15분 - 워크스페이스는 자주 변경되지 않음
+    gcTime: 2 * 60 * 60 * 1000, // 2시간
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };
 
@@ -78,8 +83,9 @@ export const useWorkspace = (workspaceId: string) => {
     queryKey: queryKeys.workspace(workspaceId),
     queryFn: () => apiService.getWorkspace(workspaceId),
     enabled: !!workspaceId,
-    staleTime: 30 * 60 * 1000, // 30분
-    gcTime: 60 * 60 * 1000, // 1시간
+    staleTime: 60 * 60 * 1000, // 1시간
+    gcTime: 2 * 60 * 60 * 1000, // 2시간
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -92,8 +98,10 @@ export const useWorkspaceSchedules = (
     queryKey: queryKeys.workspaceSchedules(workspaceId, params),
     queryFn: () => apiService.getWorkspaceSchedules(workspaceId, params),
     enabled: options?.enabled !== undefined ? options.enabled : !!workspaceId,
-    staleTime: 30 * 60 * 1000, // 30분 - 프리페치된 데이터 활용
-    gcTime: 60 * 60 * 1000, // 1시간 - 메모리에 오래 유지
+    staleTime: 60 * 60 * 1000, // 1시간 - 더 긴 캐싱
+    gcTime: 3 * 60 * 60 * 1000, // 3시간 - 메모리에 더 오래 유지
+    refetchOnWindowFocus: false,
+    refetchOnMount: false, // 마운트 시 재요청 방지
   });
 };
 
@@ -105,8 +113,9 @@ export const useWorkspaceScheduleFeed = (
     queryKey: queryKeys.workspaceScheduleFeed(workspaceId),
     queryFn: () => apiService.getWorkspaceScheduleFeed(workspaceId),
     enabled: options?.enabled !== undefined ? options.enabled : !!workspaceId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 10 * 60 * 1000, // 10분
+    gcTime: 60 * 60 * 1000, // 1시간
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -278,4 +287,52 @@ export const useUpdateNotifications = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.profile });
     },
   });
+};
+
+// ==================== Prefetch Utilities ====================
+export const usePrefetchAdjacentMonths = (
+  workspaceId: string,
+  year: number,
+  month: number
+) => {
+  const queryClient = useQueryClient();
+
+  const prefetchMonth = async (y: number, m: number) => {
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.workspaceSchedules(workspaceId, { year: y, month: m }),
+      queryFn: () => apiService.getWorkspaceSchedules(workspaceId, { year: y, month: m }),
+      staleTime: 60 * 60 * 1000,
+      gcTime: 3 * 60 * 60 * 1000,
+    });
+  };
+
+  // 이전/다음 달 프리페치
+  const prefetchAdjacent = async () => {
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+
+    // 병렬로 이전/다음 달 프리페치
+    await Promise.all([
+      prefetchMonth(prevYear, prevMonth),
+      prefetchMonth(nextYear, nextMonth),
+    ]);
+  };
+
+  return { prefetchAdjacent };
+};
+
+// 스케줄 상세 프리페치
+export const usePrefetchSchedule = () => {
+  const queryClient = useQueryClient();
+
+  return (scheduleId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.schedule(scheduleId),
+      queryFn: () => apiService.getSchedule(scheduleId),
+      staleTime: 10 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+    });
+  };
 };

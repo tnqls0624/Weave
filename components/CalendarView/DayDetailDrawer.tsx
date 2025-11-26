@@ -3,12 +3,16 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
+import dayjs from "dayjs";
+import "dayjs/locale/ko";
 import React, { useCallback, useRef, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isHoliday } from "../../constants/holidays";
 import { useDeleteSchedule } from "../../services/queries";
 import type { Schedule, User } from "../../types";
+
+dayjs.locale("ko");
 
 interface DayDetailDrawerProps {
   date: Date;
@@ -131,6 +135,37 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const dateString = `${year}-${month}-${day}`;
   const holiday = isHoliday(dateString);
 
+  // 날짜 포맷팅
+  const formatDate = () => {
+    const today = dayjs().startOf("day");
+    const selectedDate = dayjs(date);
+
+    if (selectedDate.isSame(today, "day")) {
+      return `오늘 • ${selectedDate.format("MM월 DD일 (ddd)")}`;
+    }
+    if (selectedDate.isSame(today.add(1, "day"), "day")) {
+      return `내일 • ${selectedDate.format("MM월 DD일 (ddd)")}`;
+    }
+    if (selectedDate.isSame(today.subtract(1, "day"), "day")) {
+      return `어제 • ${selectedDate.format("MM월 DD일 (ddd)")}`;
+    }
+
+    return selectedDate.format("YYYY년 MM월 DD일 (dddd)");
+  };
+
+  // 시간 포맷팅
+  const formatTime = (startTime?: string, endTime?: string) => {
+    if (!startTime) {
+      return "종일";
+    }
+
+    if (endTime && endTime !== startTime) {
+      return `${startTime} - ${endTime}`;
+    }
+
+    return startTime;
+  };
+
   return (
     <BottomSheet
       ref={bottomSheetRef}
@@ -147,15 +182,19 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
         ]}
       >
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>
-              {date.toLocaleDateString("ko-KR", {
-                month: "long",
-                day: "numeric",
-                weekday: "long",
-              })}
-            </Text>
-            {holiday && <Text style={styles.holidayText}>{holiday.name}</Text>}
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>{formatDate()}</Text>
+            {holiday && (
+              <View style={styles.holidayBadge}>
+                <MaterialIcons name="celebration" size={14} color="#ef4444" />
+                <Text style={styles.holidayText}>{holiday.name}</Text>
+              </View>
+            )}
+            {daySchedules.length > 0 && (
+              <Text style={styles.scheduleCount}>
+                일정 {daySchedules.length}개
+              </Text>
+            )}
           </View>
           <Pressable onPress={handleClose} style={styles.closeButton}>
             <MaterialIcons name="close" size={24} color="#6b7280" />
@@ -182,73 +221,128 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               return (
                 <View
                   key={schedule.id}
-                  style={[styles.scheduleCard, { backgroundColor: bgColor }]}
+                  style={[
+                    styles.scheduleCard,
+                    { borderLeftColor: textColor },
+                  ]}
                 >
-                  <View
-                    style={[styles.timeColumn, { backgroundColor: textColor }]}
-                  >
-                    <Text style={styles.timeText}>
-                      {schedule.startTime ? schedule.startTime : "All-day"}
-                    </Text>
-                  </View>
-                  <View style={styles.scheduleContent}>
-                    <View style={styles.scheduleHeader}>
-                      <View style={styles.titleContainer}>
-                        <Text style={styles.scheduleTitle}>
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.titleRow}>
+                        <View
+                          style={[styles.colorDot, { backgroundColor: textColor }]}
+                        />
+                        <Text style={styles.scheduleTitle} numberOfLines={2}>
                           {schedule.title}
                         </Text>
-                        {schedule.memo && (
-                          <Text style={styles.scheduleDescription}>
-                            {schedule.memo}
-                          </Text>
-                        )}
                       </View>
                       <View style={styles.actionButtons}>
                         <Pressable
                           onPress={() => onStartEdit(schedule)}
-                          style={styles.editButton}
+                          style={({ pressed }) => [
+                            styles.iconButton,
+                            pressed && styles.iconButtonPressed,
+                          ]}
                           disabled={deletingScheduleId === schedule.id}
                         >
                           <MaterialIcons
                             name="edit"
-                            size={18}
+                            size={20}
                             color="#6b7280"
                           />
                         </Pressable>
                         <Pressable
                           onPress={() => handleDeleteSchedule(schedule)}
-                          style={[
-                            styles.deleteButton,
+                          style={({ pressed }) => [
+                            styles.iconButton,
+                            pressed && styles.iconButtonPressed,
                             deletingScheduleId === schedule.id &&
-                              styles.deleteButtonDisabled,
+                              styles.iconButtonDisabled,
                           ]}
                           disabled={deletingScheduleId === schedule.id}
                         >
                           <MaterialIcons
-                            name="delete"
-                            size={18}
-                            color={"#6b7280"}
+                            name="delete-outline"
+                            size={20}
+                            color="#ef4444"
                           />
                         </Pressable>
                       </View>
                     </View>
-                    {participants.length > 0 && (
-                      <View style={styles.participants}>
-                        {participants.map((p) => (
-                          <Image
-                            key={p.id}
-                            source={{ uri: p.avatarUrl }}
-                            style={styles.participantAvatar}
-                          />
-                        ))}
+
+                    <View style={styles.detailsContainer}>
+                      <View style={styles.timeRow}>
+                        <MaterialIcons
+                          name="access-time"
+                          size={16}
+                          color="#9ca3af"
+                        />
+                        <Text style={styles.timeLabel}>
+                          {formatTime(schedule.startTime, schedule.endTime)}
+                        </Text>
                       </View>
-                    )}
+
+                      {schedule.memo && (
+                        <View style={styles.memoRow}>
+                          <MaterialIcons
+                            name="notes"
+                            size={16}
+                            color="#9ca3af"
+                          />
+                          <Text style={styles.memoText} numberOfLines={3}>
+                            {schedule.memo}
+                          </Text>
+                        </View>
+                      )}
+
+                      {participants.length > 0 && (
+                        <View style={styles.participantsRow}>
+                          <View style={styles.participantAvatars}>
+                            {participants.slice(0, 4).map((p, idx) => (
+                              <Image
+                                key={p.id}
+                                source={{ uri: p.avatarUrl }}
+                                style={[
+                                  styles.participantAvatar,
+                                  idx > 0 && styles.avatarOverlap,
+                                ]}
+                              />
+                            ))}
+                            {participants.length > 4 && (
+                              <View
+                                style={[
+                                  styles.moreParticipants,
+                                  styles.avatarOverlap,
+                                ]}
+                              >
+                                <Text style={styles.moreText}>
+                                  +{participants.length - 4}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.participantNames} numberOfLines={1}>
+                            {participants
+                              .slice(0, 3)
+                              .map((p) => p.name)
+                              .join(", ")}
+                            {participants.length > 3 && " 외"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
               );
             })
         ) : (
-          <Text style={styles.emptyText}>스케줄이 없습니다</Text>
+          <View style={styles.emptyState}>
+            <MaterialIcons name="event-available" size={48} color="#d1d5db" />
+            <Text style={styles.emptyText}>이 날에는 일정이 없습니다</Text>
+            <Text style={styles.emptySubtext}>
+              캘린더에서 새로운 일정을 추가해보세요
+            </Text>
+          </View>
         )}
       </BottomSheetScrollView>
     </BottomSheet>
@@ -257,105 +351,188 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
     paddingTop: 8,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingBottom: 8,
+    marginBottom: 20,
+  },
+  headerLeft: {
+    flex: 1,
+    gap: 8,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1f2937",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    lineHeight: 28,
+  },
+  holidayBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fee2e2",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
   },
   holidayText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#ef4444",
-    marginTop: 4,
+  },
+  scheduleCount: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6b7280",
   },
   closeButton: {
-    padding: 8,
+    padding: 4,
     borderRadius: 20,
   },
   scheduleCard: {
-    flexDirection: "row",
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 6,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  timeColumn: {
-    width: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 4,
-    marginRight: 8,
-    paddingVertical: 4,
+  cardContent: {
+    padding: 16,
   },
-  timeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  scheduleContent: {
-    flex: 1,
-  },
-  scheduleHeader: {
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    marginBottom: 12,
   },
-  titleContainer: {
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
     marginRight: 8,
+    gap: 10,
+  },
+  colorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   scheduleTitle: {
+    flex: 1,
+    fontSize: 16,
     fontWeight: "600",
-    color: "#1f2937",
-    fontSize: 13,
-  },
-  scheduleDescription: {
-    fontSize: 11,
-    color: "#6b7280",
-    marginTop: 1,
+    color: "#111827",
+    lineHeight: 22,
   },
   actionButtons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 8,
   },
-  editButton: {
-    padding: 2,
-    borderRadius: 12,
+  iconButton: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
   },
-  deleteButton: {
-    padding: 2,
-    borderRadius: 12,
+  iconButtonPressed: {
+    backgroundColor: "#e5e7eb",
   },
-  deleteButtonDisabled: {
-    opacity: 0.5,
+  iconButtonDisabled: {
+    opacity: 0.4,
   },
-  participants: {
+  detailsContainer: {
+    gap: 10,
+  },
+  timeRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 6,
-    paddingTop: 6,
+    gap: 8,
+  },
+  timeLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  memoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  memoText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#6b7280",
+    lineHeight: 19,
+  },
+  participantsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+  },
+  participantAvatars: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   participantAvatar: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: "#fff",
   },
-  emptyText: {
+  avatarOverlap: {
+    marginLeft: -10,
+  },
+  moreParticipants: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  moreText: {
+    fontSize: 10,
+    fontWeight: "600",
     color: "#6b7280",
+  },
+  participantNames: {
+    flex: 1,
+    fontSize: 12,
+    color: "#9ca3af",
+    textAlign: "right",
+    marginLeft: 12,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6b7280",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#9ca3af",
     textAlign: "center",
-    paddingVertical: 32,
   },
 });
 

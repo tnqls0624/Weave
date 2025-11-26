@@ -3,36 +3,34 @@
  * 피싱 알림 목록, 통계, 실시간 모니터링 표시
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { formatDistanceToNow } from "date-fns";
+import { ko } from "date-fns/locale";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
+  ActivityIndicator,
   Alert,
-  RefreshControl,
   Animated,
   Dimensions,
-  Platform,
-  ActivityIndicator,
   FlatList,
   Modal,
-  TextInput
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  smsPhishingGuardService,
   PhishingAlert,
-  PhishingGuardConfig
-} from '../../services/smsPhishingGuardService';
-import { useAppStore } from '../../stores/appStore';
-import { formatDistanceToNow } from 'date-fns';
-import { ko } from 'date-fns/locale';
+  PhishingGuardConfig,
+  smsPhishingGuardService,
+} from "../../services/smsPhishingGuardService";
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 interface Statistics {
   totalScanned: number;
@@ -53,12 +51,16 @@ export default function PhishingGuardView() {
     mediumRiskCount: 0,
     lowRiskCount: 0,
   });
-  const [selectedAlert, setSelectedAlert] = useState<PhishingAlert | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<PhishingAlert | null>(
+    null
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [config, setConfig] = useState<PhishingGuardConfig | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [filterLevel, setFilterLevel] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [filterLevel, setFilterLevel] = useState<
+    "all" | "high" | "medium" | "low"
+  >("all");
 
   // 애니메이션
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -95,7 +97,7 @@ export default function PhishingGuardView() {
 
       setIsLoading(false);
     } catch (error) {
-      console.error('초기화 실패:', error);
+      console.error("초기화 실패:", error);
       setIsLoading(false);
     }
   };
@@ -136,19 +138,19 @@ export default function PhishingGuardView() {
       if (isMonitoring) {
         await smsPhishingGuardService.stopMonitoring();
         setIsMonitoring(false);
-        Alert.alert('피싱 가드', '모니터링이 중지되었습니다.');
+        Alert.alert("피싱 가드", "모니터링이 중지되었습니다.");
       } else {
         const success = await smsPhishingGuardService.startMonitoring();
         if (success) {
           setIsMonitoring(true);
-          Alert.alert('피싱 가드', '모니터링이 시작되었습니다.');
+          Alert.alert("피싱 가드", "모니터링이 시작되었습니다.");
         } else {
-          Alert.alert('오류', 'SMS 권한이 필요합니다.');
+          Alert.alert("오류", "SMS 권한이 필요합니다.");
         }
       }
     } catch (error) {
-      console.error('모니터링 토글 실패:', error);
-      Alert.alert('오류', '모니터링 상태 변경 실패');
+      console.error("모니터링 토글 실패:", error);
+      Alert.alert("오류", "모니터링 상태 변경 실패");
     }
   };
 
@@ -161,7 +163,7 @@ export default function PhishingGuardView() {
     try {
       await initialize();
     } catch (error) {
-      console.error('새로고침 실패:', error);
+      console.error("새로고침 실패:", error);
     }
 
     setIsRefreshing(false);
@@ -171,21 +173,17 @@ export default function PhishingGuardView() {
    * 피싱 알림 삭제
    */
   const deleteAlert = async (alertId: string) => {
-    Alert.alert(
-      '삭제 확인',
-      '이 알림을 삭제하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            setPhishingAlerts(prev => prev.filter(a => a.smsId !== alertId));
-            // TODO: 서버에서도 삭제
-          }
-        }
-      ]
-    );
+    Alert.alert("삭제 확인", "이 알림을 삭제하시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          setPhishingAlerts((prev) => prev.filter((a) => a.smsId !== alertId));
+          // TODO: 서버에서도 삭제
+        },
+      },
+    ]);
   };
 
   /**
@@ -197,10 +195,10 @@ export default function PhishingGuardView() {
       currentConfig.whitelistedNumbers.push(sender);
       await smsPhishingGuardService.updateConfig(currentConfig);
 
-      Alert.alert('성공', `${sender}를 안전한 번호로 등록했습니다.`);
+      Alert.alert("성공", `${sender}를 안전한 번호로 등록했습니다.`);
     } catch (error) {
-      console.error('화이트리스트 추가 실패:', error);
-      Alert.alert('오류', '안전한 번호 등록 실패');
+      console.error("화이트리스트 추가 실패:", error);
+      Alert.alert("오류", "안전한 번호 등록 실패");
     }
   };
 
@@ -208,10 +206,10 @@ export default function PhishingGuardView() {
    * 필터된 알림 목록
    */
   const getFilteredAlerts = () => {
-    if (filterLevel === 'all') {
+    if (filterLevel === "all") {
       return phishingAlerts;
     }
-    return phishingAlerts.filter(alert => alert.riskLevel === filterLevel);
+    return phishingAlerts.filter((alert) => alert.riskLevel === filterLevel);
   };
 
   /**
@@ -219,14 +217,14 @@ export default function PhishingGuardView() {
    */
   const getRiskColor = (level: string) => {
     switch (level) {
-      case 'high':
-        return '#FF3B30';
-      case 'medium':
-        return '#FF9500';
-      case 'low':
-        return '#FFCC00';
+      case "high":
+        return "#FF3B30";
+      case "medium":
+        return "#FF9500";
+      case "low":
+        return "#FFCC00";
       default:
-        return '#8E8E93';
+        return "#8E8E93";
     }
   };
 
@@ -235,14 +233,14 @@ export default function PhishingGuardView() {
    */
   const getRiskIcon = (level: string) => {
     switch (level) {
-      case 'high':
-        return 'alert-circle';
-      case 'medium':
-        return 'alert-triangle';
-      case 'low':
-        return 'alert-octagon';
+      case "high":
+        return "alert-circle";
+      case "medium":
+        return "alert-triangle";
+      case "low":
+        return "alert-octagon";
       default:
-        return 'help-circle';
+        return "help-circle";
     }
   };
 
@@ -259,7 +257,12 @@ export default function PhishingGuardView() {
       activeOpacity={0.7}
     >
       <View style={styles.alertHeader}>
-        <View style={[styles.riskBadge, { backgroundColor: getRiskColor(item.riskLevel) }]}>
+        <View
+          style={[
+            styles.riskBadge,
+            { backgroundColor: getRiskColor(item.riskLevel) },
+          ]}
+        >
           <Ionicons name={getRiskIcon(item.riskLevel)} size={16} color="#FFF" />
           <Text style={styles.riskBadgeText}>
             {item.riskLevel.toUpperCase()}
@@ -268,7 +271,7 @@ export default function PhishingGuardView() {
         <Text style={styles.alertTime}>
           {formatDistanceToNow(new Date(item.timestamp), {
             addSuffix: true,
-            locale: ko
+            locale: ko,
           })}
         </Text>
       </View>
@@ -314,7 +317,7 @@ export default function PhishingGuardView() {
     title,
     value,
     icon,
-    color
+    color,
   }: {
     title: string;
     value: number;
@@ -326,7 +329,9 @@ export default function PhishingGuardView() {
         <FontAwesome5 name={icon} size={16} color={color} />
         <Text style={styles.statTitle}>{title}</Text>
       </View>
-      <Text style={[styles.statValue, { color }]}>{value.toLocaleString()}</Text>
+      <Text style={[styles.statValue, { color }]}>
+        {value.toLocaleString()}
+      </Text>
     </View>
   );
 
@@ -362,10 +367,14 @@ export default function PhishingGuardView() {
 
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>위험도</Text>
-                  <View style={[
-                    styles.riskBadge,
-                    { backgroundColor: getRiskColor(selectedAlert.riskLevel) }
-                  ]}>
+                  <View
+                    style={[
+                      styles.riskBadge,
+                      {
+                        backgroundColor: getRiskColor(selectedAlert.riskLevel),
+                      },
+                    ]}
+                  >
                     <Text style={styles.riskBadgeText}>
                       {selectedAlert.riskLevel.toUpperCase()}
                     </Text>
@@ -382,7 +391,9 @@ export default function PhishingGuardView() {
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>메시지 내용</Text>
                   <View style={styles.messageBox}>
-                    <Text style={styles.messageText}>{selectedAlert.message}</Text>
+                    <Text style={styles.messageText}>
+                      {selectedAlert.message}
+                    </Text>
                   </View>
                 </View>
 
@@ -400,7 +411,8 @@ export default function PhishingGuardView() {
                   <View style={styles.detailSection}>
                     <Text style={styles.detailLabel}>수신 위치</Text>
                     <Text style={styles.detailValue}>
-                      위도: {selectedAlert.location.latitude.toFixed(6)}{'\n'}
+                      위도: {selectedAlert.location.latitude.toFixed(6)}
+                      {"\n"}
                       경도: {selectedAlert.location.longitude.toFixed(6)}
                     </Text>
                   </View>
@@ -409,7 +421,7 @@ export default function PhishingGuardView() {
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>수신 시간</Text>
                   <Text style={styles.detailValue}>
-                    {new Date(selectedAlert.timestamp).toLocaleString('ko-KR')}
+                    {new Date(selectedAlert.timestamp).toLocaleString("ko-KR")}
                   </Text>
                 </View>
               </ScrollView>
@@ -454,7 +466,7 @@ export default function PhishingGuardView() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* 헤더 */}
       <LinearGradient
-        colors={['#007AFF', '#0051D5']}
+        colors={["#007AFF", "#0051D5"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -464,23 +476,23 @@ export default function PhishingGuardView() {
           <TouchableOpacity
             style={[
               styles.monitoringButton,
-              isMonitoring && styles.monitoringButtonActive
+              isMonitoring && styles.monitoringButtonActive,
             ]}
             onPress={toggleMonitoring}
           >
             <Animated.View
               style={{
-                transform: [{ scale: isMonitoring ? pulseAnim : 1 }]
+                transform: [{ scale: isMonitoring ? pulseAnim : 1 }],
               }}
             >
               <Ionicons
-                name={isMonitoring ? 'shield-checkmark' : 'shield-outline'}
+                name={isMonitoring ? "shield-checkmark" : "shield-outline"}
                 size={24}
                 color="#FFF"
               />
             </Animated.View>
             <Text style={styles.monitoringButtonText}>
-              {isMonitoring ? '보호 중' : '보호 시작'}
+              {isMonitoring ? "보호 중" : "보호 시작"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -544,22 +556,28 @@ export default function PhishingGuardView() {
 
         {/* 필터 탭 */}
         <View style={styles.filterTabs}>
-          {['all', 'high', 'medium', 'low'].map((level) => (
+          {["all", "high", "medium", "low"].map((level) => (
             <TouchableOpacity
               key={level}
               style={[
                 styles.filterTab,
-                filterLevel === level && styles.filterTabActive
+                filterLevel === level && styles.filterTabActive,
               ]}
               onPress={() => setFilterLevel(level as any)}
             >
-              <Text style={[
-                styles.filterTabText,
-                filterLevel === level && styles.filterTabTextActive
-              ]}>
-                {level === 'all' ? '전체' :
-                 level === 'high' ? '고위험' :
-                 level === 'medium' ? '중위험' : '저위험'}
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filterLevel === level && styles.filterTabTextActive,
+                ]}
+              >
+                {level === "all"
+                  ? "전체"
+                  : level === "high"
+                  ? "고위험"
+                  : level === "medium"
+                  ? "중위험"
+                  : "저위험"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -578,7 +596,7 @@ export default function PhishingGuardView() {
             <FlatList
               data={getFilteredAlerts()}
               renderItem={renderAlertItem}
-              keyExtractor={item => item.smsId}
+              keyExtractor={(item) => item.smsId}
               scrollEnabled={false}
               contentContainerStyle={styles.alertsList}
             />
@@ -603,18 +621,18 @@ export default function PhishingGuardView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: "#F2F2F7",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F2F2F7',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F2F2F7",
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#8E8E93',
+    color: "#8E8E93",
   },
   header: {
     paddingHorizontal: 20,
@@ -623,7 +641,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 20,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
@@ -634,38 +652,38 @@ const styles = StyleSheet.create({
     }),
   },
   headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingTop: 15,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFF',
+    fontWeight: "bold",
+    color: "#FFF",
   },
   monitoringButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
   },
   monitoringButtonActive: {
-    backgroundColor: 'rgba(52, 199, 89, 0.3)',
+    backgroundColor: "rgba(52, 199, 89, 0.3)",
   },
   monitoringButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 5,
   },
   statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -674,11 +692,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#34C759',
+    backgroundColor: "#34C759",
     marginRight: 8,
   },
   statusText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 12,
   },
   content: {
@@ -690,15 +708,15 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
     marginBottom: 12,
   },
   statsScroll: {
     marginBottom: 20,
   },
   statCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderRadius: 12,
     padding: 15,
     marginRight: 12,
@@ -706,7 +724,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 3,
@@ -717,21 +735,21 @@ const styles = StyleSheet.create({
     }),
   },
   statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 8,
   },
   statTitle: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: "#8E8E93",
     marginLeft: 6,
   },
   statValue: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   filterTabs: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: 20,
     marginBottom: 15,
   },
@@ -739,45 +757,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     marginRight: 10,
   },
   filterTabActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
   },
   filterTabText: {
     fontSize: 14,
-    color: '#8E8E93',
-    fontWeight: '500',
+    color: "#8E8E93",
+    fontWeight: "500",
   },
   filterTabTextActive: {
-    color: '#FFF',
+    color: "#FFF",
   },
   alertsSection: {
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   alertCount: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: "#8E8E93",
   },
   alertsList: {
     paddingBottom: 20,
   },
   alertCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderRadius: 12,
     padding: 15,
     marginBottom: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 3,
@@ -788,109 +806,109 @@ const styles = StyleSheet.create({
     }),
   },
   alertHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   riskBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   riskBadgeText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginLeft: 4,
   },
   alertTime: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: "#8E8E93",
   },
   alertContent: {
     marginBottom: 10,
   },
   alertSender: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
     marginBottom: 4,
   },
   alertMessage: {
     fontSize: 14,
-    color: '#3C3C43',
+    color: "#3C3C43",
     lineHeight: 20,
   },
   alertReasons: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 6,
   },
   alertReasonText: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: "#8E8E93",
     marginLeft: 4,
   },
   alertActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     borderTopWidth: 1,
-    borderTopColor: '#F2F2F7',
+    borderTopColor: "#F2F2F7",
     paddingTop: 10,
   },
   actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginLeft: 10,
   },
   actionText: {
     fontSize: 12,
-    color: '#3C3C43',
+    color: "#3C3C43",
     marginLeft: 4,
   },
   emptyState: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 60,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#3C3C43',
+    fontWeight: "600",
+    color: "#3C3C43",
     marginTop: 16,
   },
   emptyText: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: "#8E8E93",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: screenHeight * 0.8,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: "#F2F2F7",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   modalClose: {
     padding: 5,
@@ -903,57 +921,57 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: "#8E8E93",
     marginBottom: 6,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   detailValue: {
     fontSize: 16,
-    color: '#000',
+    color: "#000",
   },
   messageBox: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: "#F2F2F7",
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
   },
   messageText: {
     fontSize: 14,
-    color: '#3C3C43',
+    color: "#3C3C43",
     lineHeight: 20,
   },
   reasonItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 8,
   },
   reasonText: {
     fontSize: 14,
-    color: '#3C3C43',
+    color: "#3C3C43",
     marginLeft: 8,
   },
   modalFooter: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#F2F2F7',
+    borderTopColor: "#F2F2F7",
   },
   modalButton: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginHorizontal: 5,
   },
   safeButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: "#34C759",
   },
   blockButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: "#FF3B30",
   },
   modalButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

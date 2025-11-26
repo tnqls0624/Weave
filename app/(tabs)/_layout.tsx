@@ -54,11 +54,13 @@ export default function TabLayout() {
             headerShown: false,
             tabBarStyle: { display: "none" }, // Hide default tab bar, use custom BottomNav
           }}
+          initialRouteName="feed"
         >
           <Tabs.Screen name="feed" />
           <Tabs.Screen name="calendar" />
           <Tabs.Screen name="map" />
-          <Tabs.Screen name="phishing" />
+          {/* TEMPORARILY DISABLED - Security features */}
+          {/* <Tabs.Screen name="phishing" /> */}
           <Tabs.Screen name="settings" />
         </Tabs>
 
