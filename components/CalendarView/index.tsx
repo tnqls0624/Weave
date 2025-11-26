@@ -85,25 +85,17 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   // Double tap: 상세 스케줄 열기
   const handleDoubleTap = useCallback(
     (day: Date) => {
-      console.log("🔴 handleDoubleTap 호출됨:", day.toDateString());
-      console.log("  현재 selectedDate:", selectedDate?.toDateString());
-      console.log("  현재 isDrawerOpen:", isDrawerOpen);
-
       // 선택한 날짜의 월로 currentDate도 업데이트
       const dayMonth = day.getMonth();
       const dayYear = day.getFullYear();
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
 
-      // 먼저 날짜를 선택하고
+      // ref 업데이트를 통해 useEffect가 drawer를 다시 열지 않도록 함
+      previousSelectedDateRef.current = day;
       setSelectedDate(day);
-      console.log("  setSelectedDate 호출됨");
-
-      // drawer는 다음 틱에서 열기 (상태 업데이트 보장)
-      setTimeout(() => {
-        console.log("  🟢 setTimeout 실행 - setIsDrawerOpen(true) 호출");
-        setIsDrawerOpen(true);
-      }, 0);
+      // drawer를 직접 열기
+      setIsDrawerOpen(true);
 
       if (dayMonth !== currentMonth || dayYear !== currentYear) {
         const newDate = new Date(day);
@@ -111,7 +103,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
         setCurrentDate(newDate);
       }
     },
-    [currentDate, setCurrentDate, setSelectedDate, selectedDate, isDrawerOpen]
+    [currentDate, setCurrentDate, setSelectedDate]
   );
 
   const handleCloseDrawer = useCallback(() => {

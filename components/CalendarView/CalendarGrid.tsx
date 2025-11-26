@@ -352,7 +352,6 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   // 더블탭 감지를 부모 레벨로 이동 (모든 날짜 공유)
   const lastTapTimeRef = useRef<number>(0);
   const lastTapDateRef = useRef<Date | null>(null);
-  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const calendarListRef = useRef<any>(null);
@@ -597,14 +596,6 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     onDoubleTapRef.current = onDoubleTap;
   }, [onSelectDay, onDoubleTap]);
 
-  // 컴포넌트 언마운트 시 타이머 정리
-  useEffect(() => {
-    return () => {
-      if (singleTapTimerRef.current) {
-        clearTimeout(singleTapTimerRef.current);
-      }
-    };
-  }, []);
 
   // DayCell에서 직접 호출할 안정적인 콜백
   const stableOnSelectDay = useCallback((date: Date) => {
@@ -624,24 +615,16 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         lastTapDateRef.current &&
         lastTapDateRef.current.getTime() === dayDate.getTime();
 
-      // 이전 싱글탭 타이머 취소
-      if (singleTapTimerRef.current) {
-        clearTimeout(singleTapTimerRef.current);
-        singleTapTimerRef.current = null;
-      }
-
       if (timeSinceLastTap < 350 && isSameDate) {
         // 더블탭 감지됨 - 같은 날짜를 350ms 이내에 다시 탭
+        // 더블탭은 싱글탭 없이 바로 처리
         stableOnDoubleTap(dayDate);
         // 더블탭 후 초기화
         lastTapTimeRef.current = 0;
         lastTapDateRef.current = null;
       } else {
-        // 싱글탭 - 250ms 지연 후 처리 (더블탭 기다림)
-        singleTapTimerRef.current = setTimeout(() => {
-          stableOnSelectDay(dayDate);
-        }, 250);
-
+        // 싱글탭 - 즉시 처리
+        stableOnSelectDay(dayDate);
         lastTapTimeRef.current = now;
         lastTapDateRef.current = dayDate;
       }
