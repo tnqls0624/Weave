@@ -37,6 +37,13 @@ if (TASK_MANAGER_AVAILABLE) {
       LOCATION_TASK_NAME,
       async ({ data, error }: any) => {
         if (error) {
+          // kCLErrorDomain Code=0: 일시적으로 위치를 가져올 수 없음 (무시 가능)
+          // kCLErrorDomain Code=1: 위치 서비스 거부됨
+          // 이러한 에러는 일시적이므로 경고만 출력하고 계속 진행
+          if (error.code === 0) {
+            console.warn("⚠️ Background location temporarily unavailable (will retry)");
+            return;
+          }
           console.error("❌ Background location task error:", error);
           return;
         }

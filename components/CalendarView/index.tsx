@@ -60,7 +60,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     [schedules, filteredUserIds]
   );
 
-  // Single tap: 날짜 선택 (시각적 피드백만, drawer는 건드리지 않음)
+  // 싱글탭: 날짜 선택 (포커스)
   const handleSelectDay = useCallback(
     (day: Date) => {
       // 선택한 날짜의 월로 currentDate도 업데이트
@@ -69,7 +69,6 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
       const currentMonth = currentDate.getMonth();
       const currentYear = currentDate.getFullYear();
 
-      // ref 업데이트를 통해 useEffect가 drawer를 다시 열지 않도록 함
       previousSelectedDateRef.current = day;
       setSelectedDate(day);
 
@@ -125,18 +124,10 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     setAnimationDirection(null);
   }, []);
 
+  // selectedDate 변경 시 ref만 업데이트 (드로어는 더블탭에서만 열림)
   useEffect(() => {
-    const prevDate = previousSelectedDateRef.current;
-    const isSameDate =
-      prevDate && selectedDate && prevDate.getTime() === selectedDate.getTime();
-
-    if (selectedDate && !isSameDate && !isDrawerOpen) {
-      setIsDrawerOpen(true);
-    }
-
-    // 현재 selectedDate를 저장
     previousSelectedDateRef.current = selectedDate;
-  }, [selectedDate, isDrawerOpen]);
+  }, [selectedDate]);
 
   // currentDate가 변경될 때 selectedDate와 동기화
   useEffect(() => {

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "모두의캘린더",
-    "slug": "모두의캘린더",
+    "slug": "weave",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,9 +12,13 @@
       "entitlements": {
         "aps-environment": "production"
       },
+      "usesAppleSignIn": true,
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
+      "bundleIdentifier": "com.weave.project",
       "infoPlist": {
+        "CFBundleDisplayName": "모두의캘린더",
+        "CFBundleName": "모두의캘린더",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": ["weave-app"]
@@ -28,15 +32,14 @@
         "NSCameraUsageDescription": "카메라 접근 권한이 필요합니다",
         "NSPhotoLibraryUsageDescription": "사진 접근 권한이 필요합니다",
         "NSPhotoLibraryAddUsageDescription": "사진 저장 권한이 필요합니다"
-      },
-      "bundleIdentifier": "com.weave.project"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/weave_logo.jpeg",
-        "backgroundImage": "./assets/images/weave_logo.jpeg",
-        "monochromeImage": "./assets/images/weave_logo.jpeg"
+        "foregroundImage": "./assets/images/weave_logo.png",
+        "backgroundImage": "./assets/images/weave_logo.png",
+        "monochromeImage": "./assets/images/weave_logo.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -58,7 +61,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/weave_logo.jpeg",
+          "image": "./assets/images/weave_logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -131,7 +134,8 @@
             "handleKakaoOpenUrl": true
           }
         }
-      ]
+      ],
+      ["expo-apple-authentication"]
     ],
     "experiments": {
       "typedRoutes": true,

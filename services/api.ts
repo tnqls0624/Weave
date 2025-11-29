@@ -275,6 +275,17 @@ class ApiService {
     });
   }
 
+  async testLogin(email: string, password: string): Promise<AuthResponse> {
+    return this.request<AuthResponse>({
+      url: "/api/auth/test-login",
+      method: "POST",
+      data: {
+        email,
+        password,
+      },
+    });
+  }
+
   async refreshAccessToken(): Promise<boolean> {
     try {
       if (!this.refreshToken) return false;
@@ -319,6 +330,14 @@ class ApiService {
       url: "/api/user/me",
       method: "PUT",
       data: userData,
+    });
+  }
+
+  // 계정 삭제 (회원 탈퇴)
+  async deleteAccount(): Promise<void> {
+    return this.request<void>({
+      url: "/api/user/me",
+      method: "DELETE",
     });
   }
 

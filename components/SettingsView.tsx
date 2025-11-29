@@ -24,10 +24,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WebView } from "react-native-webview";
+import RenderHtml from "react-native-render-html";
 import { apiService } from "../services/api";
 import locationTrackingService from "../services/locationTrackingService";
 import {
@@ -37,6 +38,122 @@ import {
 import { useAppStore } from "../stores";
 import { User } from "../types";
 import MonthDayPicker from "./MonthDayPicker";
+
+// 개인정보처리방침 페이지 컴포넌트
+const PrivacyPolicyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const [html, setHtml] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { width } = useWindowDimensions();
+
+  useEffect(() => {
+    const fetchPrivacyPolicy = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_API_BASE_URL}/api/policy/privacy`
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const text = await response.text();
+        // body 태그 내용만 추출
+        const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        const bodyContent = bodyMatch ? bodyMatch[1] : text;
+        setHtml(bodyContent);
+      } catch (err) {
+        console.error("Failed to fetch privacy policy:", err);
+        setError("개인정보처리방침을 불러오는데 실패했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPrivacyPolicy();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+      <View style={privacyStyles.header}>
+        <TouchableOpacity onPress={onBack}>
+          <Ionicons name="arrow-back" size={24} color="#111827" />
+        </TouchableOpacity>
+        <Text style={privacyStyles.headerTitle}>개인정보처리방침</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      {error ? (
+        <View style={privacyStyles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Text style={privacyStyles.errorText}>{error}</Text>
+        </View>
+      ) : html ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        >
+          <RenderHtml
+            contentWidth={width - 32}
+            source={{ html }}
+            tagsStyles={{
+              body: { color: "#333", fontSize: 15, lineHeight: 24 },
+              h1: { fontSize: 22, fontWeight: "700", color: "#1a1a1a", marginBottom: 16 },
+              h2: { fontSize: 18, fontWeight: "600", color: "#1a1a1a", marginTop: 24, marginBottom: 12 },
+              h3: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 16, marginBottom: 8 },
+              p: { marginBottom: 12 },
+              li: { marginBottom: 6 },
+            }}
+          />
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+};
+
+const privacyStyles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    backgroundColor: "#fff",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  loadingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#EF4444",
+    textAlign: "center",
+  },
+});
 
 interface SettingsViewProps {
   users: User[];
@@ -476,19 +593,69 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         />
       </View>
 
-      {/* Logout */}
+      {/* Logout & Delete Account */}
       <View style={styles.card}>
-        <Pressable style={styles.logoutButton} onPress={onLogout}>
+        <Pressable style={[styles.logoutButton, styles.settingsItemBorder]} onPress={onLogout}>
           <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
             <Ionicons name="log-out-outline" size={24} color="#EF4444" />
           </View>
           <Text style={styles.logoutText}>로그아웃</Text>
         </Pressable>
+        <Pressable
+          style={styles.logoutButton}
+          onPress={() => {
+            Alert.alert(
+              "회원 탈퇴",
+              "정말로 탈퇴하시겠습니까?\n\n탈퇴하면 모든 데이터가 삭제되며 복구할 수 없습니다.",
+              [
+                { text: "취소", style: "cancel" },
+                {
+                  text: "탈퇴하기",
+                  style: "destructive",
+                  onPress: () => {
+                    Alert.alert(
+                      "최종 확인",
+                      "모든 일정, 워크스페이스 참여 정보가 삭제됩니다.\n\n정말 탈퇴하시겠습니까?",
+                      [
+                        { text: "취소", style: "cancel" },
+                        {
+                          text: "탈퇴",
+                          style: "destructive",
+                          onPress: async () => {
+                            try {
+                              await apiService.deleteAccount();
+                              Alert.alert("탈퇴 완료", "회원 탈퇴가 완료되었습니다.", [
+                                {
+                                  text: "확인",
+                                  onPress: () => {
+                                    onLogout?.();
+                                  },
+                                },
+                              ]);
+                            } catch (error) {
+                              console.error("Failed to delete account:", error);
+                              Alert.alert("오류", "회원 탈퇴에 실패했습니다. 다시 시도해주세요.");
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  },
+                },
+              ]
+            );
+          }}
+        >
+          <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
+            <Ionicons name="trash-outline" size={24} color="#EF4444" />
+          </View>
+          <Text style={styles.logoutText}>회원 탈퇴</Text>
+        </Pressable>
       </View>
     </>
   );
 
-  const renderSubPage = (title: string, children: React.ReactNode) => (
+  const renderSubPage = (title: string, children: React.ReactNode, noScroll?: boolean) => (
     <View style={styles.profileEditContainer}>
       <View style={styles.profileHeader}>
         <TouchableOpacity onPress={() => setSettingsPage("main")}>
@@ -498,9 +665,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 64 + insets.bottom }}>
-        {children}
-      </ScrollView>
+      {noScroll ? (
+        <View style={{ flex: 1 }}>{children}</View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: 64 + insets.bottom }}>
+          {children}
+        </ScrollView>
+      )}
     </View>
   );
 
@@ -862,28 +1033,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </View>
         );
       case "privacy":
-        return renderSubPage(
-          "개인정보처리방침",
-          <View style={[styles.formSection, { flex: 1, padding: 0 }]}>
-            <WebView
-              source={{
-                uri: `${process.env.EXPO_PUBLIC_API_BASE_URL}/api/policy/privacy`,
-              }}
-              style={{ flex: 1 }}
-              startInLoadingState={true}
-              renderLoading={() => (
-                <View style={styles.webViewLoading}>
-                  <ActivityIndicator size="large" color="#007AFF" />
-                  <Text style={styles.webViewLoadingText}>로딩 중...</Text>
-                </View>
-              )}
-            />
-          </View>
-        );
+        return <PrivacyPolicyPage onBack={() => setSettingsPage("main")} />;
       default:
         return renderMainPage();
     }
   };
+
+  // privacy 페이지는 ScrollView 밖에서 렌더링 (flex: 1 필요)
+  if (settingsPage === "privacy") {
+    return (
+      <>
+        <PrivacyPolicyPage onBack={() => setSettingsPage("main")} />
+      </>
+    );
+  }
 
   return (
     <>

@@ -26,54 +26,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Calendar, DateData, LocaleConfig } from "react-native-calendars";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RepeatOption, Schedule, User } from "../types";
 import DateTimePicker from "./DateTimePicker";
 
-// 한글 로케일 설정
-LocaleConfig.locales["ko"] = {
-  monthNames: [
-    "1월",
-    "2월",
-    "3월",
-    "4월",
-    "5월",
-    "6월",
-    "7월",
-    "8월",
-    "9월",
-    "10월",
-    "11월",
-    "12월",
-  ],
-  monthNamesShort: [
-    "1월",
-    "2월",
-    "3월",
-    "4월",
-    "5월",
-    "6월",
-    "7월",
-    "8월",
-    "9월",
-    "10월",
-    "11월",
-    "12월",
-  ],
-  dayNames: [
-    "일요일",
-    "월요일",
-    "화요일",
-    "수요일",
-    "목요일",
-    "금요일",
-    "토요일",
-  ],
-  dayNamesShort: ["일", "월", "화", "수", "목", "금", "토"],
-  today: "오늘",
-};
-LocaleConfig.defaultLocale = "ko";
+const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
 interface CreateScheduleViewProps {
   onSave: (
@@ -221,59 +178,160 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     }월 ${dateObj.getDate()}일 (${day})`;
   };
 
-  const markedDates = useMemo(() => {
-    const marked: any = {};
-    if (activeField === "start" && startDate) {
-      marked[startDate] = {
-        selected: true,
-        disableTouchEvent: false,
-        selectedColor: "#eff6ff",
-        selectedTextColor: "#007AFF",
-      };
-    }
-    if (activeField === "end" && endDate) {
-      marked[endDate] = {
-        selected: true,
-        disableTouchEvent: false,
-        selectedColor: "#eff6ff",
-        selectedTextColor: "#007AFF",
-      };
-    }
-    return marked;
-  }, [activeField, startDate, endDate]);
-
-  const calendarTheme = useMemo(
-    () => ({
-      calendarBackground: "#fff",
-      textSectionTitleColor: "#6b7280",
-      selectedDayBackgroundColor: "#eff6ff",
-      selectedDayTextColor: "#007AFF",
-      todayTextColor: "#007AFF",
-      dayTextColor: "#374151",
-      textDisabledColor: "#d1d5db",
-      dotColor: "#007AFF",
-      selectedDotColor: "#007AFF",
-      arrowColor: "#007AFF",
-      monthTextColor: "#1f2937",
-      textDayFontWeight: "500" as const,
-      textDayHeaderFontWeight: "600" as const,
-      textDayFontSize: 14,
-      textMonthFontSize: 16,
-      textDayHeaderFontSize: 12,
-      textSundayColor: "#ef4444", // 일요일 빨간색
-      textSaturdayColor: "#3b82f6", // 토요일 파란색
-    }),
-    []
-  );
-
-  const handleDayPress = (day: DateData) => {
-    const dStr = dayjs(day.dateString).format("YYYY-MM-DD");
+  const handleDayPress = (dateString: string) => {
+    const dStr = dayjs(dateString).format("YYYY-MM-DD");
     if (activeField === "start") {
       setStartDate(dStr);
     } else {
       setEndDate(dStr);
     }
   };
+
+  // 현재 선택된 날짜
+  const selectedDateForCalendar = useMemo(() => {
+    if (activeField === "start") return startDate;
+    if (activeField === "end") return endDate || startDate;
+    return startDate;
+  }, [activeField, startDate, endDate]);
+
+  // 간단한 캘린더 피커 컴포넌트
+  const SimpleDatePicker = useCallback(() => {
+    const year = displayDate.getFullYear();
+    const month = displayDate.getMonth();
+
+    // 해당 월의 첫째 날과 마지막 날
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const firstDayOfWeek = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+
+    // 이전 달의 마지막 날
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+    // 주 수 계산
+    const totalCells = firstDayOfWeek + daysInMonth;
+    const numberOfWeeks = Math.ceil(totalCells / 7);
+
+    // 날짜 배열 생성
+    const days: Array<{ date: Date; dateString: string; isCurrentMonth: boolean }> = [];
+
+    // 이전 달 날짜들
+    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+      const date = new Date(year, month - 1, prevMonthLastDay - i);
+      days.push({
+        date,
+        dateString: dayjs(date).format("YYYY-MM-DD"),
+        isCurrentMonth: false,
+      });
+    }
+
+    // 현재 달 날짜들
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      days.push({
+        date,
+        dateString: dayjs(date).format("YYYY-MM-DD"),
+        isCurrentMonth: true,
+      });
+    }
+
+    // 다음 달 날짜들
+    const remainingCells = numberOfWeeks * 7 - days.length;
+    for (let day = 1; day <= remainingCells; day++) {
+      const date = new Date(year, month + 1, day);
+      days.push({
+        date,
+        dateString: dayjs(date).format("YYYY-MM-DD"),
+        isCurrentMonth: false,
+      });
+    }
+
+    // 주 단위로 그룹화
+    const weeks: typeof days[] = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+
+    const todayString = dayjs().format("YYYY-MM-DD");
+
+    return (
+      <View style={pickerStyles.container}>
+        {/* 헤더 */}
+        <View style={pickerStyles.header}>
+          <TouchableOpacity
+            onPress={() => setDisplayDate(new Date(year, month - 1, 1))}
+            style={pickerStyles.arrowButton}
+          >
+            <MaterialIcons name="chevron-left" size={28} color="#007AFF" />
+          </TouchableOpacity>
+          <Text style={pickerStyles.monthText}>
+            {year}년 {month + 1}월
+          </Text>
+          <TouchableOpacity
+            onPress={() => setDisplayDate(new Date(year, month + 1, 1))}
+            style={pickerStyles.arrowButton}
+          >
+            <MaterialIcons name="chevron-right" size={28} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* 요일 헤더 */}
+        <View style={pickerStyles.dayNamesRow}>
+          {DAY_NAMES.map((dayName, index) => (
+            <Text
+              key={dayName}
+              style={[
+                pickerStyles.dayName,
+                index === 0 && pickerStyles.sundayText,
+                index === 6 && pickerStyles.saturdayText,
+              ]}
+            >
+              {dayName}
+            </Text>
+          ))}
+        </View>
+
+        {/* 날짜 그리드 */}
+        {weeks.map((week, weekIndex) => (
+          <View key={weekIndex} style={pickerStyles.weekRow}>
+            {week.map((dayData) => {
+              const isSelected = dayData.dateString === selectedDateForCalendar;
+              const isToday = dayData.dateString === todayString;
+              const dayOfWeek = dayData.date.getDay();
+
+              let textColor = dayData.isCurrentMonth ? "#374151" : "#d1d5db";
+              if (dayData.isCurrentMonth) {
+                if (dayOfWeek === 0) textColor = "#ef4444";
+                if (dayOfWeek === 6) textColor = "#3b82f6";
+              }
+
+              return (
+                <Pressable
+                  key={dayData.dateString}
+                  style={[
+                    pickerStyles.dayCell,
+                    isSelected && pickerStyles.selectedDay,
+                  ]}
+                  onPress={() => handleDayPress(dayData.dateString)}
+                >
+                  <Text
+                    style={[
+                      pickerStyles.dayText,
+                      { color: isSelected ? "#007AFF" : textColor },
+                      isToday && pickerStyles.todayText,
+                      isSelected && pickerStyles.selectedDayText,
+                    ]}
+                  >
+                    {dayData.date.getDate()}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
+  }, [displayDate, selectedDateForCalendar, handleDayPress]);
 
   return (
     <KeyboardAvoidingView
@@ -513,19 +571,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
 
           {activeField && (
             <View style={styles.calendarContainer}>
-              <Calendar
-                current={dayjs(displayDate).format("YYYY-MM-DD")}
-                onDayPress={handleDayPress}
-                markedDates={markedDates}
-                theme={calendarTheme}
-                hideArrows={false}
-                hideExtraDays={true}
-                firstDay={0}
-                monthFormat="yyyy년 M월"
-                onMonthChange={(month) => {
-                  setDisplayDate(new Date(month.dateString));
-                }}
-              />
+              <SimpleDatePicker />
             </View>
           )}
 
@@ -1453,6 +1499,69 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+  },
+});
+
+// 날짜 피커 스타일
+const pickerStyles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  arrowButton: {
+    padding: 8,
+  },
+  monthText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1f2937",
+  },
+  dayNamesRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  dayName: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
+    paddingVertical: 8,
+  },
+  sundayText: {
+    color: "#ef4444",
+  },
+  saturdayText: {
+    color: "#3b82f6",
+  },
+  weekRow: {
+    flexDirection: "row",
+  },
+  dayCell: {
+    flex: 1,
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 4,
+  },
+  selectedDay: {
+    backgroundColor: "#eff6ff",
+    borderRadius: 20,
+  },
+  dayText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  todayText: {
+    fontWeight: "700",
+  },
+  selectedDayText: {
+    fontWeight: "600",
   },
 });
 
