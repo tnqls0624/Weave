@@ -3,6 +3,7 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
+import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, {
@@ -584,7 +585,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         <SettingsItem
           icon="information-circle-outline"
           label="앱 정보"
-          description="버전 1.0.0"
+          description={`버전 ${Constants.expoConfig?.version ?? "1.0.0"}`}
           onPress={() => {}}
           iconColor="#6B7280"
           iconBg="#F3F4F6"
