@@ -867,7 +867,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           <View style={[styles.formSection, { flex: 1, padding: 0 }]}>
             <WebView
               source={{
-                uri: `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080'}/api/policy/privacy`
+                uri: `${process.env.EXPO_PUBLIC_API_BASE_URL}/api/policy/privacy`,
               }}
               style={{ flex: 1 }}
               startInLoadingState={true}
