@@ -20,6 +20,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -28,6 +29,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RenderHtml from "react-native-render-html";
 import { apiService } from "../services/api";
@@ -530,6 +532,57 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </View>
         </View>
       </View> */}
+
+      {/* Workspace - Invite */}
+      <View style={styles.card}>
+        <Text style={styles.sectionHeaderText}>워크스페이스</Text>
+        <SettingsItem
+          icon="person-add-outline"
+          label="초대 코드"
+          description={currentUser?.inviteCode ?? "코드 없음"}
+          onPress={() => {
+            if (currentUser?.inviteCode) {
+              Alert.alert(
+                "초대 코드",
+                `내 초대 코드: ${currentUser.inviteCode}\n\n이 코드를 공유하면 상대방이 내 워크스페이스에 참여할 수 있습니다.`,
+                [
+                  { text: "닫기", style: "cancel" },
+                  {
+                    text: "복사",
+                    onPress: async () => {
+                      await Clipboard.setStringAsync(currentUser.inviteCode!);
+                      Alert.alert("복사 완료", "초대 코드가 클립보드에 복사되었습니다.");
+                    },
+                  },
+                  {
+                    text: "공유",
+                    onPress: async () => {
+                      try {
+                        await Share.share({
+                          message: `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`,
+                        });
+                      } catch (error) {
+                        console.error("Share error:", error);
+                      }
+                    },
+                  },
+                ]
+              );
+            }
+          }}
+          iconColor="#10B981"
+          iconBg="#D1FAE5"
+        />
+        <SettingsItem
+          icon="enter-outline"
+          label="워크스페이스 참여"
+          description="초대 코드로 참여하기"
+          onPress={() => setSettingsPage("joinWorkspace")}
+          iconColor="#6366F1"
+          iconBg="#E0E7FF"
+          isLast={true}
+        />
+      </View>
 
       {/* App Settings */}
       <View style={styles.card}>
@@ -1035,9 +1088,106 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         );
       case "privacy":
         return <PrivacyPolicyPage onBack={() => setSettingsPage("main")} />;
+      case "joinWorkspace":
+        return renderJoinWorkspacePage();
       default:
         return renderMainPage();
     }
+  };
+
+  const renderJoinWorkspacePage = () => {
+    const [inviteCode, setInviteCode] = useState("");
+    const [isJoining, setIsJoining] = useState(false);
+
+    const handleJoinWorkspace = async () => {
+      if (!inviteCode.trim()) {
+        Alert.alert("입력 오류", "초대 코드를 입력해주세요.");
+        return;
+      }
+
+      setIsJoining(true);
+      try {
+        await apiService.joinWorkspaceByInviteCode(inviteCode.trim());
+        Alert.alert("참여 완료", "워크스페이스에 참여했습니다!", [
+          {
+            text: "확인",
+            onPress: () => setSettingsPage("main"),
+          },
+        ]);
+      } catch (error: any) {
+        console.error("Failed to join workspace:", error);
+        const errorCode = error?.response?.data?.code;
+        let errorMessage = "워크스페이스 참여에 실패했습니다.";
+
+        if (errorCode === "C007") {
+          errorMessage = "유효하지 않은 초대 코드입니다.";
+        } else if (errorCode === "C008") {
+          errorMessage = "자신의 초대 코드는 사용할 수 없습니다.";
+        } else if (errorCode === "C009") {
+          errorMessage = "이미 참여한 워크스페이스입니다.";
+        }
+
+        Alert.alert("오류", errorMessage);
+      } finally {
+        setIsJoining(false);
+      }
+    };
+
+    return (
+      <View style={styles.settingsSubPage}>
+        <View style={styles.subPageHeaderBar}>
+          <TouchableOpacity
+            onPress={() => setSettingsPage("main")}
+            style={styles.subPageBackButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.subPageTitle}>워크스페이스 참여</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.joinWorkspaceContent}>
+          <View style={styles.joinWorkspaceIconContainer}>
+            <Ionicons name="people" size={64} color="#6366F1" />
+          </View>
+
+          <Text style={styles.joinWorkspaceTitle}>
+            초대 코드로 참여하기
+          </Text>
+          <Text style={styles.joinWorkspaceDescription}>
+            상대방에게 받은 초대 코드를 입력하면{"\n"}
+            워크스페이스에 함께 참여할 수 있습니다.
+          </Text>
+
+          <View style={styles.inviteCodeInputContainer}>
+            <TextInput
+              style={styles.inviteCodeInput}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              placeholder="초대 코드 입력"
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.joinButton,
+              (!inviteCode.trim() || isJoining) && styles.joinButtonDisabled,
+            ]}
+            onPress={handleJoinWorkspace}
+            disabled={!inviteCode.trim() || isJoining}
+          >
+            {isJoining ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.joinButtonText}>참여하기</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   // privacy 페이지는 ScrollView 밖에서 렌더링 (flex: 1 필요)
@@ -2176,6 +2326,69 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: "#6B7280",
+  },
+  // Join Workspace Styles
+  joinWorkspaceContent: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    alignItems: "center",
+  },
+  joinWorkspaceIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#E0E7FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  joinWorkspaceTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  joinWorkspaceDescription: {
+    fontSize: 15,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  inviteCodeInputContainer: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  inviteCodeInput: {
+    width: "100%",
+    height: 56,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    fontSize: 18,
+    color: "#111827",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    textAlign: "center",
+    letterSpacing: 2,
+  },
+  joinButton: {
+    width: "100%",
+    height: 56,
+    backgroundColor: "#6366F1",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  joinButtonDisabled: {
+    backgroundColor: "#C7D2FE",
+  },
+  joinButtonText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });
 

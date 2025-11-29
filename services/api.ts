@@ -543,6 +543,14 @@ class ApiService {
     });
   }
 
+  // 초대코드로 워크스페이스 참여
+  async joinWorkspaceByInviteCode(inviteCode: string): Promise<Calendar> {
+    return this.request<Calendar>({
+      url: `/api/workspace/join/${inviteCode}`,
+      method: "POST",
+    });
+  }
+
   // 알림 설정 업데이트
   async updateNotifications(
     pushEnabled?: boolean,

@@ -23,6 +23,7 @@ export interface User {
   // phishingSensitivityLevel?: string;
   fcmToken?: string;
   email?: string;
+  inviteCode?: string;
 }
 
 export interface Calendar {
