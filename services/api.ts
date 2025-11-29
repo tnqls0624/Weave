@@ -251,9 +251,13 @@ class ApiService {
           error.response?.data?.error ||
           error.response?.statusText;
 
-        throw new Error(
+        // 에러 코드를 포함한 커스텀 에러 생성
+        const customError = new Error(
           serverMessage || error.message || "Network request failed"
-        );
+        ) as Error & { code?: string; status?: number };
+        customError.code = error.response?.data?.code;
+        customError.status = error.response?.status;
+        throw customError;
       }
       console.error("❌ [API Request failed]:", error);
       throw error;

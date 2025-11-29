@@ -124,8 +124,15 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     setAnimationDirection(null);
   }, []);
 
-  // selectedDate 변경 시 ref만 업데이트 (드로어는 더블탭에서만 열림)
+  // 외부에서 selectedDate가 변경될 때 drawer 열기 (피드에서 스케줄 선택 시)
   useEffect(() => {
+    // 외부에서 날짜가 설정되었고, 이전 값과 다르면 drawer 열기
+    if (
+      selectedDate &&
+      previousSelectedDateRef.current?.getTime() !== selectedDate.getTime()
+    ) {
+      setIsDrawerOpen(true);
+    }
     previousSelectedDateRef.current = selectedDate;
   }, [selectedDate]);
 

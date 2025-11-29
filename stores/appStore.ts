@@ -126,9 +126,8 @@ export const useAppData = () => {
   const { activeWorkspaceId, calendarDate, setActiveWorkspaceId } =
     useAppStore();
 
-  // 현재 달의 스케줄 조회
+  // 현재 연도 기준 스케줄 조회 (월 변경 시 재요청 방지)
   const currentYear = calendarDate.getFullYear();
-  const currentMonth = calendarDate.getMonth() + 1;
 
   const {
     data: workspaces = [],
@@ -155,6 +154,7 @@ export const useAppData = () => {
     workspaces.length > 0 &&
     workspaces.some((w: any) => w.id === activeWorkspaceId);
 
+  // 연도 단위로 스케줄 조회 (월 변경해도 재요청 없음)
   const {
     data: schedules = [],
     isLoading: schedulesLoading,
@@ -163,7 +163,6 @@ export const useAppData = () => {
     shouldFetchSchedules ? activeWorkspaceId : "",
     {
       year: currentYear,
-      month: currentMonth,
     },
     { enabled: shouldFetchSchedules }
   );

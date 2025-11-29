@@ -230,9 +230,23 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           return;
         }
 
-        // 초기 위치를 즉시 가져오기
+        // 마지막으로 알려진 위치를 먼저 사용 (즉시 표시)
+        const lastKnownLocation = await Location.getLastKnownPositionAsync();
+        if (lastKnownLocation) {
+          const quickLocation = {
+            latitude: lastKnownLocation.coords.latitude,
+            longitude: lastKnownLocation.coords.longitude,
+          };
+          setMyLocation(quickLocation);
+          setCameraCenter({
+            ...quickLocation,
+            zoom: 13,
+          });
+        }
+
+        // 정확한 현재 위치 가져오기 (백그라운드에서)
         const initialLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.Low, // 빠른 응답을 위해 정확도 낮춤
         });
         const newLocation = {
           latitude: initialLocation.coords.latitude,

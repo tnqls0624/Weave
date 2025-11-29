@@ -208,6 +208,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   }, [birthDate]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
 
   const colorBottomSheetRef = useRef<BottomSheet>(null);
   const imagePickerBottomSheetRef = useRef<BottomSheet>(null);
@@ -1095,44 +1097,44 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const renderJoinWorkspacePage = () => {
-    const [inviteCode, setInviteCode] = useState("");
-    const [isJoining, setIsJoining] = useState(false);
+  const handleJoinWorkspace = async () => {
+    if (!inviteCode.trim()) {
+      Alert.alert("입력 오류", "초대 코드를 입력해주세요.");
+      return;
+    }
 
-    const handleJoinWorkspace = async () => {
-      if (!inviteCode.trim()) {
-        Alert.alert("입력 오류", "초대 코드를 입력해주세요.");
-        return;
-      }
-
-      setIsJoining(true);
-      try {
-        await apiService.joinWorkspaceByInviteCode(inviteCode.trim());
-        Alert.alert("참여 완료", "워크스페이스에 참여했습니다!", [
-          {
-            text: "확인",
-            onPress: () => setSettingsPage("main"),
+    setIsJoining(true);
+    try {
+      await apiService.joinWorkspaceByInviteCode(inviteCode.trim());
+      Alert.alert("참여 완료", "워크스페이스에 참여했습니다!", [
+        {
+          text: "확인",
+          onPress: () => {
+            setInviteCode("");
+            setSettingsPage("main");
           },
-        ]);
-      } catch (error: any) {
-        console.error("Failed to join workspace:", error);
-        const errorCode = error?.response?.data?.code;
-        let errorMessage = "워크스페이스 참여에 실패했습니다.";
+        },
+      ]);
+    } catch (error: any) {
+      console.error("Failed to join workspace:", error);
+      const errorCode = error?.code;
+      let errorMessage = "워크스페이스 참여에 실패했습니다.";
 
-        if (errorCode === "C007") {
-          errorMessage = "유효하지 않은 초대 코드입니다.";
-        } else if (errorCode === "C008") {
-          errorMessage = "자신의 초대 코드는 사용할 수 없습니다.";
-        } else if (errorCode === "C009") {
-          errorMessage = "이미 참여한 워크스페이스입니다.";
-        }
-
-        Alert.alert("오류", errorMessage);
-      } finally {
-        setIsJoining(false);
+      if (errorCode === "C007") {
+        errorMessage = "유효하지 않은 초대 코드입니다.";
+      } else if (errorCode === "C008") {
+        errorMessage = "자신의 초대 코드는 사용할 수 없습니다.";
+      } else if (errorCode === "C009") {
+        errorMessage = "이미 참여한 워크스페이스입니다.";
       }
-    };
 
+      Alert.alert("오류", errorMessage);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  const renderJoinWorkspacePage = () => {
     return (
       <View style={styles.settingsSubPage}>
         <View style={styles.subPageHeaderBar}>

@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   FlatList,
   Pressable,
@@ -309,12 +309,9 @@ DayCell.displayName = "DayCell";
 interface MonthGridProps {
   year: number;
   month: number;
-  currentDate: Date;
   selectedDate: Date | null;
   screenWidth: number;
   calendarHeight: number;
-  schedules: Schedule[];
-  users: User[];
   onSelectDay: (date: Date) => void;
   onDoubleTap: (date: Date) => void;
   getEventColor: (schedule: Schedule) => string;
@@ -338,12 +335,9 @@ interface MonthGridProps {
 const MonthGrid = React.memo<MonthGridProps>(({
   year,
   month,
-  currentDate,
   selectedDate,
   screenWidth,
   calendarHeight,
-  schedules,
-  users,
   onSelectDay,
   onDoubleTap,
   getEventColor,
@@ -525,6 +519,9 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   const isScrolling = useRef(false);
   const currentIndexRef = useRef(120); // 중앙 인덱스 (120개월 전후)
 
+  // 월 데이터의 기준 날짜 저장 (초기 렌더링 시점의 currentDate)
+  const baseMonthRef = useRef({ year: currentDate.getFullYear(), month: currentDate.getMonth() });
+
   const calendarHeight = useMemo(() => {
     const dayNamesHeight = 240;
     return screenHeight - dayNamesHeight;
@@ -533,8 +530,7 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   // 월 데이터 생성 (240개월: 10년 전후)
   const months = useMemo<MonthData[]>(() => {
     const result: MonthData[] = [];
-    const baseYear = currentDate.getFullYear();
-    const baseMonth = currentDate.getMonth();
+    const { year: baseYear, month: baseMonth } = baseMonthRef.current;
 
     for (let i = -120; i <= 120; i++) {
       const date = new Date(baseYear, baseMonth + i, 1);
@@ -546,6 +542,23 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     }
     return result;
   }, []);
+
+  // currentDate가 변경되면 해당 월로 스크롤
+  useEffect(() => {
+    const { year: baseYear, month: baseMonth } = baseMonthRef.current;
+    const targetYear = currentDate.getFullYear();
+    const targetMonth = currentDate.getMonth();
+
+    // 기준 월에서 타겟 월까지의 차이 계산
+    const monthDiff = (targetYear - baseYear) * 12 + (targetMonth - baseMonth);
+    const targetIndex = 120 + monthDiff;
+
+    // 현재 인덱스와 다르면 스크롤
+    if (targetIndex !== currentIndexRef.current && flatListRef.current) {
+      flatListRef.current.scrollToIndex({ index: targetIndex, animated: false });
+      currentIndexRef.current = targetIndex;
+    }
+  }, [currentDate]);
 
   const scheduleRanges = useMemo<ScheduleWithRange[]>(() => {
     return schedules.map((schedule: Schedule) => {
@@ -563,24 +576,19 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     });
   }, [schedules]);
 
+  // 현재 연도 기준 전후 1년씩 (총 3년치) 미리 캐싱
   const visibleRange = useMemo(() => {
-    const start = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() - 1,
-      1
-    );
+    const year = currentDate.getFullYear();
+    const start = new Date(year - 1, 0, 1);
     start.setHours(0, 0, 0, 0);
-    const end = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 2,
-      0
-    );
+    const end = new Date(year + 1, 11, 31);
     end.setHours(23, 59, 59, 999);
     return {
       startTime: start.getTime(),
       endTime: end.getTime(),
+      year, // 연도가 바뀔 때만 재계산
     };
-  }, [currentDate]);
+  }, [currentDate.getFullYear()]);
 
   const visibleScheduleRanges = useMemo(() => {
     return scheduleRanges.filter(({ startTime, endTime }) => {
@@ -745,12 +753,9 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         <MonthGrid
           year={item.year}
           month={item.month}
-          currentDate={currentDate}
           selectedDate={selectedDate}
           screenWidth={screenWidth}
           calendarHeight={calendarHeight}
-          schedules={schedules}
-          users={users}
           onSelectDay={onSelectDay}
           onDoubleTap={onDoubleTap}
           getEventColor={stableGetEventColor}
@@ -762,12 +767,9 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
       );
     },
     [
-      currentDate,
       selectedDate,
       screenWidth,
       calendarHeight,
-      schedules,
-      users,
       onSelectDay,
       onDoubleTap,
       stableGetEventColor,
@@ -816,10 +818,11 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         initialScrollIndex={120}
         getItemLayout={getItemLayout}
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={3}
-        windowSize={5}
-        initialNumToRender={3}
+        removeClippedSubviews={false}
+        maxToRenderPerBatch={25}
+        windowSize={51}
+        initialNumToRender={25}
+        updateCellsBatchingPeriod={10}
       />
     </View>
   );
@@ -887,7 +890,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   holidayName: {
-    fontSize: 6,
+    fontSize: 8,
     color: "#ef4444",
     fontWeight: "600",
   },
