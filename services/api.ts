@@ -421,6 +421,11 @@ class ApiService {
       }
     }
 
+    // reminderMinutes 추가
+    if (scheduleData.reminderMinutes !== undefined) {
+      transformedData.reminderMinutes = scheduleData.reminderMinutes;
+    }
+
     const createdSchedule = await this.request<any>({
       url: "/api/schedule",
       method: "POST",
@@ -465,6 +470,11 @@ class ApiService {
       } else {
         transformedData.endDate = `${scheduleData.endDate} 23:59:59`;
       }
+    }
+
+    // reminderMinutes 추가
+    if (scheduleData.reminderMinutes !== undefined) {
+      transformedData.reminder_minutes = scheduleData.reminderMinutes;
     }
 
     const updatedSchedule = await this.request<any>({
@@ -696,6 +706,7 @@ class ApiService {
         serverSchedule.calendarType?.toLowerCase() ||
         serverSchedule.calendarType,
       isHoliday: serverSchedule.isHoliday,
+      reminderMinutes: serverSchedule.reminderMinutes,
     };
   }
 
