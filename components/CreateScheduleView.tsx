@@ -1,31 +1,32 @@
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import dayjs from "dayjs";
-import KoreanLunarCalendar from "korean-lunar-calendar";
 import React, {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useLayoutEffect,
 } from "react";
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RepeatOption, Schedule, User } from "../types";
 import DateTimePicker from "./DateTimePicker";
@@ -80,14 +81,43 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const [repeat, setRepeat] = useState<RepeatOption>("none");
   const [memo, setMemo] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [reminderMinutes, setReminderMinutes] = useState<number | null>(null);
+
+  // 키보드 상태 감지
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   // BottomSheet refs
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const calendarSheetRef = useRef<BottomSheet>(null);
+  const timeSheetRef = useRef<BottomSheet>(null);
+  const reminderSheetRef = useRef<BottomSheet>(null);
+  const customReminderSheetRef = useRef<BottomSheet>(null);
   const memoInputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // 임의 알림 설정 state
+  const [customReminderValue, setCustomReminderValue] = useState(30);
+  const [customReminderUnit, setCustomReminderUnit] = useState<"minutes" | "hours">("minutes");
+
   // BottomSheet snap points
   const snapPoints = useMemo(() => ["50%"], []);
+  const calendarSnapPoints = useMemo(() => ["55%"], []);
+  const timeSnapPoints = useMemo(() => ["40%"], []);
+  const reminderSnapPoints = useMemo(() => ["45%"], []);
+  const customReminderSnapPoints = useMemo(() => ["45%"], []);
 
   // BottomSheet backdrop
   const renderBackdrop = useCallback(
@@ -114,6 +144,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         scheduleToEdit.endTime || dayjs().add(1, "hour").format("HH:mm")
       );
       setIsAllDay(!scheduleToEdit.startTime);
+      setReminderMinutes(scheduleToEdit.reminderMinutes ?? null);
     } else {
       setTitle("");
       const initialDateStr = initialDate
@@ -126,6 +157,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       setMemo("");
       setStartTime(dayjs().format("HH:mm"));
       setEndTime(dayjs().add(1, "hour").format("HH:mm"));
+      setReminderMinutes(null);
       setIsAllDay(false);
     }
   }, [scheduleToEdit, currentUser.id, initialDate]);
@@ -137,12 +169,13 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         title,
         memo: memo || undefined,
         startDate,
-        endDate: endDate || startDate, // endDate가 없으면 startDate 사용
+        endDate: endDate || startDate,
         participants: participantIds,
         repeatType: repeat,
         calendarType: isLunar ? "lunar" : "solar",
         startTime: isAllDay ? undefined : startTime,
         endTime: isAllDay ? undefined : endTime,
+        reminderMinutes: reminderMinutes ?? undefined,
       };
       await onSave(scheduleData, scheduleToEdit?.id);
     } finally {
@@ -150,72 +183,59 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     }
   };
 
-  const formattedDateTime = (date: string) => {
+  const formatDateDisplay = (date: string) => {
     if (!date) return "";
     const dateObj = new Date(date + "T00:00:00");
     const days = ["일", "월", "화", "수", "목", "금", "토"];
     const day = days[dateObj.getDay()];
-
-    if (isLunar) {
-      try {
-        const lunarCal = new KoreanLunarCalendar();
-        lunarCal.setSolarDate(
-          dateObj.getFullYear(),
-          dateObj.getMonth() + 1,
-          dateObj.getDate()
-        );
-        const lunar = lunarCal.getLunarCalendar();
-        return `${lunar.year}년 ${lunar.month}월 ${lunar.day}일 (${day})`;
-      } catch {
-        return `${dateObj.getFullYear()}년 ${
-          dateObj.getMonth() + 1
-        }월 ${dateObj.getDate()}일 (${day})`;
-      }
-    }
-
-    return `${dateObj.getFullYear()}년 ${
-      dateObj.getMonth() + 1
-    }월 ${dateObj.getDate()}일 (${day})`;
+    return `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${day})`;
   };
 
   const handleDayPress = (dateString: string) => {
     const dStr = dayjs(dateString).format("YYYY-MM-DD");
     if (activeField === "start") {
       setStartDate(dStr);
+      // 시작일이 종료일보다 뒤면 종료일도 같이 변경
+      if (endDate && dStr > endDate) {
+        setEndDate(dStr);
+      }
     } else {
       setEndDate(dStr);
     }
   };
 
-  // 현재 선택된 날짜
   const selectedDateForCalendar = useMemo(() => {
     if (activeField === "start") return startDate;
     if (activeField === "end") return endDate || startDate;
     return startDate;
   }, [activeField, startDate, endDate]);
 
-  // 간단한 캘린더 피커 컴포넌트
-  const SimpleDatePicker = useCallback(() => {
+  const openDatePicker = (field: "start" | "end") => {
+    setActiveField(field);
+    setDisplayDate(new Date((field === "start" ? startDate : (endDate || startDate)) + "T00:00:00"));
+    calendarSheetRef.current?.expand();
+  };
+
+  const openTimePicker = (field: "start" | "end") => {
+    setActiveTimeField(field);
+    timeSheetRef.current?.expand();
+  };
+
+  // 캘린더 피커
+  const CalendarPicker = useCallback(() => {
     const year = displayDate.getFullYear();
     const month = displayDate.getMonth();
 
-    // 해당 월의 첫째 날과 마지막 날
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const firstDayOfWeek = firstDay.getDay();
     const daysInMonth = lastDay.getDate();
-
-    // 이전 달의 마지막 날
     const prevMonthLastDay = new Date(year, month, 0).getDate();
-
-    // 주 수 계산
     const totalCells = firstDayOfWeek + daysInMonth;
     const numberOfWeeks = Math.ceil(totalCells / 7);
 
-    // 날짜 배열 생성
     const days: Array<{ date: Date; dateString: string; isCurrentMonth: boolean }> = [];
 
-    // 이전 달 날짜들
     for (let i = firstDayOfWeek - 1; i >= 0; i--) {
       const date = new Date(year, month - 1, prevMonthLastDay - i);
       days.push({
@@ -225,7 +245,6 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       });
     }
 
-    // 현재 달 날짜들
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       days.push({
@@ -235,7 +254,6 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       });
     }
 
-    // 다음 달 날짜들
     const remainingCells = numberOfWeeks * 7 - days.length;
     for (let day = 1; day <= remainingCells; day++) {
       const date = new Date(year, month + 1, day);
@@ -246,7 +264,6 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       });
     }
 
-    // 주 단위로 그룹화
     const weeks: typeof days[] = [];
     for (let i = 0; i < days.length; i += 7) {
       weeks.push(days.slice(i, i + 7));
@@ -256,13 +273,12 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
 
     return (
       <View style={pickerStyles.container}>
-        {/* 헤더 */}
         <View style={pickerStyles.header}>
           <TouchableOpacity
             onPress={() => setDisplayDate(new Date(year, month - 1, 1))}
             style={pickerStyles.arrowButton}
           >
-            <MaterialIcons name="chevron-left" size={28} color="#007AFF" />
+            <Ionicons name="chevron-back" size={24} color="#007AFF" />
           </TouchableOpacity>
           <Text style={pickerStyles.monthText}>
             {year}년 {month + 1}월
@@ -271,11 +287,10 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
             onPress={() => setDisplayDate(new Date(year, month + 1, 1))}
             style={pickerStyles.arrowButton}
           >
-            <MaterialIcons name="chevron-right" size={28} color="#007AFF" />
+            <Ionicons name="chevron-forward" size={24} color="#007AFF" />
           </TouchableOpacity>
         </View>
 
-        {/* 요일 헤더 */}
         <View style={pickerStyles.dayNamesRow}>
           {DAY_NAMES.map((dayName, index) => (
             <Text
@@ -291,7 +306,6 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           ))}
         </View>
 
-        {/* 날짜 그리드 */}
         {weeks.map((week, weekIndex) => (
           <View key={weekIndex} style={pickerStyles.weekRow}>
             {week.map((dayData) => {
@@ -301,8 +315,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
 
               let textColor = dayData.isCurrentMonth ? "#374151" : "#d1d5db";
               if (dayData.isCurrentMonth) {
-                if (dayOfWeek === 0) textColor = "#ef4444";
-                if (dayOfWeek === 6) textColor = "#3b82f6";
+                if (dayOfWeek === 0) textColor = "#EF4444";
+                if (dayOfWeek === 6) textColor = "#3B82F6";
               }
 
               return (
@@ -317,9 +331,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                   <Text
                     style={[
                       pickerStyles.dayText,
-                      { color: isSelected ? "#007AFF" : textColor },
-                      isToday && pickerStyles.todayText,
-                      isSelected && pickerStyles.selectedDayText,
+                      { color: isSelected ? "#FFFFFF" : textColor },
+                      isToday && !isSelected && pickerStyles.todayText,
                     ]}
                   >
                     {dayData.date.getDate()}
@@ -331,7 +344,15 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         ))}
       </View>
     );
-  }, [displayDate, selectedDateForCalendar, handleDayPress]);
+  }, [displayDate, selectedDateForCalendar, activeField]);
+
+  const repeatOptions: { key: RepeatOption; label: string; icon: string }[] = [
+    { key: "none", label: "없음", icon: "close-circle-outline" },
+    { key: "daily", label: "매일", icon: "today-outline" },
+    { key: "weekly", label: "매주", icon: "calendar-outline" },
+    { key: "monthly", label: "매월", icon: "calendar-number-outline" },
+  ];
+
 
   return (
     <KeyboardAvoidingView
@@ -340,295 +361,405 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       keyboardVerticalOffset={0}
     >
       <View style={styles.container}>
-        {/* 헤더 */}
-        <View style={styles.header}>
+        {/* 헤더 - 미니멀 */}
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => setActiveView("calendar")}
-            activeOpacity={0.7}
             disabled={isSaving}
           >
-            <MaterialIcons name="close" size={26} color="#374151" />
+            <Ionicons name="close" size={28} color="#9CA3AF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {scheduleToEdit ? "일정 수정" : "새 일정"}
-          </Text>
           <TouchableOpacity
+            style={[
+              styles.saveButton,
+              (!title.trim() || isSaving) && styles.saveButtonDisabled,
+            ]}
             onPress={handleSubmit}
-            activeOpacity={0.6}
             disabled={!title.trim() || isSaving}
           >
-            <Text
-              style={[
-                styles.saveButton,
-                (!title.trim() || isSaving) && styles.saveButtonDisabled,
-              ]}
-            >
-              저장
-            </Text>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.saveButtonText}>저장</Text>
+            )}
           </TouchableOpacity>
         </View>
 
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
-          contentContainerStyle={{ paddingBottom: 64 + insets.bottom }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
         >
-          {/* 제목 입력 */}
-          <View style={styles.titleCard}>
-            {/* <View style={styles.titleIconContainer}> */}
-            {/* <MaterialIcons name="title" size={24} color="#007AFF" /> */}
-            {/* </View> */}
-            <TextInput
-              style={styles.titleInput}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="일정 제목"
-              placeholderTextColor="#9ca3af"
-              autoFocus={!scheduleToEdit}
-              maxLength={50}
-            />
-          </View>
+          {/* 제목 입력 - 크고 심플하게 */}
+          <TextInput
+            style={styles.titleInput}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="일정 제목"
+            placeholderTextColor="#D1D5DB"
+            autoFocus={!scheduleToEdit}
+            maxLength={50}
+          />
 
           {/* 날짜/시간 카드 */}
-          <View style={styles.dateTimeCard}>
-            {/* 시작 날짜/시간 */}
-            <View style={styles.dateTimeSection}>
-              <View style={styles.dateTimeSectionHeader}>
-                <View style={styles.dateTimeIconBadge}>
-                  <MaterialIcons
-                    name="event-available"
-                    size={18}
-                    color="#10b981"
-                  />
-                </View>
-                <Text style={styles.dateTimeSectionTitle}>시작</Text>
+          <Pressable
+            style={styles.dateTimeCard}
+            onPress={() => isKeyboardVisible && Keyboard.dismiss()}
+          >
+            {/* 시작 */}
+            <Pressable
+              style={styles.dateTimeRow}
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  Keyboard.dismiss();
+                } else {
+                  openDatePicker("start");
+                }
+              }}
+            >
+              <View style={[styles.dateTimeDot, { backgroundColor: "#10B981" }]} />
+              <View style={styles.dateTimeContent}>
+                <Text style={styles.dateTimeLabel}>시작</Text>
+                <Text style={styles.dateTimeValue}>{formatDateDisplay(startDate)}</Text>
               </View>
-              <View style={styles.dateTimeInputsContainer}>
+              {!isAllDay && (
                 <Pressable
-                  style={[
-                    styles.dateTimeButton,
-                    activeField === "start" && styles.dateTimeButtonActive,
-                  ]}
-                  onPress={() => {
-                    setActiveField(activeField === "start" ? null : "start");
-                    setActiveTimeField(null);
+                  style={styles.timeButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    if (isKeyboardVisible) {
+                      Keyboard.dismiss();
+                    } else {
+                      openTimePicker("start");
+                    }
                   }}
                 >
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={16}
-                    color={activeField === "start" ? "#007AFF" : "#6b7280"}
-                  />
-                  <Text
-                    style={[
-                      styles.dateTimeButtonText,
-                      activeField === "start" &&
-                        styles.dateTimeButtonTextActive,
-                    ]}
-                  >
-                    {formattedDateTime(startDate)}
-                  </Text>
+                  <Text style={styles.timeButtonText}>{startTime}</Text>
                 </Pressable>
-                {!isAllDay && (
-                  <Pressable
-                    style={[
-                      styles.dateTimeButton,
-                      styles.timeButton,
-                      activeTimeField === "start" &&
-                        styles.dateTimeButtonActive,
-                    ]}
-                    onPress={() => {
-                      setActiveTimeField(
-                        activeTimeField === "start" ? null : "start"
-                      );
-                      setActiveField(null);
-                    }}
-                  >
-                    <MaterialIcons
-                      name="access-time"
-                      size={16}
-                      color={
-                        activeTimeField === "start" ? "#007AFF" : "#6b7280"
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.dateTimeButtonText,
-                        activeTimeField === "start" &&
-                          styles.dateTimeButtonTextActive,
-                      ]}
-                    >
-                      {startTime}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
+              )}
+            </Pressable>
 
-            {/* 종료 날짜/시간 */}
-            <View style={styles.dateTimeSection}>
-              <View style={[styles.dateTimeSectionHeader, { marginTop: 10 }]}>
-                <View
-                  style={[
-                    styles.dateTimeIconBadge,
-                    styles.dateTimeIconBadgeEnd,
-                  ]}
-                >
-                  <MaterialIcons name="event-busy" size={18} color="#ef4444" />
-                </View>
-                <Text style={styles.dateTimeSectionTitle}>종료</Text>
+            <View style={styles.dateTimeDivider} />
+
+            {/* 종료 */}
+            <Pressable
+              style={styles.dateTimeRow}
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  Keyboard.dismiss();
+                } else {
+                  openDatePicker("end");
+                }
+              }}
+            >
+              <View style={[styles.dateTimeDot, { backgroundColor: "#EF4444" }]} />
+              <View style={styles.dateTimeContent}>
+                <Text style={styles.dateTimeLabel}>종료</Text>
+                <Text style={styles.dateTimeValue}>{formatDateDisplay(endDate || startDate)}</Text>
               </View>
-              <View style={styles.dateTimeInputsContainer}>
+              {!isAllDay && (
                 <Pressable
-                  style={[
-                    styles.dateTimeButton,
-                    activeField === "end" && styles.dateTimeButtonActive,
-                  ]}
-                  onPress={() => {
-                    setActiveField(activeField === "end" ? null : "end");
-                    setActiveTimeField(null);
+                  style={styles.timeButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    if (isKeyboardVisible) {
+                      Keyboard.dismiss();
+                    } else {
+                      openTimePicker("end");
+                    }
                   }}
                 >
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={16}
-                    color={activeField === "end" ? "#007AFF" : "#6b7280"}
-                  />
-                  <Text
-                    style={[
-                      styles.dateTimeButtonText,
-                      activeField === "end" && styles.dateTimeButtonTextActive,
-                    ]}
-                  >
-                    {formattedDateTime(endDate || startDate)}
-                  </Text>
+                  <Text style={styles.timeButtonText}>{endTime}</Text>
                 </Pressable>
-                {!isAllDay && (
-                  <Pressable
-                    style={[
-                      styles.dateTimeButton,
-                      styles.timeButton,
-                      activeTimeField === "end" && styles.dateTimeButtonActive,
-                    ]}
-                    onPress={() => {
-                      setActiveTimeField(
-                        activeTimeField === "end" ? null : "end"
-                      );
-                      setActiveField(null);
-                    }}
-                  >
-                    <MaterialIcons
-                      name="access-time"
-                      size={16}
-                      color={activeTimeField === "end" ? "#007AFF" : "#6b7280"}
-                    />
-                    <Text
-                      style={[
-                        styles.dateTimeButtonText,
-                        activeTimeField === "end" &&
-                          styles.dateTimeButtonTextActive,
-                      ]}
-                    >
-                      {endTime}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
+              )}
+            </Pressable>
 
-            {/* 종일 토글 */}
-            <View style={styles.allDayToggleContainer}>
+            <View style={styles.dateTimeDivider} />
+
+            {/* 옵션 토글 */}
+            <View style={styles.togglesRow}>
               <Pressable
-                style={styles.allDayToggle}
-                onPress={() => setIsAllDay(!isAllDay)}
-                android_ripple={{ color: "#f3f4f6" }}
+                style={[styles.toggleChip, isAllDay && styles.toggleChipActive]}
+                onPress={() => {
+                  if (isKeyboardVisible) {
+                    Keyboard.dismiss();
+                  } else {
+                    setIsAllDay(!isAllDay);
+                  }
+                }}
               >
-                <MaterialIcons
-                  name={isAllDay ? "event" : "schedule"}
-                  size={20}
-                  color={isAllDay ? "#007AFF" : "#6b7280"}
+                <Ionicons
+                  name={isAllDay ? "sunny" : "sunny-outline"}
+                  size={16}
+                  color={isAllDay ? "#FFFFFF" : "#6B7280"}
                 />
-                <Text
-                  style={[
-                    styles.allDayText,
-                    isAllDay && styles.allDayTextActive,
-                  ]}
-                >
-                  {isAllDay ? "종일 일정" : "시간 설정"}
+                <Text style={[styles.toggleChipText, isAllDay && styles.toggleChipTextActive]}>
+                  종일
                 </Text>
-                <Switch
-                  value={isAllDay}
-                  onValueChange={setIsAllDay}
-                  trackColor={{ false: "#e5e7eb", true: "#bfdbfe" }}
-                  thumbColor={isAllDay ? "#007AFF" : "#f9fafb"}
+              </Pressable>
+
+              <Pressable
+                style={[styles.toggleChip, isLunar && styles.toggleChipActive]}
+                onPress={() => {
+                  if (isKeyboardVisible) {
+                    Keyboard.dismiss();
+                  } else {
+                    setIsLunar(!isLunar);
+                  }
+                }}
+              >
+                <Ionicons
+                  name={isLunar ? "moon" : "moon-outline"}
+                  size={16}
+                  color={isLunar ? "#FFFFFF" : "#6B7280"}
                 />
+                <Text style={[styles.toggleChipText, isLunar && styles.toggleChipTextActive]}>
+                  음력
+                </Text>
               </Pressable>
             </View>
-          </View>
+          </Pressable>
 
-          {activeField && (
-            <View style={styles.calendarContainer}>
-              <SimpleDatePicker />
+          {/* 반복 */}
+          <Pressable
+            style={styles.section}
+            onPress={() => isKeyboardVisible && Keyboard.dismiss()}
+          >
+            <View style={styles.sectionHeader}>
+              <Ionicons name="repeat" size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>반복</Text>
             </View>
-          )}
-
-          {/* 반복 옵션 카드 */}
-          <View style={styles.repeatCard}>
-            <View style={styles.repeatCardHeader}>
-              <View style={styles.iconBadge}>
-                <MaterialIcons name="repeat" size={20} color="#007AFF" />
-              </View>
-              <Text style={styles.optionTitle}>반복</Text>
-            </View>
-            <View style={styles.repeatOptionsGrid}>
-              {(["none", "daily", "weekly", "monthly"] as RepeatOption[]).map(
-                (option) => (
-                  <Pressable
-                    key={option}
+            <View style={styles.repeatOptions}>
+              {repeatOptions.map((option) => (
+                <Pressable
+                  key={option.key}
+                  style={[
+                    styles.repeatChip,
+                    repeat === option.key && styles.repeatChipActive,
+                  ]}
+                  onPress={() => {
+                    if (isKeyboardVisible) {
+                      Keyboard.dismiss();
+                    } else {
+                      setRepeat(option.key);
+                    }
+                  }}
+                >
+                  <Text
                     style={[
-                      styles.repeatOptionNew,
-                      repeat === option && styles.repeatOptionNewSelected,
+                      styles.repeatChipText,
+                      repeat === option.key && styles.repeatChipTextActive,
                     ]}
-                    onPress={() => setRepeat(option)}
-                    android_ripple={{ color: "#e5e7eb" }}
                   >
-                    <MaterialIcons
-                      name={
-                        option === "none"
-                          ? "block"
-                          : option === "daily"
-                          ? "today"
-                          : option === "weekly"
-                          ? "date-range"
-                          : "calendar-month"
-                      }
-                      size={20}
-                      color={repeat === option ? "#007AFF" : "#6b7280"}
-                    />
-                    <Text
-                      style={[
-                        styles.repeatOptionTextNew,
-                        repeat === option && styles.repeatOptionTextNewSelected,
-                      ]}
-                    >
-                      {option === "none"
-                        ? "없음"
-                        : option === "daily"
-                        ? "매일"
-                        : option === "weekly"
-                        ? "매주"
-                        : "매월"}
-                    </Text>
-                  </Pressable>
-                )
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+
+          {/* 알림 */}
+          <Pressable
+            style={styles.section}
+            onPress={() => {
+              if (isKeyboardVisible) {
+                Keyboard.dismiss();
+              } else {
+                reminderSheetRef.current?.expand();
+              }
+            }}
+          >
+            <View style={styles.sectionHeader}>
+              <Ionicons name="notifications-outline" size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>알림</Text>
+              <Text style={styles.sectionBadge}>
+                {reminderMinutes === null
+                  ? "없음"
+                  : reminderMinutes === 0
+                  ? "시작"
+                  : reminderMinutes >= 60
+                  ? `${reminderMinutes / 60}시간 전`
+                  : `${reminderMinutes}분 전`}
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            </View>
+          </Pressable>
+
+          {/* 참가자 */}
+          <Pressable
+            style={styles.section}
+            onPress={() => {
+              if (isKeyboardVisible) {
+                Keyboard.dismiss();
+              } else {
+                bottomSheetRef.current?.expand();
+              }
+            }}
+          >
+            <View style={styles.sectionHeader}>
+              <Ionicons name="people" size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>참가자</Text>
+              <Text style={styles.sectionBadge}>{participantIds.length}명</Text>
+              <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+            </View>
+            <View style={styles.participantAvatars}>
+              {participantIds.slice(0, 6).map((userId) => {
+                const user = users.find((u) => u.id === userId);
+                if (!user) return null;
+                return (
+                  <Image
+                    key={user.id}
+                    source={{ uri: user.avatarUrl }}
+                    style={styles.participantAvatar}
+                  />
+                );
+              })}
+              {participantIds.length > 6 && (
+                <View style={styles.participantMore}>
+                  <Text style={styles.participantMoreText}>
+                    +{participantIds.length - 6}
+                  </Text>
+                </View>
               )}
             </View>
-          </View>
+          </Pressable>
 
-          {activeTimeField && (
+          {/* 메모 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>메모</Text>
+            </View>
+            <TextInput
+              ref={memoInputRef}
+              style={styles.memoInput}
+              value={memo}
+              onChangeText={setMemo}
+              placeholder="메모를 입력하세요 (선택)"
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 300);
+              }}
+            />
+          </View>
+        </ScrollView>
+
+        {/* 참가자 선택 BottomSheet */}
+        <BottomSheet
+          ref={bottomSheetRef}
+          index={-1}
+          snapPoints={snapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>참가자 선택</Text>
+            <ScrollView style={styles.bottomSheetList}>
+              {/* 나 */}
+              <Pressable
+                style={styles.participantItem}
+                onPress={() => {
+                  if (participantIds.includes(currentUser.id)) {
+                    setParticipantIds(participantIds.filter((id) => id !== currentUser.id));
+                  } else {
+                    setParticipantIds([...participantIds, currentUser.id]);
+                  }
+                }}
+              >
+                <Image
+                  source={{ uri: currentUser.avatarUrl }}
+                  style={styles.participantItemAvatar}
+                />
+                <Text style={styles.participantItemName}>나</Text>
+                <View
+                  style={[
+                    styles.checkbox,
+                    participantIds.includes(currentUser.id) && styles.checkboxActive,
+                  ]}
+                >
+                  {participantIds.includes(currentUser.id) && (
+                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  )}
+                </View>
+              </Pressable>
+
+              {/* 다른 사용자들 */}
+              {users
+                .filter((u) => u.id !== currentUser.id)
+                .map((user) => (
+                  <Pressable
+                    key={user.id}
+                    style={styles.participantItem}
+                    onPress={() => {
+                      if (participantIds.includes(user.id)) {
+                        setParticipantIds(participantIds.filter((id) => id !== user.id));
+                      } else {
+                        setParticipantIds([...participantIds, user.id]);
+                      }
+                    }}
+                  >
+                    <Image
+                      source={{ uri: user.avatarUrl }}
+                      style={styles.participantItemAvatar}
+                    />
+                    <Text style={styles.participantItemName}>{user.name}</Text>
+                    <View
+                      style={[
+                        styles.checkbox,
+                        participantIds.includes(user.id) && styles.checkboxActive,
+                      ]}
+                    >
+                      {participantIds.includes(user.id) && (
+                        <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                      )}
+                    </View>
+                  </Pressable>
+                ))}
+            </ScrollView>
+          </BottomSheetView>
+        </BottomSheet>
+
+        {/* 캘린더 BottomSheet */}
+        <BottomSheet
+          ref={calendarSheetRef}
+          index={-1}
+          snapPoints={calendarSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>
+              {activeField === "start" ? "시작 날짜" : "종료 날짜"}
+            </Text>
+            <CalendarPicker />
+          </BottomSheetView>
+        </BottomSheet>
+
+        {/* 시간 선택 BottomSheet */}
+        <BottomSheet
+          ref={timeSheetRef}
+          index={-1}
+          snapPoints={timeSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>
+              {activeTimeField === "start" ? "시작 시간" : "종료 시간"}
+            </Text>
             <View style={styles.timePickerContainer}>
               <DateTimePicker
                 value={activeTimeField === "start" ? startTime : endTime}
@@ -645,243 +776,119 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 locale="en_GB"
               />
             </View>
-          )}
-
-          <View style={styles.section}>
-            <MaterialIcons name="calendar-month" size={24} color="#007AFF" />
-            <Text style={styles.sectionText}>음력</Text>
-            <Switch
-              value={isLunar}
-              onValueChange={setIsLunar}
-              trackColor={{ false: "#d1d5db", true: "#007AFF" }}
-            />
-          </View>
-
-          <View style={styles.optionsSection}>
-            {/* <View style={styles.section}>
-            <MaterialIcons name="note" size={24} color="#007AFF" />
-            <Text style={styles.sectionText}>메모로 저장하기</Text>
-            <Switch
-              value={false}
-              onValueChange={() => {}}
-              trackColor={{ false: "#d1d5db", true: "#007AFF" }}
-            />
-          </View> */}
-
-            {/* <View style={styles.section}>
-            <MaterialIcons name="label" size={24} color="#007AFF" />
-            <Text style={styles.sectionText}>에메랄드 그린</Text>
-            <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
-          </View> */}
-
-            {/* 참가자 카드 */}
-            <Pressable
-              style={styles.optionCard}
-              onPress={() => bottomSheetRef.current?.expand()}
-              android_ripple={{ color: "#f3f4f6" }}
-            >
-              <View style={styles.participantHeader}>
-                <MaterialIcons name="people" size={23} color="#007AFF" />
-                <View style={styles.participantHeaderText}>
-                  <Text style={styles.participantTitle}>참가자</Text>
-                  <Text style={styles.participantSubtitle}>
-                    {participantIds.length}명 선택
-                  </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={24} color="#9ca3af" />
-              </View>
-              <View style={styles.participantPreview}>
-                {participantIds.slice(0, 5).map((userId) => {
-                  const user = users.find((u) => u.id === userId);
-                  if (!user) return null;
-                  return (
-                    <Image
-                      key={user.id}
-                      source={{ uri: user.avatarUrl }}
-                      style={styles.participantAvatarNew}
-                    />
-                  );
-                })}
-                {participantIds.length > 5 && (
-                  <View style={styles.moreParticipants}>
-                    <Text style={styles.moreParticipantsText}>
-                      +{participantIds.length - 5}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </Pressable>
-
-            {/* 메모 카드 */}
-            <View style={styles.optionCard}>
-              <View style={styles.memoHeader}>
-                <MaterialIcons name="edit-note" size={20} color="#6b7280" />
-                <Text style={styles.memoHeaderText}>메모</Text>
-                {memo.length > 0 && (
-                  <Text style={styles.memoCharCount}>{memo.length}자</Text>
-                )}
-              </View>
-              <TextInput
-                ref={memoInputRef}
-                style={styles.memoInput}
-                value={memo}
-                onChangeText={setMemo}
-                placeholder="메모 입력 (선택)"
-                placeholderTextColor="#9ca3af"
-                multiline
-                numberOfLines={2}
-                textAlignVertical="top"
-                onFocus={() => {
-                  // 키보드가 올라올 때 스크롤을 메모 입력 필드로 이동
-                  setTimeout(() => {
-                    memoInputRef.current?.measureLayout(
-                      scrollViewRef.current as any,
-                      (_left, top) => {
-                        scrollViewRef.current?.scrollTo({
-                          y: top - 100,
-                          animated: true,
-                        });
-                      },
-                      () => {}
-                    );
-                  }, 100);
-                }}
-              />
-            </View>
-
-            {/* <View style={styles.section}>
-            <MaterialIcons name="notifications" size={24} color="#007AFF" />
-            <Text style={styles.sectionText}>10분 전</Text>
-            <MaterialIcons name="close" size={20} color="#9ca3af" />
-          </View> */}
-          </View>
-
-          {/* <View style={styles.actionButtons}>
-          <MaterialIcons name="add-circle" size={32} color="#007AFF" />
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.actionButton}>
-              <MaterialIcons name="repeat" size={20} color="#007AFF" />
-              <Text style={styles.actionButtonText}>반복</Text>
-            </Pressable>
-            <Pressable style={styles.actionButton}>
-              <MaterialIcons name="star" size={20} color="#007AFF" />
-              <Text style={styles.actionButtonText}>D-Day 기능</Text>
-            </Pressable>
-            <Pressable style={styles.actionButton}>
-              <MaterialIcons name="place" size={20} color="#007AFF" />
-              <Text style={styles.actionButtonText}>장소</Text>
-            </Pressable>
-          </View>
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.actionButton}>
-              <MaterialIcons name="link" size={20} color="#007AFF" />
-              <Text style={styles.actionButtonText}>링크</Text>
-            </Pressable>
-            <Pressable style={styles.actionButton}>
-              <MaterialIcons name="description" size={20} color="#007AFF" />
-              <Text style={styles.actionButtonText}>메모</Text>
-            </Pressable>
-            <Pressable style={styles.actionButton}>
-              <MaterialIcons name="checklist" size={20} color="#007AFF" />
-              <Text style={styles.actionButtonText}>To-Do 리스트</Text>
-            </Pressable>
-          </View>
-          <Pressable style={styles.actionButton}>
-            <MaterialIcons name="attach-file" size={20} color="#007AFF" />
-            <MaterialIcons name="star-border" size={16} color="#000" />
-            <Text style={styles.actionButtonText}>첨부 파일</Text>
-          </Pressable>
-        </View> */}
-        </ScrollView>
-
-        {/* 참가자 선택 BottomSheet */}
-        <BottomSheet
-          ref={bottomSheetRef}
-          index={-1}
-          snapPoints={snapPoints}
-          enablePanDownToClose={true}
-          backdropComponent={renderBackdrop}
-        >
-          <BottomSheetView style={styles.bottomSheetContent}>
-            {/* Header */}
-            <View style={styles.bottomSheetHeader}>
-              <Text style={styles.bottomSheetTitle}>
-                참가자{" "}
-                {participantIds.length > 0 && `(${participantIds.length})`}
-              </Text>
-            </View>
-
-            {/* Participant List */}
-            <ScrollView style={styles.bottomSheetList}>
-              <Pressable
-                style={[
-                  styles.bottomSheetItem,
-                  participantIds.includes(currentUser.id) &&
-                    styles.bottomSheetItemSelected,
-                ]}
-                onPress={() => {
-                  if (participantIds.includes(currentUser.id)) {
-                    setParticipantIds(
-                      participantIds.filter((id) => id !== currentUser.id)
-                    );
-                  } else {
-                    setParticipantIds([...participantIds, currentUser.id]);
-                  }
-                }}
-              >
-                <Image
-                  source={{ uri: currentUser.avatarUrl }}
-                  style={styles.bottomSheetAvatar}
-                />
-                <Text style={styles.bottomSheetItemText}>나</Text>
-                {participantIds.includes(currentUser.id) && (
-                  <MaterialIcons name="check" size={24} color="#007AFF" />
-                )}
-              </Pressable>
-
-              {users
-                .filter((u) => u.id !== currentUser.id)
-                .map((user) => (
-                  <Pressable
-                    key={user.id}
-                    style={[
-                      styles.bottomSheetItem,
-                      participantIds.includes(user.id) &&
-                        styles.bottomSheetItemSelected,
-                    ]}
-                    onPress={() => {
-                      if (participantIds.includes(user.id)) {
-                        setParticipantIds(
-                          participantIds.filter((id) => id !== user.id)
-                        );
-                      } else {
-                        setParticipantIds([...participantIds, user.id]);
-                      }
-                    }}
-                  >
-                    <Image
-                      source={{ uri: user.avatarUrl }}
-                      style={styles.bottomSheetAvatar}
-                    />
-                    <Text style={styles.bottomSheetItemText}>{user.name}</Text>
-                    {participantIds.includes(user.id) && (
-                      <MaterialIcons name="check" size={24} color="#007AFF" />
-                    )}
-                  </Pressable>
-                ))}
-            </ScrollView>
           </BottomSheetView>
         </BottomSheet>
 
-        {/* 저장 중 로딩 오버레이 */}
-        {isSaving && (
-          <View style={styles.loadingOverlay}>
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>저장 중...</Text>
+        {/* 알림 설정 BottomSheet */}
+        <BottomSheet
+          ref={reminderSheetRef}
+          index={-1}
+          snapPoints={reminderSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>알림</Text>
+
+            <View style={styles.reminderPresetList}>
+              {[
+                { key: null, label: "없음" },
+                { key: 0, label: "시작" },
+                { key: 10, label: "10분 전" },
+                { key: 60, label: "1시간 전" },
+              ].map((option) => (
+                <Pressable
+                  key={option.key ?? "none"}
+                  style={styles.reminderPresetItem}
+                  onPress={() => {
+                    setReminderMinutes(option.key);
+                    reminderSheetRef.current?.close();
+                  }}
+                >
+                  <Text style={styles.reminderPresetText}>{option.label}</Text>
+                  {reminderMinutes === option.key && (
+                    <Ionicons name="checkmark" size={22} color="#007AFF" />
+                  )}
+                </Pressable>
+              ))}
+
+              {/* 임의... */}
+              <Pressable
+                style={styles.reminderPresetItem}
+                onPress={() => {
+                  reminderSheetRef.current?.close();
+                  setTimeout(() => {
+                    customReminderSheetRef.current?.expand();
+                  }, 300);
+                }}
+              >
+                <Text style={styles.reminderPresetText}>임의...</Text>
+                {reminderMinutes !== null &&
+                  reminderMinutes !== 0 &&
+                  reminderMinutes !== 10 &&
+                  reminderMinutes !== 60 && (
+                    <Text style={styles.reminderPresetValue}>
+                      {reminderMinutes >= 60
+                        ? `${reminderMinutes / 60}시간 전`
+                        : `${reminderMinutes}분 전`}
+                    </Text>
+                  )}
+                <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
+              </Pressable>
             </View>
-          </View>
-        )}
+          </BottomSheetView>
+        </BottomSheet>
+
+        {/* 임의 알림 설정 BottomSheet */}
+        <BottomSheet
+          ref={customReminderSheetRef}
+          index={-1}
+          snapPoints={customReminderSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>알림 시간 설정</Text>
+
+            <View style={styles.reminderPickerRow}>
+              <Picker
+                selectedValue={customReminderValue}
+                onValueChange={(value) => setCustomReminderValue(value)}
+                style={[styles.reminderPicker, { marginLeft: 20 }]}
+                itemStyle={styles.reminderPickerItem}
+              >
+                {Array.from({ length: 60 }, (_, i) => i + 1).map((num) => (
+                  <Picker.Item key={num} label={`${num}`} value={num} />
+                ))}
+              </Picker>
+
+              <Picker
+                selectedValue={customReminderUnit}
+                onValueChange={(value) => setCustomReminderUnit(value)}
+                style={[styles.reminderPicker, { marginRight: 20 }]}
+                itemStyle={styles.reminderPickerItem}
+              >
+                <Picker.Item label="분 전" value="minutes" />
+                <Picker.Item label="시간 전" value="hours" />
+              </Picker>
+            </View>
+
+            <TouchableOpacity
+              style={styles.customReminderConfirmButton}
+              onPress={() => {
+                const minutes = customReminderUnit === "hours"
+                  ? customReminderValue * 60
+                  : customReminderValue;
+                setReminderMinutes(minutes);
+                customReminderSheetRef.current?.close();
+              }}
+            >
+              <Text style={styles.customReminderConfirmText}>확인</Text>
+            </TouchableOpacity>
+          </BottomSheetView>
+        </BottomSheet>
       </View>
     </KeyboardAvoidingView>
   );
@@ -890,636 +897,330 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#FFFFFF",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  headerButton: {
+    padding: 4,
   },
   saveButton: {
-    color: "#007AFF",
-    fontWeight: "600",
-    fontSize: 17,
+    backgroundColor: "#007AFF",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   saveButtonDisabled: {
-    opacity: 0.3,
+    backgroundColor: "#E5E7EB",
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
   },
   content: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 20,
   },
-  titleSection: {
+  titleInput: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#111827",
+    paddingVertical: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: "#F3F4F6",
+    marginBottom: 24,
+  },
+  dateTimeCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  dateTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  dateTimeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 14,
+  },
+  dateTimeContent: {
+    flex: 1,
+  },
+  dateTimeLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    marginBottom: 2,
+  },
+  dateTimeValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  timeButton: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  timeButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  dateTimeDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginLeft: 24,
+  },
+  togglesRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  toggleChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  toggleChipActive: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
+  },
+  toggleChipText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  toggleChipTextActive: {
+    color: "#FFFFFF",
+  },
+  section: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#374151",
+    flex: 1,
+  },
+  sectionBadge: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#007AFF",
+  },
+  repeatOptions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  repeatChip: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+  },
+  repeatChipActive: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
+  },
+  repeatChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  repeatChipTextActive: {
+    color: "#FFFFFF",
+  },
+  reminderPresetList: {
+  },
+  reminderPresetItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#fff",
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#F3F4F6",
   },
-  titleIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#eff6ff",
+  reminderPresetText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#374151",
+    flex: 1,
+  },
+  reminderPresetValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#007AFF",
+    marginRight: 8,
+  },
+  reminderPickerRow: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginBottom: 16,
   },
-  titleInput: {
+  reminderPicker: {
     flex: 1,
-    fontSize: 17,
+    height: 180,
+  },
+  reminderPickerItem: {
+    fontSize: 20,
     fontWeight: "500",
-    color: "#1f2937",
-    padding: 0,
-  },
-  section: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
     color: "#374151",
   },
-  sectionText: {
-    flex: 1,
-    fontSize: 16,
-    color: "#374151",
-    marginLeft: 8,
-  },
-  datetimeRow: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  datetimeButton: {
-    backgroundColor: "#f3f4f6",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  datetimeText: {
-    fontSize: 12,
-    color: "#374151",
-    textAlign: "center",
-  },
-  startDateButton: {
+  customReminderConfirmButton: {
     backgroundColor: "#007AFF",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 16,
   },
-  startDateText: {
-    fontSize: 12,
-    color: "#fff",
-    textAlign: "center",
-    fontWeight: "600",
+  customReminderConfirmText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
-  optionsSection: {
-    marginTop: 4,
-  },
-  participantsRow: {
+  participantAvatars: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  participantBadges: {
-    flexDirection: "row",
-    gap: 4,
   },
   participantAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: "#F3F4F6",
   },
-  actionButtons: {
-    marginTop: 24,
-    gap: 8,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    backgroundColor: "#fff",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    color: "#374151",
-  },
-  calendarContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    marginTop: 16,
-    marginBottom: 16,
-    overflow: "hidden",
-    shadowColor: "#000",
-  },
-  timePickerContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    marginTop: 16,
-    marginBottom: 16,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  timePickerTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 12,
-  },
-  timePickerRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
-  },
-  timePickerCell: {
-    width: "10%",
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  timePickerSelected: {
-    backgroundColor: "#a7f3d0",
-    borderColor: "#a7f3d0",
-  },
-  timePickerText: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  timePickerSelectedText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-  sectionIcon: {
-    marginRight: 8,
-  },
-  bottomSheetContent: {
-    flex: 1,
-  },
-  bottomSheetHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  bottomSheetTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  bottomSheetList: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  bottomSheetItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  bottomSheetItemSelected: {
-    backgroundColor: "#ecfdf5",
-  },
-  bottomSheetAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  bottomSheetItemText: {
-    flex: 1,
-    fontSize: 16,
-    color: "#374151",
-  },
-  repeatOptionsRow: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 8,
-  },
-  repeatOption: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#fff",
-    alignItems: "center",
-  },
-  repeatOptionSelected: {
-    backgroundColor: "#dbeafe",
-    borderColor: "#007AFF",
-  },
-  repeatOptionText: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
-  repeatOptionTextSelected: {
-    color: "#007AFF",
-    fontWeight: "600",
-  },
-  // New improved styles
-  headerButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1f2937",
-    letterSpacing: -0.5,
-  },
-  titleCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  dateTimeCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  dateTimeSection: {},
-  dateTimeSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  dateTimeIconBadge: {
+  participantMore: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#d1fae5",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  dateTimeIconBadgeEnd: {
-    backgroundColor: "#fee2e2",
-  },
-  dateTimeSectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  dateTimeInputsContainer: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  dateDivider: {
-    alignItems: "center",
-  },
-  allDayToggleContainer: {
-    marginTop: 12,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
-  },
-  allDayToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 4,
-  },
-  allDayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-    marginBottom: 16,
-  },
-  allDayLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  allDayText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#6b7280",
-  },
-  allDayTextActive: {
-    color: "#007AFF",
-    fontWeight: "600",
-  },
-  dateTimeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  dateTimeLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    width: 70,
-  },
-  dateTimeLabelText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#6b7280",
-  },
-  dateTimeInputs: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 8,
-  },
-  dateTimeButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#f9fafb",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#e5e7eb",
-  },
-  dateTimeButtonActive: {
-    backgroundColor: "#eff6ff",
-    borderColor: "#007AFF",
-    borderWidth: 2,
-  },
-  dateTimeButtonText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#6b7280",
-    flex: 1,
-  },
-  dateTimeButtonTextActive: {
-    color: "#007AFF",
-    fontWeight: "600",
-  },
-  timeButton: {
-    flex: 0.6,
-  },
-  optionCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  optionCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  optionCardTitle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 14,
-  },
-  optionCardTitleText: {
-    flex: 1,
-  },
-  iconBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
   },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1f2937",
-  },
-  optionSubtitle: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#9ca3af",
-    marginTop: 3,
-  },
-  participantHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
-  participantHeaderText: {
-    flex: 1,
-  },
-  participantTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  participantSubtitle: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#9ca3af",
-    marginTop: 2,
-  },
-  participantPreview: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: -8,
-  },
-  participantAvatarNew: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  moreParticipants: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 2,
-    borderColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  moreParticipantsText: {
+  participantMoreText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#6b7280",
+    fontWeight: "700",
+    color: "#6B7280",
   },
-  memoHeader: {
-    flexDirection: "row",
+  timePickerContainer: {
     alignItems: "center",
-    gap: 8,
-    marginBottom: 10,
-  },
-  memoHeaderText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#374151",
-    flex: 1,
-  },
-  memoCharCount: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "500",
+    justifyContent: "center",
   },
   memoInput: {
-    backgroundColor: "#f9fafb",
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
     color: "#374151",
-    minHeight: 120,
+    minHeight: 100,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#E5E7EB",
   },
-  repeatCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+  bottomSheetHandle: {
+    backgroundColor: "#E5E7EB",
+    width: 40,
   },
-  repeatCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  bottomSheetContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  bottomSheetTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    textAlign: "center",
     marginBottom: 16,
   },
-  repeatSection: {
-    marginTop: 16,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
-  },
-  repeatSectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#374151",
-    marginBottom: 14,
-  },
-  repeatOptionsGrid: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  repeatOptionNew: {
+  bottomSheetList: {
     flex: 1,
-    flexDirection: "column",
+  },
+  participantItem: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
     paddingVertical: 14,
-    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  participantItemAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 14,
+  },
+  participantItemName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#fafafa",
-  },
-  repeatOptionNewSelected: {
-    backgroundColor: "#eff6ff",
-    borderColor: "#007AFF",
-    borderWidth: 2.5,
-  },
-  repeatOptionTextNew: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6b7280",
-  },
-  repeatOptionTextNewSelected: {
-    color: "#007AFF",
-    fontWeight: "700",
-  },
-  loadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    // backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderColor: "#D1D5DB",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
   },
-  loadingContainer: {
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
+  checkboxActive: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
   },
 });
 
-// 날짜 피커 스타일
 const pickerStyles = StyleSheet.create({
   container: {
-    padding: 16,
+    paddingHorizontal: 8,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   arrowButton: {
     padding: 8,
   },
   monthText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111827",
   },
   dayNamesRow: {
     flexDirection: "row",
@@ -1528,16 +1229,16 @@ const pickerStyles = StyleSheet.create({
   dayName: {
     flex: 1,
     textAlign: "center",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
-    color: "#6b7280",
+    color: "#9CA3AF",
     paddingVertical: 8,
   },
   sundayText: {
-    color: "#ef4444",
+    color: "#EF4444",
   },
   saturdayText: {
-    color: "#3b82f6",
+    color: "#3B82F6",
   },
   weekRow: {
     flexDirection: "row",
@@ -1547,21 +1248,19 @@ const pickerStyles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 4,
+    margin: 2,
   },
   selectedDay: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#007AFF",
     borderRadius: 20,
   },
   dayText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "500",
   },
   todayText: {
     fontWeight: "700",
-  },
-  selectedDayText: {
-    fontWeight: "600",
+    color: "#007AFF",
   },
 });
 

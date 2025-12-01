@@ -29,25 +29,36 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({
   };
 
   const renderMonthsGrid = () => {
-    const months = Array.from({ length: 12 }, (_, i) =>
-      new Date(0, i).toLocaleString("ko-KR", { month: "long" })
-    );
-    const currentDisplayMonth = displayDate.getMonth();
+    // 월 데이터를 명시적으로 정의 (인덱스 혼동 방지)
+    const monthsData = [
+      { index: 0, name: "1월" },
+      { index: 1, name: "2월" },
+      { index: 2, name: "3월" },
+      { index: 3, name: "4월" },
+      { index: 4, name: "5월" },
+      { index: 5, name: "6월" },
+      { index: 6, name: "7월" },
+      { index: 7, name: "8월" },
+      { index: 8, name: "9월" },
+      { index: 9, name: "10월" },
+      { index: 10, name: "11월" },
+      { index: 11, name: "12월" },
+    ];
     const currentActualMonth = currentDate.getMonth();
     const currentActualYear = currentDate.getFullYear();
 
     return (
       <View style={styles.monthsGrid}>
-        {months.map((month, i) => (
+        {monthsData.map(({ index, name }) => (
           <Pressable
-            key={month}
+            key={index}
             onPress={() => {
-              const newDate = new Date(displayDate.getFullYear(), i, 1);
+              const newDate = new Date(displayDate.getFullYear(), index, 1);
               onDateSelect(newDate);
             }}
             style={[
               styles.monthButton,
-              i === currentActualMonth &&
+              index === currentActualMonth &&
                 displayDate.getFullYear() === currentActualYear &&
                 styles.selectedMonth,
             ]}
@@ -55,12 +66,12 @@ const MonthYearPicker: React.FC<MonthYearPickerProps> = ({
             <Text
               style={[
                 styles.monthText,
-                i === currentActualMonth &&
+                index === currentActualMonth &&
                   displayDate.getFullYear() === currentActualYear &&
                   styles.selectedMonthText,
               ]}
             >
-              {month}
+              {name}
             </Text>
           </Pressable>
         ))}

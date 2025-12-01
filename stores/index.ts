@@ -1,6 +1,9 @@
 export {
   useCreateSchedule,
   useDeleteSchedule,
+  useDeleteWorkspace,
+  useKickWorkspaceMember,
+  useLeaveWorkspace,
   useMyProfile,
   useMyWorkspaces,
   useSchedule,
@@ -8,6 +11,7 @@ export {
   useUpdateMyLocation,
   useUpdateSchedule,
   useUpdateUser,
+  useUpdateWorkspace,
   useWorkspace,
   useWorkspaceSchedules,
   useWorkspaceUserLocations,

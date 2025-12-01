@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { hexToColorName } from "../services/api";
+import { queryClient } from "../services/queryClient";
 import {
   useMyProfile,
   useMyWorkspaces,
@@ -18,7 +19,7 @@ const DEFAULT_CALENDAR: Calendar = {
   users: [],
 };
 
-type SettingsPage = "main" | "account" | "tags" | "notifications" | "privacy";
+type SettingsPage = "main" | "account" | "tags" | "notifications" | "privacy" | "joinWorkspace" | "workspaceManage";
 
 interface AppState {
   // Auth State
@@ -70,10 +71,14 @@ export const useAppStore = create<AppState>()(
         });
       },
       clearAuth: () => {
+        // React Query 캐시 전체 초기화
+        queryClient.clear();
+
         set({
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
+          activeWorkspaceId: "", // 워크스페이스 ID도 초기화
         });
       },
 

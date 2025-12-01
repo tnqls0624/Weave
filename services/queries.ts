@@ -289,6 +289,80 @@ export const useUpdateNotifications = () => {
   });
 };
 
+// ==================== Workspace Management Mutations ====================
+export const useLeaveWorkspace = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (workspaceId: string) => apiService.leaveWorkspace(workspaceId),
+    onSuccess: (_, workspaceId) => {
+      // 워크스페이스 목록 캐시 무효화
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+      // 해당 워크스페이스의 스케줄 캐시 제거
+      queryClient.removeQueries({ queryKey: queryKeys.workspace(workspaceId) });
+    },
+  });
+};
+
+export const useDeleteWorkspace = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (workspaceId: string) => apiService.deleteWorkspace(workspaceId),
+    onSuccess: (_, workspaceId) => {
+      // 워크스페이스 목록 캐시 무효화
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+      // 해당 워크스페이스의 캐시 제거
+      queryClient.removeQueries({ queryKey: queryKeys.workspace(workspaceId) });
+    },
+  });
+};
+
+export const useUpdateWorkspace = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      workspaceId,
+      data,
+    }: {
+      workspaceId: string;
+      data: { title?: string; thumbnailImage?: string };
+    }) => apiService.updateWorkspace(workspaceId, data),
+    onSuccess: (updatedWorkspace) => {
+      // 워크스페이스 목록 캐시 무효화
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+      // 해당 워크스페이스 캐시 업데이트
+      queryClient.setQueryData(
+        queryKeys.workspace(updatedWorkspace.id),
+        updatedWorkspace
+      );
+    },
+  });
+};
+
+export const useKickWorkspaceMember = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      workspaceId,
+      userId,
+    }: {
+      workspaceId: string;
+      userId: string;
+    }) => apiService.kickWorkspaceMember(workspaceId, userId),
+    onSuccess: (_, variables) => {
+      // 워크스페이스 목록 캐시 무효화
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+      // 해당 워크스페이스 캐시 무효화
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.workspace(variables.workspaceId),
+      });
+    },
+  });
+};
+
 // ==================== Prefetch Utilities ====================
 export const usePrefetchAdjacentMonths = (
   workspaceId: string,

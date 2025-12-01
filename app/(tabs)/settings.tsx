@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { users, currentUser, isLoading, error } = useAppData();
+  const { users, currentUser, activeWorkspace, isLoading, error } = useAppData();
   const { clearAuth, activeWorkspaceId } = useAppStore();
   const updateUserMutation = useUpdateUser();
 
@@ -77,6 +77,7 @@ export default function SettingsScreen() {
         users={users as unknown as User[]}
         currentUser={currentUser}
         workspaceId={activeWorkspaceId}
+        activeWorkspace={activeWorkspace}
         scheduleCount={schedules.length}
         schedulesLoading={schedulesLoading}
         onUpdateUser={handleUpdateUser}

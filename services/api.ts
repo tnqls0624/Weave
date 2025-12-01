@@ -555,6 +555,45 @@ class ApiService {
     });
   }
 
+  // 워크스페이스 나가기
+  async leaveWorkspace(workspaceId: string): Promise<void> {
+    return this.request<void>({
+      url: `/api/workspace/${workspaceId}/leave`,
+      method: "POST",
+    });
+  }
+
+  // 워크스페이스 삭제 (마스터만 가능)
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    return this.request<void>({
+      url: `/api/workspace/${workspaceId}`,
+      method: "DELETE",
+    });
+  }
+
+  // 워크스페이스 설정 업데이트 (마스터만 가능)
+  async updateWorkspace(
+    workspaceId: string,
+    data: { title?: string; thumbnailImage?: string }
+  ): Promise<Calendar> {
+    return this.request<Calendar>({
+      url: `/api/workspace/${workspaceId}`,
+      method: "PUT",
+      data,
+    });
+  }
+
+  // 워크스페이스 멤버 추방 (마스터만 가능)
+  async kickWorkspaceMember(
+    workspaceId: string,
+    userId: string
+  ): Promise<void> {
+    return this.request<void>({
+      url: `/api/workspace/${workspaceId}/kick/${userId}`,
+      method: "POST",
+    });
+  }
+
   // 알림 설정 업데이트
   async updateNotifications(
     pushEnabled?: boolean,

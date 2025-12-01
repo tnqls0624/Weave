@@ -49,4 +49,5 @@ export interface Schedule {
   isHoliday?: boolean;
   repeatType?: string;
   calendarType?: string;
+  reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)
 }

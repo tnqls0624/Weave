@@ -35,11 +35,15 @@ import RenderHtml from "react-native-render-html";
 import { apiService } from "../services/api";
 import locationTrackingService from "../services/locationTrackingService";
 import {
+  useDeleteWorkspace,
+  useKickWorkspaceMember,
+  useLeaveWorkspace,
   useUpdateNotifications,
   useUpdateParticipantColors,
+  useUpdateWorkspace,
 } from "../services/queries";
 import { useAppStore } from "../stores";
-import { User } from "../types";
+import { Calendar, User } from "../types";
 import MonthDayPicker from "./MonthDayPicker";
 
 // 개인정보처리방침 페이지 컴포넌트
@@ -48,6 +52,7 @@ const PrivacyPolicyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchPrivacyPolicy = async () => {
@@ -98,7 +103,7 @@ const PrivacyPolicyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ) : html ? (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom + 80 }}
         >
           <RenderHtml
             contentWidth={width - 32}
@@ -162,6 +167,7 @@ interface SettingsViewProps {
   users: User[];
   currentUser?: User;
   workspaceId: string;
+  activeWorkspace?: Calendar;
   scheduleCount: number;
   schedulesLoading?: boolean;
   onUpdateUser: (userId: string, userData: Partial<User>) => Promise<void>;
@@ -172,6 +178,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   users,
   currentUser,
   workspaceId,
+  activeWorkspace,
   scheduleCount,
   schedulesLoading,
   onUpdateUser,
@@ -196,6 +203,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const isUpdatingColors = updateParticipantColorsMutation.isPending;
 
   const updateNotificationsMutation = useUpdateNotifications();
+  const leaveWorkspaceMutation = useLeaveWorkspace();
+  const deleteWorkspaceMutation = useDeleteWorkspace();
+  const updateWorkspaceMutation = useUpdateWorkspace();
+  const kickMemberMutation = useKickWorkspaceMember();
 
   const [profileName, setProfileName] = useState("");
   const [birthDate, setBirthDate] = useState<string | null>(null);
@@ -210,6 +221,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [isJoining, setIsJoining] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
 
   const colorBottomSheetRef = useRef<BottomSheet>(null);
   const imagePickerBottomSheetRef = useRef<BottomSheet>(null);
@@ -410,155 +423,66 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Quick Stats */}
-      <View style={styles.statsCard}>
-        <Text style={styles.sectionHeaderText}>워크스페이스 현황</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <View
-              style={[styles.statIconContainer, { backgroundColor: "#EFF6FF" }]}
-            >
-              <Ionicons name="people" size={24} color="#3B82F6" />
+      {/* Calendar Card - 통합된 캘린더 섹션 */}
+      <View style={styles.calendarCard}>
+        {activeWorkspace ? (
+          <>
+            {/* 캘린더 헤더 - 이름과 통계 */}
+            <View style={styles.calendarCardHeader}>
+              <View style={styles.calendarIconContainer}>
+                <Ionicons name="calendar" size={28} color="#6366F1" />
+              </View>
+              <View style={styles.calendarHeaderInfo}>
+                <Text style={styles.calendarName}>
+                  {activeWorkspace.title || "내 캘린더"}
+                </Text>
+                <View style={styles.calendarStats}>
+                  <View style={styles.calendarStatItem}>
+                    <Ionicons name="people" size={14} color="#6B7280" />
+                    <Text style={styles.calendarStatText}>멤버 {users.length}명</Text>
+                  </View>
+                  <View style={styles.calendarStatDivider} />
+                  <View style={styles.calendarStatItem}>
+                    <Ionicons name="document-text" size={14} color="#6B7280" />
+                    {schedulesLoading ? (
+                      <ActivityIndicator size="small" color="#6B7280" style={{ marginLeft: 4 }} />
+                    ) : (
+                      <Text style={styles.calendarStatText}>일정 {scheduleCount}개</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+              {isMaster && (
+                <View style={styles.calendarMasterBadge}>
+                  <Ionicons name="shield-checkmark" size={12} color="#F59E0B" />
+                </View>
+              )}
             </View>
-            <Text style={styles.statValue}>{users.length}</Text>
-            <Text style={styles.statLabel}>멤버</Text>
-          </View>
-          <View style={styles.statItem}>
-            <View
-              style={[styles.statIconContainer, { backgroundColor: "#F0FDF4" }]}
-            >
-              <Ionicons name="calendar" size={24} color="#22C55E" />
-            </View>
-            {schedulesLoading ? (
-              <ActivityIndicator size="small" color="#22C55E" />
-            ) : (
-              <Text style={styles.statValue}>{scheduleCount}</Text>
-            )}
-            <Text style={styles.statLabel}>일정</Text>
-          </View>
-          {/* TEMPORARILY DISABLED - Security features */}
-          {/* <View style={styles.statItem}>
-            <View
-              style={[styles.statIconContainer, { backgroundColor: "#FEF3C7" }]}
-            >
-              <Ionicons name="shield-checkmark" size={24} color="#F59E0B" />
-            </View>
-            <Text style={styles.statValue}>
-              {phishingGuardEnabled ? "ON" : "OFF"}
-            </Text>
-            <Text style={styles.statLabel}>피싱가드</Text>
-          </View> */}
-        </View>
-      </View>
 
-      {/* Quick Toggles */}
-      {/* <View style={styles.card}>
-        <Text style={styles.sectionHeaderText}>빠른 설정</Text>
-        <View style={styles.quickToggleContainer}>
-          <View style={styles.quickToggleItem}>
-            <View style={styles.quickToggleIcon}>
-              <Ionicons
-                name="notifications"
-                size={20}
-                color={notificationsEnabled ? "#3B82F6" : "#9CA3AF"}
-              />
-            </View>
-            <Text style={styles.quickToggleLabel}>푸시 알림</Text>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={async (value) => {
-                setNotificationsEnabled(value);
-                try {
-                  await updateNotificationsMutation.mutateAsync({
-                    pushEnabled: value,
-                    fcmToken: currentUser?.fcmToken,
-                  });
-                } catch (error) {
-                  setNotificationsEnabled(!value);
-                  Alert.alert("오류", "알림 설정 업데이트에 실패했습니다.");
-                }
-              }}
-              trackColor={{ false: "#D1D5DB", true: "#93C5FD" }}
-              thumbColor={notificationsEnabled ? "#3B82F6" : "#F3F4F6"}
-            />
-          </View>
-
-          <View style={[styles.quickToggleItem, { borderBottomWidth: 0 }]}>
-            <View style={styles.quickToggleIcon}>
-              <Ionicons
-                name="location"
-                size={20}
-                color={locationSharingEnabled ? "#3B82F6" : "#9CA3AF"}
-              />
-            </View>
-            <Text style={styles.quickToggleLabel}>위치 공유</Text>
-            <Switch
-              value={locationSharingEnabled}
-              onValueChange={async (value) => {
-                setLocationSharingEnabled(value);
-                try {
-                  await apiService.updateLocationSharing(value);
-                  if (value) {
-                    await locationTrackingService.startForegroundTracking(
-                      workspaceId,
-                      30000
-                    );
-                  } else {
-                    await locationTrackingService.stopTracking();
-                  }
-                } catch (error) {
-                  setLocationSharingEnabled(!value);
-                  Alert.alert("오류", "위치 공유 설정에 실패했습니다.");
-                }
-              }}
-              trackColor={{ false: "#D1D5DB", true: "#93C5FD" }}
-              thumbColor={locationSharingEnabled ? "#3B82F6" : "#F3F4F6"}
-            />
-          </View>
-
-          <View style={[styles.quickToggleItem, { borderBottomWidth: 0 }]}>
-            <View style={styles.quickToggleIcon}>
-              <Ionicons
-                name="shield-checkmark"
-                size={20}
-                color={phishingGuardEnabled ? "#3B82F6" : "#9CA3AF"}
-              />
-            </View>
-            <Text style={styles.quickToggleLabel}>피싱 가드</Text>
-            <Switch
-              value={phishingGuardEnabled}
-              onValueChange={handlePhishingGuardToggle}
-              trackColor={{ false: "#D1D5DB", true: "#93C5FD" }}
-              thumbColor={phishingGuardEnabled ? "#3B82F6" : "#F3F4F6"}
-            />
-          </View>
-        </View>
-      </View> */}
-
-      {/* Workspace - Invite */}
-      <View style={styles.card}>
-        <Text style={styles.sectionHeaderText}>워크스페이스</Text>
-        <SettingsItem
-          icon="person-add-outline"
-          label="초대 코드"
-          description={currentUser?.inviteCode ?? "코드 없음"}
-          onPress={() => {
-            if (currentUser?.inviteCode) {
-              Alert.alert(
-                "초대 코드",
-                `내 초대 코드: ${currentUser.inviteCode}\n\n이 코드를 공유하면 상대방이 내 워크스페이스에 참여할 수 있습니다.`,
-                [
-                  { text: "닫기", style: "cancel" },
-                  {
-                    text: "복사",
-                    onPress: async () => {
-                      await Clipboard.setStringAsync(currentUser.inviteCode!);
-                      Alert.alert("복사 완료", "초대 코드가 클립보드에 복사되었습니다.");
-                    },
-                  },
-                  {
-                    text: "공유",
-                    onPress: async () => {
+            {/* 초대 코드 섹션 */}
+            <View style={styles.inviteCodeSection}>
+              <View style={styles.inviteCodeBox}>
+                <Text style={styles.inviteCodeLabel}>초대 코드</Text>
+                <Text style={styles.inviteCodeValue}>
+                  {currentUser?.inviteCode || "—"}
+                </Text>
+              </View>
+              <View style={styles.inviteCodeActions}>
+                <TouchableOpacity
+                  style={styles.inviteCodeButton}
+                  onPress={async () => {
+                    if (currentUser?.inviteCode) {
+                      await Clipboard.setStringAsync(currentUser.inviteCode);
+                      Alert.alert("복사 완료", "초대 코드가 복사되었습니다.");
+                    }
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={18} color="#6366F1" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.inviteCodeButton}
+                  onPress={async () => {
+                    if (currentUser?.inviteCode) {
                       try {
                         await Share.share({
                           message: `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`,
@@ -566,24 +490,56 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       } catch (error) {
                         console.error("Share error:", error);
                       }
-                    },
-                  },
-                ]
-              );
-            }
-          }}
-          iconColor="#10B981"
-          iconBg="#D1FAE5"
-        />
-        <SettingsItem
-          icon="enter-outline"
-          label="워크스페이스 참여"
-          description="초대 코드로 참여하기"
-          onPress={() => setSettingsPage("joinWorkspace")}
-          iconColor="#6366F1"
-          iconBg="#E0E7FF"
-          isLast={true}
-        />
+                    }
+                  }}
+                >
+                  <Ionicons name="share-outline" size={18} color="#6366F1" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 액션 버튼들 */}
+            <View style={styles.calendarActions}>
+              <TouchableOpacity
+                style={styles.calendarActionButton}
+                onPress={() => setSettingsPage("joinWorkspace")}
+              >
+                <View style={[styles.calendarActionIcon, { backgroundColor: "#EEF2FF" }]}>
+                  <Ionicons name="enter-outline" size={20} color="#6366F1" />
+                </View>
+                <Text style={styles.calendarActionText}>참여하기</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.calendarActionButton}
+                onPress={() => setSettingsPage("workspaceManage")}
+              >
+                <View style={[styles.calendarActionIcon, { backgroundColor: "#FEF3C7" }]}>
+                  <Ionicons name="settings-outline" size={20} color="#F59E0B" />
+                </View>
+                <Text style={styles.calendarActionText}>관리</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          /* 캘린더가 없을 때 빈 상태 */
+          <View style={styles.emptyCalendarState}>
+            <View style={styles.emptyCalendarIcon}>
+              <Ionicons name="calendar-outline" size={48} color="#D1D5DB" />
+            </View>
+            <Text style={styles.emptyCalendarTitle}>참여 중인 캘린더가 없습니다</Text>
+            <Text style={styles.emptyCalendarDescription}>
+              초대 코드를 입력하여 다른 사람의 캘린더에{"\n"}참여해보세요
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyCalendarButton}
+              onPress={() => setSettingsPage("joinWorkspace")}
+            >
+              <Ionicons name="enter-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.emptyCalendarButtonText}>캘린더 참여하기</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* App Settings */}
@@ -671,7 +627,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   onPress: () => {
                     Alert.alert(
                       "최종 확인",
-                      "모든 일정, 워크스페이스 참여 정보가 삭제됩니다.\n\n정말 탈퇴하시겠습니까?",
+                      "모든 일정, 캘린더 참여 정보가 삭제됩니다.\n\n정말 탈퇴하시겠습니까?",
                       [
                         { text: "취소", style: "cancel" },
                         {
@@ -1019,7 +975,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   <View style={styles.toggleInfo}>
                     <Text style={styles.toggleLabel}>위치 공유</Text>
                     <Text style={styles.toggleDescription}>
-                      실시간으로 워크스페이스 멤버들과 위치 공유
+                      실시간으로 캘린더 멤버들과 위치 공유
                     </Text>
                   </View>
                   <Switch
@@ -1092,6 +1048,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         return <PrivacyPolicyPage onBack={() => setSettingsPage("main")} />;
       case "joinWorkspace":
         return renderJoinWorkspacePage();
+      case "workspaceManage":
+        return renderWorkspaceManagePage();
       default:
         return renderMainPage();
     }
@@ -1106,7 +1064,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     setIsJoining(true);
     try {
       await apiService.joinWorkspaceByInviteCode(inviteCode.trim());
-      Alert.alert("참여 완료", "워크스페이스에 참여했습니다!", [
+      Alert.alert("참여 완료", "캘린더에 참여했습니다!", [
         {
           text: "확인",
           onPress: () => {
@@ -1118,20 +1076,335 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     } catch (error: any) {
       console.error("Failed to join workspace:", error);
       const errorCode = error?.code;
-      let errorMessage = "워크스페이스 참여에 실패했습니다.";
+      let errorMessage = "캘린더 참여에 실패했습니다.";
 
       if (errorCode === "C007") {
         errorMessage = "유효하지 않은 초대 코드입니다.";
       } else if (errorCode === "C008") {
         errorMessage = "자신의 초대 코드는 사용할 수 없습니다.";
       } else if (errorCode === "C009") {
-        errorMessage = "이미 참여한 워크스페이스입니다.";
+        errorMessage = "이미 참여한 캘린더입니다.";
       }
 
       Alert.alert("오류", errorMessage);
     } finally {
       setIsJoining(false);
     }
+  };
+
+  // 현재 사용자가 캘린더 마스터인지 확인
+  const isMaster = activeWorkspace?.master === currentUser?.id;
+
+  const handleLeaveWorkspace = () => {
+    if (isMaster) {
+      Alert.alert(
+        "나갈 수 없음",
+        "캘린더 관리자는 나갈 수 없습니다.\n다른 멤버에게 관리자 권한을 이전하거나 캘린더를 삭제해주세요."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "캘린더 나가기",
+      `"${activeWorkspace?.title || "캘린더"}"에서 나가시겠습니까?\n\n나가면 이 캘린더의 일정을 더 이상 볼 수 없습니다.`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "나가기",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveWorkspaceMutation.mutateAsync(workspaceId);
+              Alert.alert("완료", "캘린더에서 나갔습니다.", [
+                {
+                  text: "확인",
+                  onPress: () => setSettingsPage("main"),
+                },
+              ]);
+            } catch (error) {
+              console.error("Failed to leave workspace:", error);
+              Alert.alert("오류", "캘린더 나가기에 실패했습니다.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteWorkspace = () => {
+    Alert.alert(
+      "캘린더 삭제",
+      `"${activeWorkspace?.title || "캘린더"}"를 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.\n모든 멤버가 캘린더에서 제거되고, 모든 일정이 삭제됩니다.`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "최종 확인",
+              "정말로 캘린더를 삭제하시겠습니까?",
+              [
+                { text: "취소", style: "cancel" },
+                {
+                  text: "삭제",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await deleteWorkspaceMutation.mutateAsync(workspaceId);
+                      Alert.alert("완료", "캘린더가 삭제되었습니다.", [
+                        {
+                          text: "확인",
+                          onPress: () => setSettingsPage("main"),
+                        },
+                      ]);
+                    } catch (error) {
+                      console.error("Failed to delete workspace:", error);
+                      Alert.alert("오류", "캘린더 삭제에 실패했습니다.");
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleKickMember = (userId: string, userName: string) => {
+    Alert.alert(
+      "멤버 추방",
+      `${userName}님을 캘린더에서 추방하시겠습니까?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "추방",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await kickMemberMutation.mutateAsync({ workspaceId, userId });
+              Alert.alert("완료", `${userName}님을 추방했습니다.`);
+            } catch (error) {
+              console.error("Failed to kick member:", error);
+              Alert.alert("오류", "멤버 추방에 실패했습니다.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUpdateWorkspaceName = async () => {
+    if (!workspaceName.trim()) {
+      Alert.alert("입력 오류", "캘린더 이름을 입력해주세요.");
+      return;
+    }
+
+    try {
+      await updateWorkspaceMutation.mutateAsync({
+        workspaceId,
+        data: { title: workspaceName.trim() },
+      });
+      setIsEditingWorkspaceName(false);
+      Alert.alert("완료", "캘린더 이름이 변경되었습니다.");
+    } catch (error) {
+      console.error("Failed to update workspace name:", error);
+      Alert.alert("오류", "캘린더 이름 변경에 실패했습니다.");
+    }
+  };
+
+  const renderWorkspaceManagePage = () => {
+    const workspaceUsers = activeWorkspace?.users || [];
+
+    return (
+      <View style={styles.settingsSubPage}>
+        <View style={styles.subPageHeaderBar}>
+          <TouchableOpacity
+            onPress={() => setSettingsPage("main")}
+            style={styles.subPageBackButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.subPageTitle}>캘린더 관리</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom + 80 }}
+        >
+          {/* 캘린더 정보 */}
+          <View style={styles.workspaceInfoCard}>
+            <View style={styles.workspaceInfoHeader}>
+              <View style={styles.workspaceIconLarge}>
+                <Ionicons name="people" size={32} color="#6366F1" />
+              </View>
+              <View style={styles.workspaceInfoText}>
+                {isEditingWorkspaceName ? (
+                  <TextInput
+                    style={styles.workspaceNameInput}
+                    value={workspaceName}
+                    onChangeText={setWorkspaceName}
+                    placeholder="캘린더 이름"
+                    placeholderTextColor="#9CA3AF"
+                    autoFocus
+                    maxLength={30}
+                  />
+                ) : (
+                  <Text style={styles.workspaceTitle}>
+                    {activeWorkspace?.title || "캘린더"}
+                  </Text>
+                )}
+                <Text style={styles.workspaceMemberCount}>
+                  멤버 {workspaceUsers.length}명 · 일정 {scheduleCount}개
+                </Text>
+              </View>
+              {isMaster && (
+                isEditingWorkspaceName ? (
+                  <View style={styles.editNameButtons}>
+                    <TouchableOpacity
+                      style={styles.editNameCancelButton}
+                      onPress={() => {
+                        setIsEditingWorkspaceName(false);
+                        setWorkspaceName(activeWorkspace?.title || "");
+                      }}
+                    >
+                      <Ionicons name="close" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.editNameSaveButton}
+                      onPress={handleUpdateWorkspaceName}
+                      disabled={updateWorkspaceMutation.isPending}
+                    >
+                      {updateWorkspaceMutation.isPending ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.editNameButton}
+                    onPress={() => {
+                      setWorkspaceName(activeWorkspace?.title || "");
+                      setIsEditingWorkspaceName(true);
+                    }}
+                  >
+                    <Ionicons name="pencil" size={18} color="#6366F1" />
+                  </TouchableOpacity>
+                )
+              )}
+            </View>
+            {isMaster && !isEditingWorkspaceName && (
+              <View style={styles.masterBadge}>
+                <Ionicons name="shield-checkmark" size={14} color="#F59E0B" />
+                <Text style={styles.masterBadgeText}>관리자</Text>
+              </View>
+            )}
+          </View>
+
+          {/* 멤버 목록 (마스터만 볼 수 있음) */}
+          {isMaster && (
+            <View style={styles.card}>
+              <Text style={styles.sectionHeaderText}>멤버 관리</Text>
+              {users.map((user, index) => {
+                const isUserMaster = user.id === activeWorkspace?.master;
+                const isCurrentUser = user.id === currentUser?.id;
+
+                return (
+                  <View
+                    key={user.id}
+                    style={[
+                      styles.memberItem,
+                      index < users.length - 1 && styles.memberItemBorder,
+                    ]}
+                  >
+                    <View style={styles.memberInfo}>
+                      {user.avatarUrl ? (
+                        <Image
+                          source={{ uri: user.avatarUrl }}
+                          style={styles.memberAvatar}
+                        />
+                      ) : (
+                        <View style={styles.memberAvatarPlaceholder}>
+                          <Text style={styles.memberAvatarText}>
+                            {user.name?.charAt(0) || "?"}
+                          </Text>
+                        </View>
+                      )}
+                      <View>
+                        <Text style={styles.memberName}>
+                          {user.name}
+                          {isCurrentUser && " (나)"}
+                        </Text>
+                        {isUserMaster && (
+                          <Text style={styles.memberRole}>관리자</Text>
+                        )}
+                      </View>
+                    </View>
+                    {!isUserMaster && !isCurrentUser && (
+                      <TouchableOpacity
+                        style={styles.kickButton}
+                        onPress={() => handleKickMember(user.id, user.name)}
+                        disabled={kickMemberMutation.isPending}
+                      >
+                        <Ionicons name="remove-circle-outline" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* 캘린더 액션 */}
+          <View style={styles.card}>
+            <Text style={styles.sectionHeaderText}>캘린더</Text>
+
+            {!isMaster && (
+              <TouchableOpacity
+                style={[styles.dangerButton, styles.settingsItemBorder]}
+                onPress={handleLeaveWorkspace}
+                disabled={leaveWorkspaceMutation.isPending}
+              >
+                <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
+                  <Ionicons name="exit-outline" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.dangerButtonText}>캘린더 나가기</Text>
+                {leaveWorkspaceMutation.isPending && (
+                  <ActivityIndicator size="small" color="#EF4444" style={{ marginLeft: "auto" }} />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {isMaster && (
+              <TouchableOpacity
+                style={styles.dangerButton}
+                onPress={handleDeleteWorkspace}
+                disabled={deleteWorkspaceMutation.isPending}
+              >
+                <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
+                  <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.dangerButtonText}>캘린더 삭제</Text>
+                {deleteWorkspaceMutation.isPending && (
+                  <ActivityIndicator size="small" color="#EF4444" style={{ marginLeft: "auto" }} />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* 안내 메시지 */}
+          <Text style={styles.workspaceManageHint}>
+            {isMaster
+              ? "캘린더 관리자는 멤버를 추방하거나 캘린더를 삭제할 수 있습니다."
+              : "캘린더에서 나가면 이 캘린더의 일정을 더 이상 볼 수 없습니다."}
+          </Text>
+        </ScrollView>
+      </View>
+    );
   };
 
   const renderJoinWorkspacePage = () => {
@@ -1144,7 +1417,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <Ionicons name="arrow-back" size={24} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.subPageTitle}>워크스페이스 참여</Text>
+          <Text style={styles.subPageTitle}>캘린더 참여</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -1158,7 +1431,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </Text>
           <Text style={styles.joinWorkspaceDescription}>
             상대방에게 받은 초대 코드를 입력하면{"\n"}
-            워크스페이스에 함께 참여할 수 있습니다.
+            캘린더에 함께 참여할 수 있습니다.
           </Text>
 
           <View style={styles.inviteCodeInputContainer}>
@@ -2391,6 +2664,331 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  // Calendar Card Styles (통합된 캘린더 섹션)
+  calendarCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  calendarCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  calendarIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  calendarHeaderInfo: {
+    flex: 1,
+  },
+  calendarName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  calendarStats: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  calendarStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  calendarStatText: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  calendarStatDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 10,
+  },
+  calendarMasterBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inviteCodeSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+  },
+  inviteCodeBox: {
+    flex: 1,
+  },
+  inviteCodeLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  inviteCodeValue: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#374151",
+    letterSpacing: 1,
+  },
+  inviteCodeActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  inviteCodeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  calendarActions: {
+    flexDirection: "row",
+    marginTop: 16,
+    gap: 12,
+  },
+  calendarActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  calendarActionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  calendarActionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  // Empty Calendar State Styles
+  emptyCalendarState: {
+    alignItems: "center",
+    paddingVertical: 24,
+  },
+  emptyCalendarIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  emptyCalendarTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  emptyCalendarDescription: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  emptyCalendarButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#6366F1",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyCalendarButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  // Workspace Management Styles
+  workspaceInfoCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  workspaceInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  workspaceIconLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: "#E0E7FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+  },
+  workspaceInfoText: {
+    flex: 1,
+  },
+  workspaceTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  workspaceNameInput: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: "#6366F1",
+  },
+  editNameButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E0E7FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editNameButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  editNameCancelButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editNameSaveButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#6366F1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workspaceMemberCount: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  masterBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginTop: 12,
+  },
+  masterBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#D97706",
+    marginLeft: 4,
+  },
+  memberItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  memberItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  memberInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  memberAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  memberAvatarText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  memberRole: {
+    fontSize: 12,
+    color: "#F59E0B",
+    marginTop: 2,
+  },
+  kickButton: {
+    padding: 8,
+  },
+  dangerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  dangerButtonText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#EF4444",
+  },
+  workspaceManageHint: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 18,
   },
 });
 

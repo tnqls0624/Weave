@@ -4,7 +4,7 @@
     "slug": "weave",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "weave",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -29,18 +29,19 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "CFBundleIconName": "AppIcon",
         "UIBackgroundModes": ["remote-notification", "location"],
-        "NSCameraUsageDescription": "카메라 접근 권한이 필요합니다",
-        "NSPhotoLibraryUsageDescription": "사진 접근 권한이 필요합니다",
-        "NSPhotoLibraryAddUsageDescription": "사진 저장 권한이 필요합니다"
+        "NSCameraUsageDescription": "프로필 사진을 촬영하여 설정하기 위해 카메라 접근 권한이 필요합니다. 예: 새로운 프로필 사진 촬영",
+        "NSPhotoLibraryUsageDescription": "갤러리에서 프로필 사진을 선택하여 설정하기 위해 사진 라이브러리 접근 권한이 필요합니다. 예: 기존 사진을 프로필 이미지로 사용",
+        "NSPhotoLibraryAddUsageDescription": "편집한 프로필 사진을 기기에 저장하기 위해 사진 저장 권한이 필요합니다."
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/weave_logo.png",
-        "backgroundImage": "./assets/images/weave_logo.png",
-        "monochromeImage": "./assets/images/weave_logo.png"
+        "foregroundImage": "./assets/images/app-icon.png",
+        "backgroundImage": "./assets/images/app-icon.png",
+        "monochromeImage": "./assets/images/app-icon.png"
       },
+      "googleServicesFile": "./GoogleService-Info.plist",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -61,7 +62,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/weave_logo.png",
+          "image": "./assets/images/app-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -90,7 +91,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/push-icon.png",
+          "icon": "./assets/images/app-icon.png",
           "color": "#ffffff",
           "defaultChannel": "default",
           "mode": "production",
@@ -107,8 +108,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "사진을 업로드하려면 접근 권한이 필요합니다",
-          "cameraPermission": "카메라 사용 권한이 필요합니다",
+          "photosPermission": "갤러리에서 프로필 사진을 선택하여 설정하기 위해 사진 라이브러리 접근 권한이 필요합니다. 예: 기존 사진을 프로필 이미지로 사용",
+          "cameraPermission": "프로필 사진을 촬영하여 설정하기 위해 카메라 접근 권한이 필요합니다. 예: 새로운 프로필 사진 촬영",
           "microphonePermission": false
         }
       ],
