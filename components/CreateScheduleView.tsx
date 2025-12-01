@@ -83,6 +83,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [reminderMinutes, setReminderMinutes] = useState<number | null>(null);
+  const [isImportant, setIsImportant] = useState(false);
 
   // 키보드 상태 감지
   useEffect(() => {
@@ -145,6 +146,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       );
       setIsAllDay(!scheduleToEdit.startTime);
       setReminderMinutes(scheduleToEdit.reminderMinutes ?? null);
+      setIsImportant(scheduleToEdit.isImportant ?? false);
     } else {
       setTitle("");
       const initialDateStr = initialDate
@@ -158,6 +160,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       setStartTime(dayjs().format("HH:mm"));
       setEndTime(dayjs().add(1, "hour").format("HH:mm"));
       setReminderMinutes(null);
+      setIsImportant(false);
       setIsAllDay(false);
     }
   }, [scheduleToEdit, currentUser.id, initialDate]);
@@ -176,6 +179,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         startTime: isAllDay ? undefined : startTime,
         endTime: isAllDay ? undefined : endTime,
         reminderMinutes: reminderMinutes ?? undefined,
+        isImportant,
       };
       await onSave(scheduleData, scheduleToEdit?.id);
     } finally {
@@ -521,6 +525,26 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 />
                 <Text style={[styles.toggleChipText, isLunar && styles.toggleChipTextActive]}>
                   음력
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.toggleChip, isImportant && styles.toggleChipImportant]}
+                onPress={() => {
+                  if (isKeyboardVisible) {
+                    Keyboard.dismiss();
+                  } else {
+                    setIsImportant(!isImportant);
+                  }
+                }}
+              >
+                <Ionicons
+                  name={isImportant ? "star" : "star-outline"}
+                  size={16}
+                  color={isImportant ? "#FFFFFF" : "#6B7280"}
+                />
+                <Text style={[styles.toggleChipText, isImportant && styles.toggleChipTextActive]}>
+                  중요
                 </Text>
               </Pressable>
             </View>
@@ -1008,6 +1032,10 @@ const styles = StyleSheet.create({
   toggleChipActive: {
     backgroundColor: "#007AFF",
     borderColor: "#007AFF",
+  },
+  toggleChipImportant: {
+    backgroundColor: "#F59E0B",
+    borderColor: "#F59E0B",
   },
   toggleChipText: {
     fontSize: 14,

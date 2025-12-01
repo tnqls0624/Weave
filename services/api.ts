@@ -426,6 +426,11 @@ class ApiService {
       transformedData.reminderMinutes = scheduleData.reminderMinutes;
     }
 
+    // isImportant 추가
+    if (scheduleData.isImportant !== undefined) {
+      transformedData.isImportant = scheduleData.isImportant;
+    }
+
     const createdSchedule = await this.request<any>({
       url: "/api/schedule",
       method: "POST",
@@ -475,6 +480,11 @@ class ApiService {
     // reminderMinutes 추가
     if (scheduleData.reminderMinutes !== undefined) {
       transformedData.reminder_minutes = scheduleData.reminderMinutes;
+    }
+
+    // isImportant 추가
+    if (scheduleData.isImportant !== undefined) {
+      transformedData.is_important = scheduleData.isImportant;
     }
 
     const updatedSchedule = await this.request<any>({
@@ -707,6 +717,7 @@ class ApiService {
         serverSchedule.calendarType,
       isHoliday: serverSchedule.isHoliday,
       reminderMinutes: serverSchedule.reminderMinutes,
+      isImportant: serverSchedule.isImportant,
     };
   }
 

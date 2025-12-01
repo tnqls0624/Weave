@@ -50,4 +50,5 @@ export interface Schedule {
   repeatType?: string;
   calendarType?: string;
   reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)
+  isImportant?: boolean; // 중요 일정 여부 (D-day 알림용)
 }
