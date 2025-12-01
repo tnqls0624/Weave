@@ -351,6 +351,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     { key: "daily", label: "매일", icon: "today-outline" },
     { key: "weekly", label: "매주", icon: "calendar-outline" },
     { key: "monthly", label: "매월", icon: "calendar-number-outline" },
+    { key: "yearly", label: "매년", icon: "gift-outline" },
   ];
 
 

@@ -1,6 +1,6 @@
 export type View = "feed" | "calendar" | "create" | "map" | "settings";
 
-export type RepeatOption = "none" | "daily" | "weekly" | "monthly";
+export type RepeatOption = "none" | "daily" | "weekly" | "monthly" | "yearly";
 
 export interface Location {
   latitude: number;
