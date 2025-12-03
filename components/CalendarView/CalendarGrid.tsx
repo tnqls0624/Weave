@@ -553,12 +553,16 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     const monthDiff = (targetYear - baseYear) * 12 + (targetMonth - baseMonth);
     const targetIndex = 120 + monthDiff;
 
+    // 인덱스 범위 체크 (0 ~ 240)
+    const maxIndex = monthsData.length - 1;
+    const safeIndex = Math.max(0, Math.min(targetIndex, maxIndex));
+
     // 현재 인덱스와 다르면 스크롤
-    if (targetIndex !== currentIndexRef.current && flatListRef.current) {
-      flatListRef.current.scrollToIndex({ index: targetIndex, animated: false });
-      currentIndexRef.current = targetIndex;
+    if (safeIndex !== currentIndexRef.current && flatListRef.current) {
+      flatListRef.current.scrollToIndex({ index: safeIndex, animated: false });
+      currentIndexRef.current = safeIndex;
     }
-  }, [currentDate]);
+  }, [currentDate, monthsData.length]);
 
   // 현재 연도 기준 전후 1년씩 (총 3년치) 미리 캐싱
   const visibleRange = useMemo(() => {
@@ -638,26 +642,26 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
       const maxInstances = 1000;
 
       while (currentDate.isBefore(rangeEnd) && count < maxInstances) {
-        // visibleRange 내에 있으면 추가
-        if (currentDate.isAfter(rangeStart.subtract(1, "day")) || currentDate.isSame(rangeStart, "day") || currentDate.add(duration, "day").isAfter(rangeStart.subtract(1, "day"))) {
-          const instanceStart = currentDate.toDate();
-          instanceStart.setHours(0, 0, 0, 0);
-          const instanceEnd = currentDate.add(duration, "day").toDate();
-          instanceEnd.setHours(0, 0, 0, 0);
+        const instanceStart = currentDate.toDate();
+        instanceStart.setHours(0, 0, 0, 0);
+        const instanceEnd = currentDate.add(duration, "day").toDate();
+        instanceEnd.setHours(0, 0, 0, 0);
 
-          // visibleRange 내에 있는 인스턴스만 추가
-          if (instanceEnd.getTime() >= visibleRange.startTime && instanceStart.getTime() <= visibleRange.endTime) {
-            ranges.push({
-              schedule: {
-                ...schedule,
-                // 반복 인스턴스의 날짜 업데이트
-                startDate: currentDate.format("YYYY-MM-DD"),
-                endDate: currentDate.add(duration, "day").format("YYYY-MM-DD"),
-              },
-              startTime: instanceStart.getTime(),
-              endTime: instanceEnd.getTime(),
-            });
-          }
+        // visibleRange 내에 있는 인스턴스만 추가
+        if (instanceEnd.getTime() >= visibleRange.startTime && instanceStart.getTime() <= visibleRange.endTime) {
+          // 반복 인스턴스는 고유 ID 생성 (원본ID_날짜)
+          const instanceId = `${schedule.id}_${currentDate.format("YYYY-MM-DD")}`;
+          ranges.push({
+            schedule: {
+              ...schedule,
+              id: instanceId,
+              // 반복 인스턴스의 날짜 업데이트
+              startDate: currentDate.format("YYYY-MM-DD"),
+              endDate: currentDate.add(duration, "day").format("YYYY-MM-DD"),
+            },
+            startTime: instanceStart.getTime(),
+            endTime: instanceEnd.getTime(),
+          });
         }
 
         // 다음 반복으로 이동
