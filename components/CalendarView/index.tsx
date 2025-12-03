@@ -46,6 +46,7 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const previousSelectedDateRef = React.useRef<Date | null>(null);
   const isInternalDateChangeRef = React.useRef(false); // 내부에서 날짜 변경 여부
+  const isInitialMountRef = React.useRef(true); // 초기 마운트 여부
 
   // 필터링된 사용자 ID (Set으로 저장하여 includes O(1)로 최적화)
   const filteredUserIds = useMemo(() => {
@@ -135,6 +136,13 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
 
   // 외부에서 selectedDate가 변경될 때 drawer 열기 (피드에서 스케줄 선택 시)
   useEffect(() => {
+    // 초기 마운트 시에는 drawer 열지 않음
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      previousSelectedDateRef.current = selectedDate;
+      return;
+    }
+
     // 내부에서 변경된 경우 무시
     if (isInternalDateChangeRef.current) {
       isInternalDateChangeRef.current = false;
