@@ -560,22 +560,6 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     }
   }, [currentDate]);
 
-  const scheduleRanges = useMemo<ScheduleWithRange[]>(() => {
-    return schedules.map((schedule: Schedule) => {
-      const startDateString =
-        schedule.startDate || dayjs().format("YYYY-MM-DD");
-      const eventStart = new Date(`${startDateString}T00:00:00`);
-      const endDateString = schedule.endDate || startDateString;
-      const eventEnd = new Date(`${endDateString}T00:00:00`);
-
-      return {
-        schedule,
-        startTime: eventStart.getTime(),
-        endTime: eventEnd.getTime(),
-      };
-    });
-  }, [schedules]);
-
   // 현재 연도 기준 전후 1년씩 (총 3년치) 미리 캐싱
   const visibleRange = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -586,9 +570,119 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     return {
       startTime: start.getTime(),
       endTime: end.getTime(),
-      year, // 연도가 바뀔 때만 재계산
+      year,
+      startYear: year - 1,
+      endYear: year + 1,
     };
   }, [currentDate.getFullYear()]);
+
+  // 반복 일정을 펼쳐서 여러 인스턴스로 생성
+  const scheduleRanges = useMemo<ScheduleWithRange[]>(() => {
+    const ranges: ScheduleWithRange[] = [];
+
+    schedules.forEach((schedule: Schedule) => {
+      const startDateString = schedule.startDate || dayjs().format("YYYY-MM-DD");
+      const originalStart = dayjs(startDateString);
+      const endDateString = schedule.endDate || startDateString;
+      const duration = dayjs(endDateString).diff(originalStart, "day");
+
+      const repeatType = schedule.repeatType?.toLowerCase() || "none";
+
+      // 반복 없는 일정
+      if (repeatType === "none") {
+        const eventStart = new Date(`${startDateString}T00:00:00`);
+        const eventEnd = new Date(`${endDateString}T00:00:00`);
+        ranges.push({
+          schedule,
+          startTime: eventStart.getTime(),
+          endTime: eventEnd.getTime(),
+        });
+        return;
+      }
+
+      // 반복 일정: visibleRange 내에서 인스턴스 생성
+      const rangeStart = dayjs(visibleRange.startTime);
+      const rangeEnd = dayjs(visibleRange.endTime);
+
+      // 반복 타입에 따라 인스턴스 생성
+      let currentDate = originalStart;
+
+      // 시작일이 visibleRange 이전이면, visibleRange 시작점 근처로 점프
+      if (currentDate.isBefore(rangeStart)) {
+        if (repeatType === "yearly") {
+          // 연간 반복: visibleRange 시작 연도로 점프
+          const yearDiff = rangeStart.year() - currentDate.year();
+          currentDate = currentDate.add(yearDiff, "year");
+          // 아직 이전이면 1년 더
+          if (currentDate.isBefore(rangeStart)) {
+            currentDate = currentDate.add(1, "year");
+          }
+          // 1년 앞으로 한번 더 가서 이전 해도 포함
+          currentDate = currentDate.subtract(1, "year");
+        } else if (repeatType === "monthly") {
+          // 월간 반복: visibleRange 시작 월로 점프
+          const monthDiff = rangeStart.diff(currentDate, "month");
+          currentDate = currentDate.add(Math.max(0, monthDiff - 1), "month");
+        } else if (repeatType === "weekly") {
+          // 주간 반복: visibleRange 시작 주로 점프
+          const weekDiff = rangeStart.diff(currentDate, "week");
+          currentDate = currentDate.add(Math.max(0, weekDiff - 1), "week");
+        } else if (repeatType === "daily") {
+          // 일간 반복: visibleRange 시작일로 점프
+          currentDate = rangeStart;
+        }
+      }
+
+      // 반복 인스턴스 생성 (최대 1000개로 제한)
+      let count = 0;
+      const maxInstances = 1000;
+
+      while (currentDate.isBefore(rangeEnd) && count < maxInstances) {
+        // visibleRange 내에 있으면 추가
+        if (currentDate.isAfter(rangeStart.subtract(1, "day")) || currentDate.isSame(rangeStart, "day") || currentDate.add(duration, "day").isAfter(rangeStart.subtract(1, "day"))) {
+          const instanceStart = currentDate.toDate();
+          instanceStart.setHours(0, 0, 0, 0);
+          const instanceEnd = currentDate.add(duration, "day").toDate();
+          instanceEnd.setHours(0, 0, 0, 0);
+
+          // visibleRange 내에 있는 인스턴스만 추가
+          if (instanceEnd.getTime() >= visibleRange.startTime && instanceStart.getTime() <= visibleRange.endTime) {
+            ranges.push({
+              schedule: {
+                ...schedule,
+                // 반복 인스턴스의 날짜 업데이트
+                startDate: currentDate.format("YYYY-MM-DD"),
+                endDate: currentDate.add(duration, "day").format("YYYY-MM-DD"),
+              },
+              startTime: instanceStart.getTime(),
+              endTime: instanceEnd.getTime(),
+            });
+          }
+        }
+
+        // 다음 반복으로 이동
+        switch (repeatType) {
+          case "daily":
+            currentDate = currentDate.add(1, "day");
+            break;
+          case "weekly":
+            currentDate = currentDate.add(1, "week");
+            break;
+          case "monthly":
+            currentDate = currentDate.add(1, "month");
+            break;
+          case "yearly":
+            currentDate = currentDate.add(1, "year");
+            break;
+          default:
+            currentDate = rangeEnd; // 루프 종료
+        }
+        count++;
+      }
+    });
+
+    return ranges;
+  }, [schedules, visibleRange]);
 
   const visibleScheduleRanges = useMemo(() => {
     return scheduleRanges.filter(({ startTime, endTime }) => {

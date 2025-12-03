@@ -118,14 +118,69 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
     return colorMap[colorName] || colorMap["gray"];
   };
 
-  const daySchedules = events.filter((schedule) => {
-    const scheduleStart = new Date(schedule.startDate + "T00:00:00");
-    const scheduleEnd = schedule.endDate
-      ? new Date(schedule.endDate + "T00:00:00")
-      : scheduleStart;
-    const currentDay = new Date(date);
-    currentDay.setHours(0, 0, 0, 0);
-    return currentDay >= scheduleStart && currentDay <= scheduleEnd;
+  // 반복 일정을 해당 날짜에 맞게 필터링
+  const daySchedules = events.flatMap((schedule) => {
+    const currentDay = dayjs(date).startOf("day");
+    const originalStart = dayjs(schedule.startDate);
+    const originalEnd = schedule.endDate ? dayjs(schedule.endDate) : originalStart;
+    const duration = originalEnd.diff(originalStart, "day");
+    const repeatType = schedule.repeatType?.toLowerCase() || "none";
+
+    // 반복 없는 일정
+    if (repeatType === "none") {
+      const scheduleStart = originalStart.startOf("day");
+      const scheduleEnd = originalEnd.startOf("day");
+      if (currentDay.isSame(scheduleStart, "day") ||
+          (currentDay.isAfter(scheduleStart) && currentDay.isBefore(scheduleEnd.add(1, "day")))) {
+        return [schedule];
+      }
+      return [];
+    }
+
+    // 반복 일정: 해당 날짜에 맞는 인스턴스인지 확인
+    let checkDate = originalStart;
+
+    // 효율성을 위해 현재 날짜 근처로 점프
+    if (repeatType === "yearly") {
+      checkDate = originalStart.year(currentDay.year());
+      // 이번 해 인스턴스가 해당 날짜 범위에 포함되는지 확인
+      if (currentDay.isBefore(checkDate)) {
+        checkDate = checkDate.subtract(1, "year");
+      }
+    } else if (repeatType === "monthly") {
+      checkDate = originalStart.year(currentDay.year()).month(currentDay.month());
+      if (currentDay.isBefore(checkDate)) {
+        checkDate = checkDate.subtract(1, "month");
+      }
+    } else if (repeatType === "weekly") {
+      const weeksDiff = currentDay.diff(originalStart, "week");
+      checkDate = originalStart.add(weeksDiff, "week");
+      if (currentDay.isBefore(checkDate)) {
+        checkDate = checkDate.subtract(1, "week");
+      }
+    } else if (repeatType === "daily") {
+      checkDate = currentDay;
+    }
+
+    // 해당 날짜가 반복 인스턴스의 범위 내에 있는지 확인
+    const instanceStart = checkDate.startOf("day");
+    const instanceEnd = checkDate.add(duration, "day").startOf("day");
+
+    // 원본 시작일 이후인지 확인
+    if (instanceStart.isBefore(originalStart)) {
+      return [];
+    }
+
+    if (currentDay.isSame(instanceStart, "day") ||
+        (currentDay.isAfter(instanceStart) && currentDay.isBefore(instanceEnd.add(1, "day")))) {
+      return [{
+        ...schedule,
+        startDate: instanceStart.format("YYYY-MM-DD"),
+        endDate: instanceEnd.format("YYYY-MM-DD"),
+      }];
+    }
+
+    return [];
   });
 
   // 공휴일 확인
