@@ -461,24 +461,24 @@ class ApiService {
       transformedData.participants = scheduleData.participants;
     if (scheduleData.repeatType !== undefined)
       transformedData.repeatType = scheduleData.repeatType;
-    if (scheduleData.calendarType)
+    if (scheduleData.calendarType !== undefined)
       transformedData.calendarType = scheduleData.calendarType;
 
-    // startDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
+    // startDate: "YYYY-MM-DDTHH:mm:ss" 형식 (ISO 8601)
     if (scheduleData.startDate) {
       if (scheduleData.startTime) {
-        transformedData.startDate = `${scheduleData.startDate} ${scheduleData.startTime}:00`;
+        transformedData.startDate = `${scheduleData.startDate}T${scheduleData.startTime}:00`;
       } else {
-        transformedData.startDate = `${scheduleData.startDate} 00:00:00`;
+        transformedData.startDate = `${scheduleData.startDate}T00:00:00`;
       }
     }
 
-    // endDate: "YYYY-MM-DD HH:mm:ss" 형식 (공백으로 구분)
+    // endDate: "YYYY-MM-DDTHH:mm:ss" 형식 (ISO 8601)
     if (scheduleData.endDate) {
       if (scheduleData.endTime) {
-        transformedData.endDate = `${scheduleData.endDate} ${scheduleData.endTime}:00`;
+        transformedData.endDate = `${scheduleData.endDate}T${scheduleData.endTime}:00`;
       } else {
-        transformedData.endDate = `${scheduleData.endDate} 23:59:59`;
+        transformedData.endDate = `${scheduleData.endDate}T23:59:59`;
       }
     }
 
