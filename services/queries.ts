@@ -183,8 +183,8 @@ export const useCreateSchedule = () => {
     mutationFn: (scheduleData: Omit<Schedule, "id">) =>
       apiService.createSchedule(scheduleData),
     onSuccess: (newSchedule) => {
-      // 워크스페이스 스케줄 캐시 무효화
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+      // 모든 워크스페이스 관련 쿼리 무효화 (workspaceSchedules 포함)
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules });
 
       // 새로운 스케줄 캐시에 추가
@@ -205,14 +205,25 @@ export const useUpdateSchedule = () => {
       scheduleData: Partial<Schedule>;
     }) => apiService.updateSchedule(scheduleId, scheduleData),
     onSuccess: (updatedSchedule) => {
-      // 워크스페이스 스케줄 캐시 무효화
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+      // 모든 워크스페이스 관련 쿼리 무효화 (workspaceSchedules 포함)
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules });
 
       // 업데이트된 스케줄 캐시 업데이트
       queryClient.setQueryData(
         queryKeys.schedule(updatedSchedule.id),
         updatedSchedule
+      );
+
+      // workspaceSchedules 캐시의 해당 스케줄도 직접 업데이트
+      queryClient.setQueriesData(
+        { queryKey: ["workspaces"] },
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData)) return oldData;
+          return oldData.map((schedule: Schedule) =>
+            schedule.id === updatedSchedule.id ? updatedSchedule : schedule
+          );
+        }
       );
     },
   });

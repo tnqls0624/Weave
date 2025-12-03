@@ -426,6 +426,11 @@ class ApiService {
       transformedData.reminderMinutes = scheduleData.reminderMinutes;
     }
 
+    // isAllDay 추가
+    if (scheduleData.isAllDay !== undefined) {
+      transformedData.isAllDay = scheduleData.isAllDay;
+    }
+
     // isImportant 추가
     if (scheduleData.isImportant !== undefined) {
       transformedData.isImportant = scheduleData.isImportant;
@@ -479,12 +484,17 @@ class ApiService {
 
     // reminderMinutes 추가
     if (scheduleData.reminderMinutes !== undefined) {
-      transformedData.reminder_minutes = scheduleData.reminderMinutes;
+      transformedData.reminderMinutes = scheduleData.reminderMinutes;
+    }
+
+    // isAllDay 추가
+    if (scheduleData.isAllDay !== undefined) {
+      transformedData.isAllDay = scheduleData.isAllDay;
     }
 
     // isImportant 추가
     if (scheduleData.isImportant !== undefined) {
-      transformedData.is_important = scheduleData.isImportant;
+      transformedData.isImportant = scheduleData.isImportant;
     }
 
     const updatedSchedule = await this.request<any>({
@@ -679,8 +689,8 @@ class ApiService {
       return { date: trimmed, time: undefined };
     };
 
-    const start = parseDateTime(serverSchedule.startDate);
-    const end = parseDateTime(serverSchedule.endDate);
+    const start = parseDateTime(serverSchedule.start_date || serverSchedule.startDate);
+    const end = parseDateTime(serverSchedule.end_date || serverSchedule.endDate);
 
     // participants가 객체 배열이면 User 정보 캐싱 후 ID만 추출
     const participants = serverSchedule.participants
@@ -711,13 +721,14 @@ class ApiService {
       endTime: end.time,
       participants,
       repeatType:
-        serverSchedule.repeatType?.toLowerCase() || serverSchedule.repeatType,
+        (serverSchedule.repeat_type || serverSchedule.repeatType)?.toLowerCase() || serverSchedule.repeat_type || serverSchedule.repeatType,
       calendarType:
-        serverSchedule.calendarType?.toLowerCase() ||
-        serverSchedule.calendarType,
+        (serverSchedule.calendar_type || serverSchedule.calendarType)?.toLowerCase() ||
+        serverSchedule.calendar_type || serverSchedule.calendarType,
       isHoliday: serverSchedule.isHoliday,
-      reminderMinutes: serverSchedule.reminderMinutes,
-      isImportant: serverSchedule.isImportant,
+      isAllDay: serverSchedule.is_all_day ?? serverSchedule.isAllDay,
+      reminderMinutes: serverSchedule.reminder_minutes ?? serverSchedule.reminderMinutes,
+      isImportant: serverSchedule.is_important ?? serverSchedule.isImportant,
     };
   }
 

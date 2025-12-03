@@ -47,6 +47,7 @@ export interface Schedule {
   memo?: string;
   participants: string[]; // 참여자 ID 배열 (User 객체가 아닌 ID)
   isHoliday?: boolean;
+  isAllDay?: boolean; // 종일 일정 여부
   repeatType?: string;
   calendarType?: string;
   reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)

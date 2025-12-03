@@ -144,7 +144,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       setEndTime(
         scheduleToEdit.endTime || dayjs().add(1, "hour").format("HH:mm")
       );
-      setIsAllDay(!scheduleToEdit.startTime);
+      setIsAllDay(scheduleToEdit.isAllDay ?? !scheduleToEdit.startTime);
+      setIsLunar(scheduleToEdit.calendarType === "lunar");
       setReminderMinutes(scheduleToEdit.reminderMinutes ?? null);
       setIsImportant(scheduleToEdit.isImportant ?? false);
     } else {
@@ -162,6 +163,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       setReminderMinutes(null);
       setIsImportant(false);
       setIsAllDay(false);
+      setIsLunar(false);
     }
   }, [scheduleToEdit, currentUser.id, initialDate]);
 
@@ -176,6 +178,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         participants: participantIds,
         repeatType: repeat,
         calendarType: isLunar ? "lunar" : "solar",
+        isAllDay,
         startTime: isAllDay ? undefined : startTime,
         endTime: isAllDay ? undefined : endTime,
         reminderMinutes: reminderMinutes ?? undefined,
