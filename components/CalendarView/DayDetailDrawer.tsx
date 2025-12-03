@@ -34,6 +34,21 @@ const getLunarDateInYear = (lunarMonth: number, lunarDay: number, targetYear: nu
   return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(solar.day).padStart(2, "0")}`;
 };
 
+// D-Day 계산 (오늘 기준)
+const calculateDDay = (targetDateStr: string): number | null => {
+  const today = dayjs().startOf("day");
+  const targetDate = dayjs(targetDateStr).startOf("day");
+  const diff = targetDate.diff(today, "day");
+  return diff;
+};
+
+// D-Day 텍스트 포맷
+const formatDDay = (dDay: number): string => {
+  if (dDay === 0) return "D-Day";
+  if (dDay > 0) return `D-${dDay}`;
+  return `D+${Math.abs(dDay)}`;
+};
+
 interface DayDetailDrawerProps {
   date: Date;
   events: Schedule[];
@@ -339,6 +354,11 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               const bgColor = getColorCode(scheduleColor) + "20";
               const textColor = getColorCode(scheduleColor);
 
+              // 중요 일정 D-Day 계산
+              const dDay = schedule.isImportant && schedule.startDate
+                ? calculateDDay(schedule.startDate)
+                : null;
+
               return (
                 <View
                   key={schedule.id}
@@ -356,6 +376,20 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         <Text style={styles.scheduleTitle} numberOfLines={2}>
                           {schedule.title}
                         </Text>
+                        {dDay !== null && (
+                          <View style={[
+                            styles.ddayBadge,
+                            dDay === 0 && styles.ddayBadgeToday,
+                            dDay < 0 && styles.ddayBadgePast,
+                          ]}>
+                            <Text style={[
+                              styles.ddayText,
+                              dDay === 0 && styles.ddayTextToday,
+                            ]}>
+                              {formatDDay(dDay)}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       <View style={styles.actionButtons}>
                         <Pressable
@@ -553,6 +587,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#111827",
     lineHeight: 22,
+  },
+  ddayBadge: {
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 4,
+  },
+  ddayBadgeToday: {
+    backgroundColor: "#fee2e2",
+  },
+  ddayBadgePast: {
+    backgroundColor: "#f3f4f6",
+  },
+  ddayText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#d97706",
+  },
+  ddayTextToday: {
+    color: "#ef4444",
   },
   actionButtons: {
     flexDirection: "row",

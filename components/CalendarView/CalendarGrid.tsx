@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
@@ -280,13 +281,18 @@ const DayCell = React.memo<DayCellProps>(
                 ]}
               >
                 {eventInfo.isStart && (
-                  <Text
-                    style={styles.eventBarText}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {schedule.title}
-                  </Text>
+                  <View style={styles.eventBarContent}>
+                    {schedule.isImportant && (
+                      <Ionicons name="star" size={10} color="#fff" style={styles.importantIcon} />
+                    )}
+                    <Text
+                      style={styles.eventBarText}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {schedule.title}
+                    </Text>
+                  </View>
                 )}
               </View>
             );
@@ -1134,11 +1140,21 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
     marginRight: -2,
   },
+  eventBarContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    overflow: "hidden",
+  },
+  importantIcon: {
+    marginRight: 2,
+  },
   eventBarText: {
     fontSize: 10,
     fontWeight: "600",
     color: "#fff",
     overflow: "hidden",
+    flex: 1,
   },
   firstEventBar: {
     marginTop: 2,
