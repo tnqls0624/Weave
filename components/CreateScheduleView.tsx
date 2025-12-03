@@ -34,18 +34,6 @@ import DateTimePicker from "./DateTimePicker";
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
-// 양력을 음력으로 변환
-const solarToLunar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
-  try {
-    const calendar = new KoreanLunarCalendar();
-    calendar.setSolarDate(year, month, day);
-    const lunarDate = calendar.getLunarCalendar();
-    return { year: lunarDate.year, month: lunarDate.month, day: lunarDate.day };
-  } catch {
-    return null;
-  }
-};
-
 // 음력을 양력으로 변환
 const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
   try {
@@ -58,26 +46,6 @@ const lunarToSolar = (year: number, month: number, day: number): { year: number;
   }
 };
 
-// 날짜 문자열 변환 헬퍼
-const convertDateString = (dateStr: string, toType: "lunar" | "solar"): string => {
-  const d = dayjs(dateStr);
-  const year = d.year();
-  const month = d.month() + 1;
-  const day = d.date();
-
-  if (toType === "lunar") {
-    const lunar = solarToLunar(year, month, day);
-    if (lunar) {
-      return `${lunar.year}-${String(lunar.month).padStart(2, "0")}-${String(lunar.day).padStart(2, "0")}`;
-    }
-  } else {
-    const solar = lunarToSolar(year, month, day);
-    if (solar) {
-      return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(solar.day).padStart(2, "0")}`;
-    }
-  }
-  return dateStr;
-};
 
 interface CreateScheduleViewProps {
   onSave: (
@@ -581,24 +549,9 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                   if (isKeyboardVisible) {
                     Keyboard.dismiss();
                   } else {
-                    const newIsLunar = !isLunar;
-                    // 음력 토글 시 날짜 변환
-                    if (newIsLunar) {
-                      // 양력 -> 음력: 현재 양력 날짜를 음력으로 변환하여 저장
-                      const newStartDate = convertDateString(startDate, "lunar");
-                      setStartDate(newStartDate);
-                      if (endDate) {
-                        setEndDate(convertDateString(endDate, "lunar"));
-                      }
-                    } else {
-                      // 음력 -> 양력: 현재 음력 날짜를 양력으로 변환하여 저장
-                      const newStartDate = convertDateString(startDate, "solar");
-                      setStartDate(newStartDate);
-                      if (endDate) {
-                        setEndDate(convertDateString(endDate, "solar"));
-                      }
-                    }
-                    setIsLunar(newIsLunar);
+                    // 음력 토글: 날짜는 그대로 두고 타입만 변경
+                    // 선택한 날짜가 음력인지 양력인지만 표시
+                    setIsLunar(!isLunar);
                   }
                 }}
               >
