@@ -8,11 +8,31 @@ import "dayjs/locale/ko";
 import React, { useCallback, useRef, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
 import { useDeleteSchedule } from "../../services/queries";
 import type { Schedule, User } from "../../types";
 
 dayjs.locale("ko");
+
+// 음력을 양력으로 변환하는 헬퍼 함수
+const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
+  try {
+    const calendar = new KoreanLunarCalendar();
+    calendar.setLunarDate(year, month, day, false);
+    const solarDate = calendar.getSolarCalendar();
+    return { year: solarDate.year, month: solarDate.month, day: solarDate.day };
+  } catch {
+    return null;
+  }
+};
+
+// 특정 연도의 음력 날짜를 양력으로 변환
+const getLunarDateInYear = (lunarMonth: number, lunarDay: number, targetYear: number): string | null => {
+  const solar = lunarToSolar(targetYear, lunarMonth, lunarDay);
+  if (!solar) return null;
+  return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(solar.day).padStart(2, "0")}`;
+};
 
 interface DayDetailDrawerProps {
   date: Date;
@@ -118,15 +138,62 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
     return colorMap[colorName] || colorMap["gray"];
   };
 
-  // 반복 일정을 해당 날짜에 맞게 필터링
+  // 반복 일정을 해당 날짜에 맞게 필터링 (음력 지원)
   const daySchedules = events.flatMap((schedule) => {
     const currentDay = dayjs(date).startOf("day");
     const originalStart = dayjs(schedule.startDate);
     const originalEnd = schedule.endDate ? dayjs(schedule.endDate) : originalStart;
     const duration = originalEnd.diff(originalStart, "day");
     const repeatType = schedule.repeatType?.toLowerCase() || "none";
+    const isLunar = schedule.calendarType?.toLowerCase() === "lunar";
 
-    // 반복 없는 일정
+    // 음력 + 매년 반복: 해당 연도의 음력을 양력으로 변환
+    if (isLunar && repeatType === "yearly") {
+      const lunarMonth = originalStart.month() + 1;
+      const lunarDay = originalStart.date();
+      const targetYear = currentDay.year();
+
+      const solarDateString = getLunarDateInYear(lunarMonth, lunarDay, targetYear);
+      if (!solarDateString) return [];
+
+      const solarStart = dayjs(solarDateString);
+      const solarEnd = solarStart.add(duration, "day");
+
+      if (currentDay.isSame(solarStart, "day") ||
+          (currentDay.isAfter(solarStart) && currentDay.isBefore(solarEnd.add(1, "day")))) {
+        return [{
+          ...schedule,
+          startDate: solarStart.format("YYYY-MM-DD"),
+          endDate: solarEnd.format("YYYY-MM-DD"),
+        }];
+      }
+      return [];
+    }
+
+    // 음력 + 반복 없음: 해당 연도의 음력을 양력으로 변환
+    if (isLunar && repeatType === "none") {
+      const lunarMonth = originalStart.month() + 1;
+      const lunarDay = originalStart.date();
+      const lunarYear = originalStart.year();
+
+      const solarDateString = getLunarDateInYear(lunarMonth, lunarDay, lunarYear);
+      if (!solarDateString) return [];
+
+      const solarStart = dayjs(solarDateString);
+      const solarEnd = solarStart.add(duration, "day");
+
+      if (currentDay.isSame(solarStart, "day") ||
+          (currentDay.isAfter(solarStart) && currentDay.isBefore(solarEnd.add(1, "day")))) {
+        return [{
+          ...schedule,
+          startDate: solarStart.format("YYYY-MM-DD"),
+          endDate: solarEnd.format("YYYY-MM-DD"),
+        }];
+      }
+      return [];
+    }
+
+    // 양력 반복 없는 일정
     if (repeatType === "none") {
       const scheduleStart = originalStart.startOf("day");
       const scheduleEnd = originalEnd.startOf("day");
@@ -137,7 +204,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
       return [];
     }
 
-    // 반복 일정: 해당 날짜에 맞는 인스턴스인지 확인
+    // 양력 반복 일정: 해당 날짜에 맞는 인스턴스인지 확인
     let checkDate = originalStart;
 
     // 효율성을 위해 현재 날짜 근처로 점프
