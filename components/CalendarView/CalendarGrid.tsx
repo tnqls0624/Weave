@@ -280,19 +280,20 @@ const DayCell = React.memo<DayCellProps>(
                   idx === 0 && styles.firstEventBar,
                 ]}
               >
-                {eventInfo.isStart && (
-                  <View style={styles.eventBarContent}>
-                    {schedule.isImportant && (
-                      <Ionicons name="star" size={10} color="#fff" style={styles.importantIcon} />
-                    )}
-                    <Text
-                      style={styles.eventBarText}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {schedule.title}
-                    </Text>
+                {/* 중요 일정 별 뱃지 - 이벤트 바 왼쪽 상단 */}
+                {schedule.isImportant && eventInfo.isStart && (
+                  <View style={styles.importantBadge}>
+                    <Ionicons name="star" size={8} color="#f59e0b" />
                   </View>
+                )}
+                {eventInfo.isStart && (
+                  <Text
+                    style={styles.eventBarText}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {schedule.title}
+                  </Text>
                 )}
               </View>
             );
@@ -1062,6 +1063,20 @@ const styles = StyleSheet.create({
   selectedDayCell: {
     backgroundColor: "#f3f4f6",
   },
+  importantBadge: {
+    position: "absolute",
+    top: -5,
+    left: -3,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
+  },
   dayNumberContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -1119,7 +1134,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 3,
     marginHorizontal: 2,
-    overflow: "hidden",
+    overflow: "visible",
     zIndex: 5,
   },
   eventBarStart: {
@@ -1140,21 +1155,11 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
     marginRight: -2,
   },
-  eventBarContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    overflow: "hidden",
-  },
-  importantIcon: {
-    marginRight: 2,
-  },
   eventBarText: {
     fontSize: 10,
     fontWeight: "600",
     color: "#fff",
     overflow: "hidden",
-    flex: 1,
   },
   firstEventBar: {
     marginTop: 2,
