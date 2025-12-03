@@ -72,13 +72,18 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
       previousSelectedDateRef.current = day;
       setSelectedDate(day);
 
+      // 싱글탭 시 drawer가 열려있으면 닫기
+      if (isDrawerOpen) {
+        setIsDrawerOpen(false);
+      }
+
       if (dayMonth !== currentMonth || dayYear !== currentYear) {
         const newDate = new Date(day);
         newDate.setDate(1);
         setCurrentDate(newDate);
       }
     },
-    [currentDate, setCurrentDate, setSelectedDate]
+    [currentDate, setCurrentDate, setSelectedDate, isDrawerOpen]
   );
 
   // Double tap: 상세 스케줄 열기
