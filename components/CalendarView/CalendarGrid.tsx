@@ -528,7 +528,7 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   }, [screenHeight]);
 
   // 월 데이터 생성 (240개월: 10년 전후)
-  const months = useMemo<MonthData[]>(() => {
+  const monthsData = useMemo<MonthData[]>(() => {
     const result: MonthData[] = [];
     const { year: baseYear, month: baseMonth } = baseMonthRef.current;
 
@@ -907,7 +907,7 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
       </View>
       <FlatList
         ref={flatListRef}
-        data={months}
+        data={monthsData}
         renderItem={renderMonth}
         keyExtractor={(item) => item.key}
         horizontal
