@@ -161,11 +161,8 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
       if (currentDay.isSame(solarStart, "day") ||
           (currentDay.isAfter(solarStart) && currentDay.isBefore(solarEnd.add(1, "day")))) {
-        return [{
-          ...schedule,
-          startDate: solarStart.format("YYYY-MM-DD"),
-          endDate: solarEnd.format("YYYY-MM-DD"),
-        }];
+        // 원본 음력 날짜는 유지 (수정 시 사용)
+        return [schedule];
       }
       return [];
     }
@@ -184,11 +181,8 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
       if (currentDay.isSame(solarStart, "day") ||
           (currentDay.isAfter(solarStart) && currentDay.isBefore(solarEnd.add(1, "day")))) {
-        return [{
-          ...schedule,
-          startDate: solarStart.format("YYYY-MM-DD"),
-          endDate: solarEnd.format("YYYY-MM-DD"),
-        }];
+        // 원본 음력 날짜는 유지 (수정 시 사용)
+        return [schedule];
       }
       return [];
     }
