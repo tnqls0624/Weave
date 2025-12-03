@@ -236,13 +236,30 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     }
   };
 
-  const formatDateDisplay = (date: string, showLunarLabel: boolean = false) => {
+  const formatDateDisplay = (date: string) => {
     if (!date) return "";
-    const dateObj = new Date(date + "T00:00:00");
-    const days = ["일", "월", "화", "수", "목", "금", "토"];
-    const day = days[dateObj.getDay()];
-    const prefix = showLunarLabel && isLunar ? "음력 " : "";
-    return `${prefix}${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${day})`;
+    const d = dayjs(date);
+    const year = d.year();
+    const month = d.month() + 1;
+    const day = d.date();
+
+    if (isLunar) {
+      // 음력 날짜를 양력으로 변환하여 함께 표시
+      const solar = lunarToSolar(year, month, day);
+      if (solar) {
+        const solarDate = new Date(solar.year, solar.month - 1, solar.day);
+        const days = ["일", "월", "화", "수", "목", "금", "토"];
+        const dayName = days[solarDate.getDay()];
+        return `음력 ${month}월 ${day}일 (양력 ${solar.month}/${solar.day} ${dayName})`;
+      }
+      return `음력 ${month}월 ${day}일`;
+    } else {
+      // 양력 날짜 표시
+      const dateObj = new Date(date + "T00:00:00");
+      const days = ["일", "월", "화", "수", "목", "금", "토"];
+      const dayName = days[dateObj.getDay()];
+      return `${month}월 ${day}일 (${dayName})`;
+    }
   };
 
   const handleDayPress = (dateString: string) => {
@@ -480,7 +497,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <View style={[styles.dateTimeDot, { backgroundColor: "#10B981" }]} />
               <View style={styles.dateTimeContent}>
                 <Text style={styles.dateTimeLabel}>시작</Text>
-                <Text style={styles.dateTimeValue}>{formatDateDisplay(startDate, true)}</Text>
+                <Text style={styles.dateTimeValue}>{formatDateDisplay(startDate)}</Text>
               </View>
               {!isAllDay && (
                 <Pressable
@@ -515,7 +532,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <View style={[styles.dateTimeDot, { backgroundColor: "#EF4444" }]} />
               <View style={styles.dateTimeContent}>
                 <Text style={styles.dateTimeLabel}>종료</Text>
-                <Text style={styles.dateTimeValue}>{formatDateDisplay(endDate || startDate, true)}</Text>
+                <Text style={styles.dateTimeValue}>{formatDateDisplay(endDate || startDate)}</Text>
               </View>
               {!isAllDay && (
                 <Pressable
