@@ -10,8 +10,28 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
+import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
 import type { Schedule, User } from "../../types";
+
+// 음력을 양력으로 변환하는 헬퍼 함수
+const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
+  try {
+    const calendar = new KoreanLunarCalendar();
+    calendar.setLunarDate(year, month, day, false); // false = 평달 (윤달 아님)
+    const solarDate = calendar.getSolarCalendar();
+    return { year: solarDate.year, month: solarDate.month, day: solarDate.day };
+  } catch {
+    return null;
+  }
+};
+
+// 특정 연도의 음력 날짜를 양력으로 변환
+const getLunarDateInYear = (lunarMonth: number, lunarDay: number, targetYear: number): string | null => {
+  const solar = lunarToSolar(targetYear, lunarMonth, lunarDay);
+  if (!solar) return null;
+  return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(solar.day).padStart(2, "0")}`;
+};
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
@@ -580,7 +600,7 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     };
   }, [currentDate.getFullYear()]);
 
-  // 반복 일정을 펼쳐서 여러 인스턴스로 생성
+  // 반복 일정을 펼쳐서 여러 인스턴스로 생성 (음력 지원)
   const scheduleRanges = useMemo<ScheduleWithRange[]>(() => {
     const ranges: ScheduleWithRange[] = [];
 
@@ -591,8 +611,75 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
       const duration = dayjs(endDateString).diff(originalStart, "day");
 
       const repeatType = schedule.repeatType?.toLowerCase() || "none";
+      const isLunar = schedule.calendarType?.toLowerCase() === "lunar";
 
-      // 반복 없는 일정
+      // 음력 일정이면서 반복이 있는 경우: 매년 음력 날짜를 양력으로 변환
+      if (isLunar && repeatType === "yearly") {
+        // 원본 음력 날짜 (월, 일만 사용)
+        const lunarMonth = originalStart.month() + 1; // dayjs는 0-indexed
+        const lunarDay = originalStart.date();
+
+        // visibleRange의 각 연도에 대해 음력을 양력으로 변환
+        for (let year = visibleRange.startYear; year <= visibleRange.endYear; year++) {
+          const solarDateString = getLunarDateInYear(lunarMonth, lunarDay, year);
+          if (!solarDateString) continue;
+
+          const solarStart = dayjs(solarDateString);
+          const solarEnd = solarStart.add(duration, "day");
+
+          const instanceStart = solarStart.toDate();
+          instanceStart.setHours(0, 0, 0, 0);
+          const instanceEnd = solarEnd.toDate();
+          instanceEnd.setHours(0, 0, 0, 0);
+
+          // visibleRange 내에 있는 인스턴스만 추가
+          if (instanceEnd.getTime() >= visibleRange.startTime && instanceStart.getTime() <= visibleRange.endTime) {
+            const instanceId = `${schedule.id}_lunar_${year}`;
+            ranges.push({
+              schedule: {
+                ...schedule,
+                id: instanceId,
+                startDate: solarStart.format("YYYY-MM-DD"),
+                endDate: solarEnd.format("YYYY-MM-DD"),
+              },
+              startTime: instanceStart.getTime(),
+              endTime: instanceEnd.getTime(),
+            });
+          }
+        }
+        return;
+      }
+
+      // 음력 일정이면서 반복 없음: 원본 음력 날짜를 해당 연도 양력으로 변환
+      if (isLunar && repeatType === "none") {
+        const lunarMonth = originalStart.month() + 1;
+        const lunarDay = originalStart.date();
+        const lunarYear = originalStart.year();
+
+        const solarDateString = getLunarDateInYear(lunarMonth, lunarDay, lunarYear);
+        if (solarDateString) {
+          const solarStart = dayjs(solarDateString);
+          const solarEnd = solarStart.add(duration, "day");
+
+          const eventStart = solarStart.toDate();
+          eventStart.setHours(0, 0, 0, 0);
+          const eventEnd = solarEnd.toDate();
+          eventEnd.setHours(0, 0, 0, 0);
+
+          ranges.push({
+            schedule: {
+              ...schedule,
+              startDate: solarStart.format("YYYY-MM-DD"),
+              endDate: solarEnd.format("YYYY-MM-DD"),
+            },
+            startTime: eventStart.getTime(),
+            endTime: eventEnd.getTime(),
+          });
+        }
+        return;
+      }
+
+      // 양력 반복 없는 일정
       if (repeatType === "none") {
         const eventStart = new Date(`${startDateString}T00:00:00`);
         const eventEnd = new Date(`${endDateString}T00:00:00`);
@@ -604,7 +691,7 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         return;
       }
 
-      // 반복 일정: visibleRange 내에서 인스턴스 생성
+      // 양력 반복 일정: visibleRange 내에서 인스턴스 생성
       const rangeStart = dayjs(visibleRange.startTime);
       const rangeEnd = dayjs(visibleRange.endTime);
 
