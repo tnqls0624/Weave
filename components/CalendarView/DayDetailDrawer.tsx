@@ -64,9 +64,14 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
+        pressBehavior="close"
+        onPress={() => {
+          // backdrop 클릭 시 닫기만 하고 이벤트 전파 방지
+          onClose();
+        }}
       />
     ),
-    []
+    [onClose]
   );
 
   const handleClose = () => {

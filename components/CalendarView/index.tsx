@@ -64,6 +64,12 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   // 싱글탭: 날짜 선택 (포커스)
   const handleSelectDay = useCallback(
     (day: Date) => {
+      // drawer가 열려있으면 닫기만 하고 날짜 변경 안함
+      if (isDrawerOpen) {
+        setIsDrawerOpen(false);
+        return;
+      }
+
       // 선택한 날짜의 월로 currentDate도 업데이트
       const dayMonth = day.getMonth();
       const dayYear = day.getFullYear();
@@ -74,11 +80,6 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
       isInternalDateChangeRef.current = true;
       previousSelectedDateRef.current = day;
       setSelectedDate(day);
-
-      // 싱글탭 시 drawer가 열려있으면 닫기
-      if (isDrawerOpen) {
-        setIsDrawerOpen(false);
-      }
 
       if (dayMonth !== currentMonth || dayYear !== currentYear) {
         const newDate = new Date(day);
