@@ -28,10 +28,56 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import KoreanLunarCalendar from "korean-lunar-calendar";
 import { RepeatOption, Schedule, User } from "../types";
 import DateTimePicker from "./DateTimePicker";
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 양력을 음력으로 변환
+const solarToLunar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
+  try {
+    const calendar = new KoreanLunarCalendar();
+    calendar.setSolarDate(year, month, day);
+    const lunarDate = calendar.getLunarCalendar();
+    return { year: lunarDate.year, month: lunarDate.month, day: lunarDate.day };
+  } catch {
+    return null;
+  }
+};
+
+// 음력을 양력으로 변환
+const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
+  try {
+    const calendar = new KoreanLunarCalendar();
+    calendar.setLunarDate(year, month, day, false);
+    const solarDate = calendar.getSolarCalendar();
+    return { year: solarDate.year, month: solarDate.month, day: solarDate.day };
+  } catch {
+    return null;
+  }
+};
+
+// 날짜 문자열 변환 헬퍼
+const convertDateString = (dateStr: string, toType: "lunar" | "solar"): string => {
+  const d = dayjs(dateStr);
+  const year = d.year();
+  const month = d.month() + 1;
+  const day = d.date();
+
+  if (toType === "lunar") {
+    const lunar = solarToLunar(year, month, day);
+    if (lunar) {
+      return `${lunar.year}-${String(lunar.month).padStart(2, "0")}-${String(lunar.day).padStart(2, "0")}`;
+    }
+  } else {
+    const solar = lunarToSolar(year, month, day);
+    if (solar) {
+      return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(solar.day).padStart(2, "0")}`;
+    }
+  }
+  return dateStr;
+};
 
 interface CreateScheduleViewProps {
   onSave: (
@@ -190,12 +236,13 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     }
   };
 
-  const formatDateDisplay = (date: string) => {
+  const formatDateDisplay = (date: string, showLunarLabel: boolean = false) => {
     if (!date) return "";
     const dateObj = new Date(date + "T00:00:00");
     const days = ["일", "월", "화", "수", "목", "금", "토"];
     const day = days[dateObj.getDay()];
-    return `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${day})`;
+    const prefix = showLunarLabel && isLunar ? "음력 " : "";
+    return `${prefix}${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${day})`;
   };
 
   const handleDayPress = (dateString: string) => {
@@ -433,7 +480,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <View style={[styles.dateTimeDot, { backgroundColor: "#10B981" }]} />
               <View style={styles.dateTimeContent}>
                 <Text style={styles.dateTimeLabel}>시작</Text>
-                <Text style={styles.dateTimeValue}>{formatDateDisplay(startDate)}</Text>
+                <Text style={styles.dateTimeValue}>{formatDateDisplay(startDate, true)}</Text>
               </View>
               {!isAllDay && (
                 <Pressable
@@ -468,7 +515,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <View style={[styles.dateTimeDot, { backgroundColor: "#EF4444" }]} />
               <View style={styles.dateTimeContent}>
                 <Text style={styles.dateTimeLabel}>종료</Text>
-                <Text style={styles.dateTimeValue}>{formatDateDisplay(endDate || startDate)}</Text>
+                <Text style={styles.dateTimeValue}>{formatDateDisplay(endDate || startDate, true)}</Text>
               </View>
               {!isAllDay && (
                 <Pressable
@@ -517,7 +564,24 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                   if (isKeyboardVisible) {
                     Keyboard.dismiss();
                   } else {
-                    setIsLunar(!isLunar);
+                    const newIsLunar = !isLunar;
+                    // 음력 토글 시 날짜 변환
+                    if (newIsLunar) {
+                      // 양력 -> 음력: 현재 양력 날짜를 음력으로 변환하여 저장
+                      const newStartDate = convertDateString(startDate, "lunar");
+                      setStartDate(newStartDate);
+                      if (endDate) {
+                        setEndDate(convertDateString(endDate, "lunar"));
+                      }
+                    } else {
+                      // 음력 -> 양력: 현재 음력 날짜를 양력으로 변환하여 저장
+                      const newStartDate = convertDateString(startDate, "solar");
+                      setStartDate(newStartDate);
+                      if (endDate) {
+                        setEndDate(convertDateString(endDate, "solar"));
+                      }
+                    }
+                    setIsLunar(newIsLunar);
                   }
                 }}
               >
