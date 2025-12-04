@@ -586,3 +586,148 @@ export const useClearAllNotifications = () => {
     },
   });
 };
+
+// ==================== Schedule Checklist ====================
+
+export const useScheduleChecklist = (scheduleId: string) => {
+  return useQuery({
+    queryKey: ["scheduleChecklist", scheduleId],
+    queryFn: () => apiService.getScheduleChecklist(scheduleId),
+    enabled: !!scheduleId,
+    staleTime: 1 * 60 * 1000,
+  });
+};
+
+export const useAddChecklistItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, content }: { scheduleId: string; content: string }) =>
+      apiService.addChecklistItem(scheduleId, content),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["scheduleChecklist", variables.scheduleId] });
+    },
+  });
+};
+
+export const useToggleChecklistItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, itemId }: { scheduleId: string; itemId: string }) =>
+      apiService.toggleChecklistItem(scheduleId, itemId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["scheduleChecklist", variables.scheduleId] });
+    },
+  });
+};
+
+export const useUpdateChecklistItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, itemId, content }: { scheduleId: string; itemId: string; content: string }) =>
+      apiService.updateChecklistItem(scheduleId, itemId, content),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["scheduleChecklist", variables.scheduleId] });
+    },
+  });
+};
+
+export const useDeleteChecklistItem = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, itemId }: { scheduleId: string; itemId: string }) =>
+      apiService.deleteChecklistItem(scheduleId, itemId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["scheduleChecklist", variables.scheduleId] });
+    },
+  });
+};
+
+// ==================== Schedule Photos ====================
+
+export const useSchedulePhotos = (scheduleId: string) => {
+  return useQuery({
+    queryKey: ["schedulePhotos", scheduleId],
+    queryFn: () => apiService.getSchedulePhotos(scheduleId),
+    enabled: !!scheduleId,
+    staleTime: 1 * 60 * 1000,
+  });
+};
+
+export const useUploadSchedulePhoto = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, imageUri, caption }: { scheduleId: string; imageUri: string; caption?: string }) =>
+      apiService.uploadSchedulePhoto(scheduleId, imageUri, caption),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["schedulePhotos", variables.scheduleId] });
+    },
+  });
+};
+
+export const useDeleteSchedulePhoto = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, photoId }: { scheduleId: string; photoId: string }) =>
+      apiService.deleteSchedulePhoto(scheduleId, photoId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["schedulePhotos", variables.scheduleId] });
+    },
+  });
+};
+
+// ==================== Location Reminder ====================
+
+export const useLocationReminder = (scheduleId: string) => {
+  return useQuery({
+    queryKey: ["locationReminder", scheduleId],
+    queryFn: () => apiService.getLocationReminder(scheduleId),
+    enabled: !!scheduleId,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useSetLocationReminder = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      data,
+    }: {
+      scheduleId: string;
+      data: { latitude: number; longitude: number; radius: number; address?: string; placeName?: string };
+    }) => apiService.setLocationReminder(scheduleId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["locationReminder", variables.scheduleId] });
+    },
+  });
+};
+
+export const useToggleLocationReminder = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scheduleId, isEnabled }: { scheduleId: string; isEnabled: boolean }) =>
+      apiService.toggleLocationReminder(scheduleId, isEnabled),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["locationReminder", variables.scheduleId] });
+    },
+  });
+};
+
+export const useDeleteLocationReminder = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (scheduleId: string) => apiService.deleteLocationReminder(scheduleId),
+    onSuccess: (_, scheduleId) => {
+      queryClient.invalidateQueries({ queryKey: ["locationReminder", scheduleId] });
+    },
+  });
+};

@@ -6,13 +6,16 @@ import BottomSheet, {
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import React, { useCallback, useRef, useState } from "react";
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
 import { useDeleteSchedule } from "../../services/queries";
 import type { Schedule, User } from "../../types";
 import ScheduleComments from "../ScheduleComments";
+import ScheduleChecklist from "../ScheduleChecklist";
+import SchedulePhotoAlbum from "../SchedulePhotoAlbum";
+import LocationReminderSetting from "../LocationReminderSetting";
 
 dayjs.locale("ko");
 
@@ -75,6 +78,8 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   );
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedScheduleForComments, setSelectedScheduleForComments] = useState<Schedule | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedScheduleForDetail, setSelectedScheduleForDetail] = useState<Schedule | null>(null);
 
   const openCommentsModal = (schedule: Schedule) => {
     setSelectedScheduleForComments(schedule);
@@ -84,6 +89,16 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const closeCommentsModal = () => {
     setCommentsModalVisible(false);
     setSelectedScheduleForComments(null);
+  };
+
+  const openDetailModal = (schedule: Schedule) => {
+    setSelectedScheduleForDetail(schedule);
+    setDetailModalVisible(true);
+  };
+
+  const closeDetailModal = () => {
+    setDetailModalVisible(false);
+    setSelectedScheduleForDetail(null);
   };
 
   const renderBackdrop = useCallback(
@@ -463,16 +478,25 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         </View>
                       )}
 
-                      {/* 댓글 버튼 */}
-                      <Pressable
-                        style={styles.commentsButton}
-                        onPress={() => openCommentsModal(schedule)}
-                      >
-                        <Ionicons name="chatbubble-outline" size={16} color="#6b7280" />
-                        <Text style={styles.commentsButtonText}>
-                          댓글 {schedule.commentCount || 0}
-                        </Text>
-                      </Pressable>
+                      {/* 액션 버튼들 */}
+                      <View style={styles.actionRow}>
+                        <Pressable
+                          style={styles.commentsButton}
+                          onPress={() => openCommentsModal(schedule)}
+                        >
+                          <Ionicons name="chatbubble-outline" size={16} color="#6b7280" />
+                          <Text style={styles.commentsButtonText}>
+                            댓글 {schedule.commentCount || 0}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.detailButton}
+                          onPress={() => openDetailModal(schedule)}
+                        >
+                          <Ionicons name="ellipsis-horizontal" size={16} color="#6b7280" />
+                          <Text style={styles.detailButtonText}>더보기</Text>
+                        </Pressable>
+                      </View>
 
                       {participants.length > 0 && (
                         <View style={styles.participantsRow}>
@@ -547,6 +571,45 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               scheduleId={selectedScheduleForComments.id}
               currentUserId={currentUser.id}
             />
+          )}
+        </View>
+      </Modal>
+
+      {/* 일정 상세 모달 (체크리스트, 앨범, 위치 알림) */}
+      <Modal
+        visible={detailModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeDetailModal}
+      >
+        <View style={styles.detailModal}>
+          <View style={styles.detailModalHeader}>
+            <Pressable onPress={closeDetailModal} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </Pressable>
+            <Text style={styles.detailModalTitle} numberOfLines={1}>
+              {selectedScheduleForDetail?.title || "일정 상세"}
+            </Text>
+            <View style={{ width: 32 }} />
+          </View>
+          {selectedScheduleForDetail && (
+            <ScrollView
+              style={styles.detailModalContent}
+              contentContainerStyle={styles.detailModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <ScheduleChecklist
+                scheduleId={selectedScheduleForDetail.id}
+                currentUserId={currentUser.id}
+              />
+              <SchedulePhotoAlbum
+                scheduleId={selectedScheduleForDetail.id}
+                currentUserId={currentUser.id}
+              />
+              <LocationReminderSetting
+                scheduleId={selectedScheduleForDetail.id}
+              />
+            </ScrollView>
           )}
         </View>
       </Modal>
@@ -760,6 +823,11 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
   },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   commentsButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -768,9 +836,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: "#f9fafb",
     borderRadius: 8,
-    alignSelf: "flex-start",
   },
   commentsButtonText: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  detailButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+  },
+  detailButtonText: {
     fontSize: 13,
     color: "#6b7280",
     fontWeight: "500",
@@ -797,6 +878,34 @@ const styles = StyleSheet.create({
     color: "#111827",
     flex: 1,
     textAlign: "center",
+  },
+  detailModal: {
+    flex: 1,
+    backgroundColor: "#f3f4f6",
+  },
+  detailModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  detailModalTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
+    textAlign: "center",
+  },
+  detailModalContent: {
+    flex: 1,
+  },
+  detailModalScrollContent: {
+    padding: 16,
+    paddingBottom: 32,
   },
 });
 

@@ -819,6 +819,179 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // ==================== Schedule Checklist API ====================
+
+  // 체크리스트 조회
+  async getScheduleChecklist(scheduleId: string): Promise<any[]> {
+    return this.request<any[]>({
+      url: `/api/schedule/${scheduleId}/checklist`,
+      method: "GET",
+    });
+  }
+
+  // 체크리스트 아이템 추가
+  async addChecklistItem(
+    scheduleId: string,
+    content: string
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/checklist`,
+      method: "POST",
+      data: { content },
+    });
+  }
+
+  // 체크리스트 아이템 토글 (완료/미완료)
+  async toggleChecklistItem(
+    scheduleId: string,
+    itemId: string
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/checklist/${itemId}/toggle`,
+      method: "PUT",
+    });
+  }
+
+  // 체크리스트 아이템 수정
+  async updateChecklistItem(
+    scheduleId: string,
+    itemId: string,
+    content: string
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/checklist/${itemId}`,
+      method: "PUT",
+      data: { content },
+    });
+  }
+
+  // 체크리스트 아이템 삭제
+  async deleteChecklistItem(
+    scheduleId: string,
+    itemId: string
+  ): Promise<void> {
+    return this.request<void>({
+      url: `/api/schedule/${scheduleId}/checklist/${itemId}`,
+      method: "DELETE",
+    });
+  }
+
+  // ==================== Schedule Photos API ====================
+
+  // 일정 사진 목록 조회
+  async getSchedulePhotos(scheduleId: string): Promise<any[]> {
+    return this.request<any[]>({
+      url: `/api/schedule/${scheduleId}/photos`,
+      method: "GET",
+    });
+  }
+
+  // 일정 사진 업로드
+  async uploadSchedulePhoto(
+    scheduleId: string,
+    imageUri: string,
+    caption?: string
+  ): Promise<any> {
+    try {
+      const formData = new FormData();
+
+      const filename = imageUri.split("/").pop() || "photo.jpg";
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : "image/jpeg";
+
+      formData.append("file", {
+        uri: imageUri,
+        name: filename,
+        type: type,
+      } as any);
+
+      if (caption) {
+        formData.append("caption", caption);
+      }
+
+      const response = await this.axiosInstance.post<any>(
+        `/api/schedule/${scheduleId}/photos`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            ...(this.accessToken && {
+              Authorization: `Bearer ${this.accessToken}`,
+            }),
+          },
+        }
+      );
+
+      if (response.data.code !== 0) {
+        throw new Error(response.data.message || "Photo upload failed");
+      }
+
+      return response.data.data;
+    } catch (error) {
+      console.error("❌ [Upload Schedule Photo] Failed:", error);
+      throw error;
+    }
+  }
+
+  // 일정 사진 삭제
+  async deleteSchedulePhoto(
+    scheduleId: string,
+    photoId: string
+  ): Promise<void> {
+    return this.request<void>({
+      url: `/api/schedule/${scheduleId}/photos/${photoId}`,
+      method: "DELETE",
+    });
+  }
+
+  // ==================== Location Reminder API ====================
+
+  // 위치 알림 설정 조회
+  async getLocationReminder(scheduleId: string): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/location-reminder`,
+      method: "GET",
+    });
+  }
+
+  // 위치 알림 설정
+  async setLocationReminder(
+    scheduleId: string,
+    data: {
+      latitude: number;
+      longitude: number;
+      radius: number;
+      address?: string;
+      placeName?: string;
+    }
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/location-reminder`,
+      method: "POST",
+      data,
+    });
+  }
+
+  // 위치 알림 활성화/비활성화
+  async toggleLocationReminder(
+    scheduleId: string,
+    isEnabled: boolean
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/location-reminder/toggle`,
+      method: "PUT",
+      data: { isEnabled },
+    });
+  }
+
+  // 위치 알림 삭제
+  async deleteLocationReminder(scheduleId: string): Promise<void> {
+    return this.request<void>({
+      url: `/api/schedule/${scheduleId}/location-reminder`,
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiService = ApiService.getInstance();

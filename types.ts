@@ -49,6 +49,9 @@ export interface Schedule {
   reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)
   isImportant?: boolean; // 중요 일정 여부 (D-day 알림용)
   commentCount?: number; // 댓글 수
+  checklist?: ChecklistItem[]; // 체크리스트
+  photos?: SchedulePhoto[]; // 사진 앨범
+  locationReminder?: LocationReminder; // 위치 기반 알림
 }
 
 // 일정 댓글
@@ -61,6 +64,41 @@ export interface ScheduleComment {
   content: string;
   createdAt: string; // ISO date string
   updatedAt?: string;
+}
+
+// 체크리스트 아이템
+export interface ChecklistItem {
+  id: string;
+  content: string;
+  isCompleted: boolean;
+  completedBy?: string; // 완료한 사용자 ID
+  completedAt?: string; // 완료 시간
+  createdBy: string; // 생성한 사용자 ID
+  createdAt: string;
+}
+
+// 일정 사진
+export interface SchedulePhoto {
+  id: string;
+  url: string;
+  thumbnailUrl?: string;
+  uploadedBy: string; // 업로드한 사용자 ID
+  uploadedByName?: string;
+  uploadedAt: string;
+  caption?: string;
+}
+
+// 위치 기반 알림
+export interface LocationReminder {
+  id: string;
+  scheduleId: string;
+  latitude: number;
+  longitude: number;
+  radius: number; // 미터 단위
+  address?: string;
+  placeName?: string;
+  isEnabled: boolean;
+  triggeredAt?: string;
 }
 
 // 알림 타입
