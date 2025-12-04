@@ -267,13 +267,28 @@ export const useUpdateUser = () => {
       userId: string;
       userData: Partial<User>;
     }) => apiService.updateUser(userId, userData),
-    onSuccess: (updatedUser) => {
+    onSuccess: async (updatedUser) => {
       // 사용자 캐시 무효화
       queryClient.invalidateQueries({ queryKey: queryKeys.users });
       queryClient.invalidateQueries({ queryKey: queryKeys.profile });
 
       // 업데이트된 사용자 캐시 업데이트
       queryClient.setQueryData(queryKeys.user(updatedUser.id), updatedUser);
+
+      // 워크스페이스 캐시도 무효화 (사용자 아바타 등이 포함되어 있음)
+      await queryClient.resetQueries({ queryKey: queryKeys.workspaces });
+
+      // 피드 캐시도 무효화
+      await queryClient.resetQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key[0] === "workspaces" &&
+            key[2] === "feed"
+          );
+        },
+      });
     },
   });
 };
