@@ -971,51 +971,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   <Text style={styles.cardTitle}>위치 설정</Text>
                 </View>
 
-                <View style={styles.toggleRow}>
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>위치 공유</Text>
-                    <Text style={styles.toggleDescription}>
-                      실시간으로 캘린더 멤버들과 위치 공유
-                    </Text>
-                  </View>
-                  <Switch
-                    value={locationSharingEnabled}
-                    onValueChange={async (value) => {
-                      setLocationSharingEnabled(value);
-                      try {
-                        await apiService.updateLocationSharing(value);
-
-                        if (value) {
-                          // 백그라운드 추적 시작 (실시간 위치 공유)
-                          const success =
-                            await locationTrackingService.startBackgroundTracking(
-                              workspaceId
-                            );
-                          if (!success) {
-                            setLocationSharingEnabled(false);
-                            await apiService.updateLocationSharing(false);
-                            Alert.alert(
-                              "위치 권한 필요",
-                              "위치 공유를 사용하려면 백그라운드 위치 권한이 필요합니다."
-                            );
-                          }
-                        } else {
-                          await locationTrackingService.stopTracking();
-                        }
-                      } catch (error) {
-                        console.error(
-                          "Failed to toggle location sharing:",
-                          error
-                        );
-                        setLocationSharingEnabled(!value);
-                        Alert.alert("오류", "위치 공유 설정에 실패했습니다.");
-                      }
-                    }}
-                    trackColor={{ false: "#D1D5DB", true: "#93C5FD" }}
-                    thumbColor={locationSharingEnabled ? "#3B82F6" : "#F3F4F6"}
-                  />
-                </View>
-
                 {/* Debug Button - 백그라운드 태스크 상태 확인 */}
                 {/* <TouchableOpacity
                   style={styles.debugButton}
