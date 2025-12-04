@@ -35,6 +35,10 @@ interface AppState {
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
 
+  // Feature Flags
+  isMapTabEnabled: boolean;
+  setIsMapTabEnabled: (enabled: boolean) => void;
+
   // Workspace (Calendar)
   activeWorkspaceId: string;
   setActiveWorkspaceId: (id: string) => void;
@@ -88,6 +92,10 @@ export const useAppStore = create<AppState>()(
       isSearchOpen: false,
       setIsSearchOpen: (open) => set({ isSearchOpen: open }),
 
+      // Feature Flags
+      isMapTabEnabled: false,
+      setIsMapTabEnabled: (enabled) => set({ isMapTabEnabled: enabled }),
+
       // Workspace (Calendar)
       activeWorkspaceId: "family",
       setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
@@ -121,6 +129,7 @@ export const useAppStore = create<AppState>()(
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         activeWorkspaceId: state.activeWorkspaceId,
+        isMapTabEnabled: state.isMapTabEnabled,
       }),
     }
   )

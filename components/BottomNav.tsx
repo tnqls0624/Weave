@@ -1,7 +1,7 @@
 import { useAppStore } from "@/stores";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,19 +9,25 @@ const BottomNav: React.FC = () => {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
-  const { resetSettingsPage } = useAppStore();
+  const { resetSettingsPage, isMapTabEnabled } = useAppStore();
 
   // Get current route from segments (e.g., ['(tabs)', 'calendar'] -> 'calendar')
   const currentRoute = segments[segments.length - 1] || "calendar";
 
-  const navItems = [
-    { route: "feed", icon: "list", label: "피드" },
-    { route: "calendar", icon: "event", label: "캘린더" },
-    { route: "map", icon: "map", label: "지도" },
-    // TEMPORARILY DISABLED - Security features
-    // { route: "phishing", icon: "security", label: "보안" },
-    { route: "settings", icon: "settings", label: "설정" },
-  ];
+  const navItems = useMemo(() => {
+    const items = [
+      { route: "feed", icon: "list", label: "피드" },
+      { route: "calendar", icon: "event", label: "캘린더" },
+    ];
+
+    if (isMapTabEnabled) {
+      items.push({ route: "map", icon: "map", label: "지도" });
+    }
+
+    items.push({ route: "settings", icon: "settings", label: "설정" });
+
+    return items;
+  }, [isMapTabEnabled]);
 
   const handleNavigate = (route: string) => {
     // 같은 탭을 다시 누른 경우 초기 화면으로 리셋

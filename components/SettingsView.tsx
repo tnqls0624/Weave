@@ -186,7 +186,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { settingsPage, setSettingsPage } = useAppStore();
+  const { settingsPage, setSettingsPage, isMapTabEnabled, setIsMapTabEnabled } = useAppStore();
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     currentUser?.pushEnabled ?? true
   );
@@ -1040,6 +1040,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     백그라운드 태스크 상태 확인 (디버그)
                   </Text>
                 </TouchableOpacity> */}
+
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>지도 탭 사용</Text>
+                    <Text style={styles.toggleDescription}>
+                      하단 네비게이션에 지도 탭 표시
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isMapTabEnabled}
+                    onValueChange={(value) => {
+                      setIsMapTabEnabled(value);
+                    }}
+                    trackColor={{ false: "#D1D5DB", true: "#93C5FD" }}
+                    thumbColor={isMapTabEnabled ? "#3B82F6" : "#F3F4F6"}
+                  />
+                </View>
               </View>
             </View>
           </View>
