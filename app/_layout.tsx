@@ -281,19 +281,6 @@ export default function RootLayout() {
                       name="create"
                       options={{ presentation: "modal", headerShown: false }}
                     />
-                    {/* TEMPORARILY DISABLED - Security features */}
-                    {/* <Stack.Screen
-                      name="phishing-settings"
-                      options={{ headerShown: false }}
-                    />
-                    <Stack.Screen
-                      name="phishing-history"
-                      options={{ headerShown: false }}
-                    />
-                    <Stack.Screen
-                      name="manual-check"
-                      options={{ headerShown: false }}
-                    /> */}
                   </Stack>
                   <StatusBar style="auto" />
                 </ThemeProvider>

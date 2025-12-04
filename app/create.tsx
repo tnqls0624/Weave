@@ -80,6 +80,7 @@ export default function CreateScreen() {
         setActiveView={handleSetActiveView}
         scheduleToEdit={schedule || null}
         initialDate={detailDrawerDate}
+        existingSchedules={schedules}
       />
     </View>
   );

@@ -17,10 +17,6 @@ export interface User {
   location?: Location;
   pushEnabled?: boolean;
   locationEnabled?: boolean;
-  // TEMPORARILY DISABLED - Security features
-  // phishingGuardEnabled?: boolean;
-  // phishingAutoBlock?: boolean;
-  // phishingSensitivityLevel?: string;
   fcmToken?: string;
   email?: string;
   inviteCode?: string;
@@ -52,4 +48,40 @@ export interface Schedule {
   calendarType?: string;
   reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)
   isImportant?: boolean; // 중요 일정 여부 (D-day 알림용)
+  commentCount?: number; // 댓글 수
+}
+
+// 일정 댓글
+export interface ScheduleComment {
+  id: string;
+  scheduleId: string;
+  userId: string;
+  userName: string;
+  userAvatarUrl?: string;
+  content: string;
+  createdAt: string; // ISO date string
+  updatedAt?: string;
+}
+
+// 알림 타입
+export type NotificationType =
+  | "schedule_invite" // 일정 초대
+  | "schedule_update" // 일정 수정
+  | "schedule_delete" // 일정 삭제
+  | "schedule_reminder" // 일정 리마인더
+  | "schedule_comment" // 일정 댓글
+  | "dday_reminder" // D-day 알림
+  | "general"; // 일반 알림
+
+// 알림 아이템
+export interface NotificationItem {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  scheduleId?: string;
+  scheduleTitle?: string;
+  inviterName?: string; // 초대한 사람 이름
+  createdAt: string; // ISO date string
+  isRead: boolean;
 }

@@ -59,8 +59,6 @@ export default function TabLayout() {
           <Tabs.Screen name="feed" />
           <Tabs.Screen name="calendar" />
           <Tabs.Screen name="map" />
-          {/* TEMPORARILY DISABLED - Security features */}
-          {/* <Tabs.Screen name="phishing" /> */}
           <Tabs.Screen name="settings" />
         </Tabs>
 

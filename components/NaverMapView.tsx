@@ -1,6 +1,4 @@
-import locationWebSocketService, {
-  PhishingAlert,
-} from "@/services/locationWebSocketService";
+import locationWebSocketService from "@/services/locationWebSocketService";
 import { useAppStore } from "@/stores/appStore";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -93,7 +91,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     longitude: 126.978,
     zoom: 13,
   });
-  const [phishingAlerts, setPhishingAlerts] = useState<PhishingAlert[]>([]);
   const [cachedImages, setCachedImages] = useState<Record<string, string>>({});
   const { activeWorkspaceId } = useAppStore();
   const { data: currentUser } = useMyProfile();
@@ -292,70 +289,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
       }
     };
   }, [isActive, activeWorkspaceId, sendLocationUpdate]);
-
-  // 피싱 알림 스트림 구독
-  // useEffect(() => {
-  //   if (!activeWorkspaceId || !isActive) return;
-
-  //   const setupPhishingAlerts = async () => {
-  //     try {
-  //       // 피싱 알림 구독
-  //       await locationWebSocketService.subscribeToPhishingAlerts(
-  //         (alert: PhishingAlert) => {
-  //           // 위치 정보가 있는 알림만 지도에 표시
-  //           if (alert.location) {
-  //             setPhishingAlerts((prev) => {
-  //               // 중복 제거
-  //               const filtered = prev.filter((a) => a.smsId !== alert.smsId);
-  //               return [...filtered, alert];
-  //             });
-
-  //             // 고위험 알림은 팝업으로 알림
-  //             if (alert.riskLevel === "high") {
-  //               Alert.alert(
-  //                 "🚨 피싱 위험 감지",
-  //                 `발신자: ${alert.sender}\n위치: 현재 위치 근처`,
-  //                 [
-  //                   {
-  //                     text: "확인",
-  //                     onPress: () => {
-  //                       // 해당 위치로 카메라 이동
-  //                       if (mapRef.current) {
-  //                         setCameraCenter({
-  //                           latitude: alert.location!.latitude,
-  //                           longitude: alert.location!.longitude,
-  //                           zoom: 15,
-  //                         });
-  //                       }
-  //                     },
-  //                   },
-  //                 ]
-  //               );
-  //             }
-  //           }
-  //         }
-  //       );
-
-  //       // 피싱 위치 알림 스트림 (선택적)
-  //       // if (activeWorkspaceId) {
-  //       //   await locationWebSocketService.streamPhishingStats(
-  //       //     activeWorkspaceId,
-  //       //     (stats: any) => {
-  //       //       // 피싱 통계 수신 (로그 최소화)
-  //       //     }
-  //       //   );
-  //       // }
-  //     } catch (error) {
-  //       console.error("피싱 알림 구독 실패:", error);
-  //     }
-  //   };
-
-  //   setupPhishingAlerts();
-
-  //   return () => {
-  //     // locationWebSocketService.unsubscribeFromPhishingAlerts();
-  //   };
-  // }, [activeWorkspaceId, isActive]);
 
   const displayUsers = realtimeUsers;
 
@@ -568,58 +501,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
     );
   };
 
-  // 피싱 알림 마커 렌더링
-  const renderPhishingMarker = (alert: PhishingAlert) => {
-    if (!alert.location) return null;
-
-    const getRiskColor = () => {
-      switch (alert.riskLevel) {
-        case "high":
-          return "#FF3B30";
-        case "medium":
-          return "#FF9500";
-        case "low":
-          return "#FFCC00";
-        default:
-          return "#8E8E93";
-      }
-    };
-
-    const getRiskIcon = () => {
-      switch (alert.riskLevel) {
-        case "high":
-          return "warning";
-        case "medium":
-          return "alert-circle";
-        case "low":
-          return "information-circle";
-        default:
-          return "help-circle";
-      }
-    };
-
-    return (
-      <NaverMapMarkerOverlay
-        key={`phishing-${alert.smsId}`}
-        latitude={alert.location.latitude}
-        longitude={alert.location.longitude}
-        width={48}
-        height={48}
-        caption={{
-          text: `피싱 ${alert.riskLevel.toUpperCase()}`,
-          textSize: 11,
-          color: getRiskColor(),
-        }}
-      >
-        <View
-          style={[styles.phishingMarker, { backgroundColor: getRiskColor() }]}
-        >
-          <Ionicons name={getRiskIcon()} size={24} color="#FFF" />
-        </View>
-      </NaverMapMarkerOverlay>
-    );
-  };
-
   const totalMembersWithLocation = (myMarker ? 1 : 0) + otherMarkers.length;
 
   return (
@@ -639,14 +520,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
           <Text style={styles.subtitle}>
             {totalMembersWithLocation}명의 멤버 위치 표시 중
           </Text>
-          {phishingAlerts.length > 0 && (
-            <View style={styles.phishingIndicator}>
-              <Ionicons name="warning" size={14} color="#FF3B30" />
-              <Text style={styles.phishingCount}>
-                피싱 {phishingAlerts.length}건
-              </Text>
-            </View>
-          )}
         </View>
       </View>
 
@@ -667,9 +540,6 @@ const NaverMapView: React.FC<NaverMapViewProps> = ({
 
           {/* 다른 멤버 마커 */}
           {otherMarkers.map((marker) => renderMarker(marker))}
-
-          {/* 피싱 알림 마커 */}
-          {phishingAlerts.map((alert) => renderPhishingMarker(alert))}
         </RNNaverMapView>
 
         {/* 멤버 아이콘 리스트 (왼쪽 위) */}
@@ -833,20 +703,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  phishingIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFF0F0",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  phishingCount: {
-    fontSize: 12,
-    color: "#FF3B30",
-    fontWeight: "600",
-    marginLeft: 4,
   },
   markerContainer: {
     position: "relative",
@@ -1111,20 +967,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     justifyContent: "center",
     alignItems: "center",
-  },
-  phishingMarker: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    borderWidth: 3,
-    borderColor: "#FFF",
   },
 });
 

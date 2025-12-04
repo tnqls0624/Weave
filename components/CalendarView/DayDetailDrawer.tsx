@@ -1,4 +1,4 @@
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -6,12 +6,13 @@ import BottomSheet, {
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import React, { useCallback, useRef, useState } from "react";
-import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
 import { useDeleteSchedule } from "../../services/queries";
 import type { Schedule, User } from "../../types";
+import ScheduleComments from "../ScheduleComments";
 
 dayjs.locale("ko");
 
@@ -72,6 +73,18 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(
     null
   );
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [selectedScheduleForComments, setSelectedScheduleForComments] = useState<Schedule | null>(null);
+
+  const openCommentsModal = (schedule: Schedule) => {
+    setSelectedScheduleForComments(schedule);
+    setCommentsModalVisible(true);
+  };
+
+  const closeCommentsModal = () => {
+    setCommentsModalVisible(false);
+    setSelectedScheduleForComments(null);
+  };
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -450,6 +463,17 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         </View>
                       )}
 
+                      {/* 댓글 버튼 */}
+                      <Pressable
+                        style={styles.commentsButton}
+                        onPress={() => openCommentsModal(schedule)}
+                      >
+                        <Ionicons name="chatbubble-outline" size={16} color="#6b7280" />
+                        <Text style={styles.commentsButtonText}>
+                          댓글 {schedule.commentCount || 0}
+                        </Text>
+                      </Pressable>
+
                       {participants.length > 0 && (
                         <View style={styles.participantsRow}>
                           <View style={styles.participantAvatars}>
@@ -500,6 +524,32 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
           </View>
         )}
       </BottomSheetScrollView>
+
+      {/* 댓글 모달 */}
+      <Modal
+        visible={commentsModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeCommentsModal}
+      >
+        <View style={styles.commentsModal}>
+          <View style={styles.commentsModalHeader}>
+            <Pressable onPress={closeCommentsModal} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </Pressable>
+            <Text style={styles.commentsModalTitle}>
+              {selectedScheduleForComments?.title || "댓글"}
+            </Text>
+            <View style={{ width: 32 }} />
+          </View>
+          {selectedScheduleForComments && (
+            <ScheduleComments
+              scheduleId={selectedScheduleForComments.id}
+              currentUserId={currentUser.id}
+            />
+          )}
+        </View>
+      </Modal>
     </BottomSheet>
   );
 };
@@ -708,6 +758,44 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: "#9ca3af",
+    textAlign: "center",
+  },
+  commentsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  commentsButtonText: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  commentsModal: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+  },
+  commentsModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  commentsModalTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
     textAlign: "center",
   },
 });

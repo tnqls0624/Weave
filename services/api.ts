@@ -774,153 +774,51 @@ class ApiService {
     });
   }
 
-  // ==================== Phishing Guard API ====================
-  // TEMPORARILY DISABLED - Security features commented out
+  // ==================== Schedule Comments API ====================
 
-  // // 피싱 신고
-  // async reportPhishing(data: {
-  //   smsId: string;
-  //   sender: string;
-  //   message: string;
-  //   workspaceId?: string;
-  //   riskScore: number;
-  //   riskLevel: string;
-  //   detectionReasons: string[];
-  //   phishingType?: string;
-  //   location?: { latitude: number; longitude: number };
-  //   deviceInfo?: any;
-  //   autoBlocked?: boolean;
-  // }): Promise<any> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/report",
-  //     method: "POST",
-  //     data,
-  //   });
-  // }
+  // 일정 댓글 목록 조회
+  async getScheduleComments(scheduleId: string): Promise<any[]> {
+    return this.request<any[]>({
+      url: `/api/schedule/${scheduleId}/comments`,
+      method: "GET",
+    });
+  }
 
-  // // 피싱 탐지 요청
-  // async detectPhishing(data: {
-  //   sender: string;
-  //   message: string;
-  //   sensitivityLevel?: string;
-  // }): Promise<{
-  //   isPhishing: boolean;
-  //   riskScore: number;
-  //   riskLevel: string;
-  //   detectionReasons: string[];
-  //   phishingType: string;
-  //   confidence: number;
-  // }> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/detect",
-  //     method: "POST",
-  //     data,
-  //   });
-  // }
+  // 일정 댓글 작성
+  async createScheduleComment(
+    scheduleId: string,
+    content: string
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/comments`,
+      method: "POST",
+      data: { content },
+    });
+  }
 
-  // // 내 피싱 신고 목록 조회
-  // async getMyPhishingReports(params?: {
-  //   page?: number;
-  //   size?: number;
-  // }): Promise<any> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/reports/me",
-  //     method: "GET",
-  //     params,
-  //   });
-  // }
+  // 일정 댓글 수정
+  async updateScheduleComment(
+    scheduleId: string,
+    commentId: string,
+    content: string
+  ): Promise<any> {
+    return this.request<any>({
+      url: `/api/schedule/${scheduleId}/comments/${commentId}`,
+      method: "PUT",
+      data: { content },
+    });
+  }
 
-  // // 워크스페이스 피싱 신고 조회
-  // async getWorkspacePhishingReports(
-  //   workspaceId: string,
-  //   params?: { page?: number; size?: number }
-  // ): Promise<any> {
-  //   return this.request<any>({
-  //     url: `/api/phishing/reports/workspace/${workspaceId}`,
-  //     method: "GET",
-  //     params,
-  //   });
-  // }
-
-  // // 피싱 신고 상세 조회
-  // async getPhishingReport(reportId: string): Promise<any> {
-  //   return this.request<any>({
-  //     url: `/api/phishing/reports/${reportId}`,
-  //     method: "GET",
-  //   });
-  // }
-
-  // // 피싱 신고 피드백 추가
-  // async addPhishingFeedback(reportId: string, feedback: string): Promise<any> {
-  //   return this.request<any>({
-  //     url: `/api/phishing/reports/${reportId}/feedback`,
-  //     method: "PUT",
-  //     data: { feedback },
-  //   });
-  // }
-
-  // // 내 피싱 통계 조회
-  // async getMyPhishingStatistics(): Promise<any> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/statistics/me",
-  //     method: "GET",
-  //   });
-  // }
-
-  // // 워크스페이스 피싱 통계 조회
-  // async getWorkspacePhishingStatistics(workspaceId: string): Promise<any> {
-  //   return this.request<any>({
-  //     url: `/api/phishing/statistics/workspace/${workspaceId}`,
-  //     method: "GET",
-  //   });
-  // }
-
-  // // 근처 피싱 알림 조회
-  // async getNearbyPhishingReports(
-  //   latitude: number,
-  //   longitude: number,
-  //   radius?: number
-  // ): Promise<any> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/reports/nearby",
-  //     method: "GET",
-  //     params: { latitude, longitude, radius: radius || 5000 },
-  //   });
-  // }
-
-  // // 피싱 패턴 목록 조회 (관리자용)
-  // async getPhishingPatterns(params?: {
-  //   category?: string;
-  //   language?: string;
-  //   activeOnly?: boolean;
-  // }): Promise<any> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/patterns",
-  //     method: "GET",
-  //     params,
-  //   });
-  // }
-
-  // // 고위험 미처리 신고 조회 (관리자용)
-  // async getHighRiskPendingReports(): Promise<any> {
-  //   return this.request<any>({
-  //     url: "/api/phishing/reports/high-risk/pending",
-  //     method: "GET",
-  //   });
-  // }
-
-  // // 피싱 신고 상태 변경 (관리자용)
-  // async updatePhishingReportStatus(
-  //   reportId: string,
-  //   status: string,
-  //   adminNote?: string
-  // ): Promise<any> {
-  //   return this.request<any>({
-  //     url: `/api/phishing/reports/${reportId}/status`,
-  //     method: "PUT",
-  //     data: { status, adminNote },
-  //   });
-  // }
+  // 일정 댓글 삭제
+  async deleteScheduleComment(
+    scheduleId: string,
+    commentId: string
+  ): Promise<void> {
+    return this.request<void>({
+      url: `/api/schedule/${scheduleId}/comments/${commentId}`,
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiService = ApiService.getInstance();

@@ -14,6 +14,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -31,6 +32,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import { RepeatOption, Schedule, User } from "../types";
 import DateTimePicker from "./DateTimePicker";
+import ScheduleConflictService, { ConflictInfo } from "../services/scheduleConflictService";
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -57,6 +59,7 @@ interface CreateScheduleViewProps {
   setActiveView: (view: string) => void;
   scheduleToEdit: Schedule | null;
   initialDate?: Date | null;
+  existingSchedules?: Schedule[]; // 충돌 감지를 위한 기존 일정
 }
 
 const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
@@ -66,6 +69,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   setActiveView,
   scheduleToEdit,
   initialDate,
+  existingSchedules = [],
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -98,6 +102,32 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [reminderMinutes, setReminderMinutes] = useState<number | null>(null);
   const [isImportant, setIsImportant] = useState(false);
+  const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
+
+  // 충돌 감지 - 일정 정보가 변경될 때마다 체크
+  useEffect(() => {
+    if (existingSchedules.length === 0) {
+      setConflictInfo(null);
+      return;
+    }
+
+    const scheduleData: Partial<Schedule> = {
+      startDate,
+      endDate: endDate || startDate,
+      startTime: isAllDay ? undefined : startTime,
+      endTime: isAllDay ? undefined : endTime,
+      isAllDay,
+      participants: participantIds,
+    };
+
+    const conflict = ScheduleConflictService.checkConflict(
+      scheduleData,
+      existingSchedules,
+      scheduleToEdit?.id // 수정 시 자기 자신 제외
+    );
+
+    setConflictInfo(conflict.hasConflict ? conflict : null);
+  }, [startDate, endDate, startTime, endTime, isAllDay, participantIds, existingSchedules, scheduleToEdit?.id]);
 
   // 키보드 상태 감지
   useEffect(() => {
@@ -182,6 +212,29 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   }, [scheduleToEdit, currentUser.id, initialDate]);
 
   const handleSubmit = async () => {
+    // 충돌이 있으면 경고 표시
+    if (conflictInfo && conflictInfo.hasConflict) {
+      Alert.alert(
+        "일정 충돌 알림",
+        `${conflictInfo.message}\n\n그래도 일정을 저장하시겠습니까?`,
+        [
+          {
+            text: "취소",
+            style: "cancel",
+          },
+          {
+            text: "저장",
+            onPress: () => saveSchedule(),
+          },
+        ]
+      );
+      return;
+    }
+
+    await saveSchedule();
+  };
+
+  const saveSchedule = async () => {
     setIsSaving(true);
     try {
       const scheduleData: Omit<Schedule, "id" | "workspace"> = {
@@ -445,6 +498,27 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
             autoFocus={!scheduleToEdit}
             maxLength={50}
           />
+
+          {/* 충돌 경고 배너 */}
+          {conflictInfo && conflictInfo.hasConflict && (
+            <View style={styles.conflictBanner}>
+              <Ionicons name="warning" size={20} color="#F59E0B" />
+              <View style={styles.conflictTextContainer}>
+                <Text style={styles.conflictTitle}>일정이 겹칩니다</Text>
+                <Text style={styles.conflictMessage}>{conflictInfo.message}</Text>
+                {conflictInfo.conflictingSchedules.slice(0, 2).map((schedule) => (
+                  <Text key={schedule.id} style={styles.conflictSchedule}>
+                    • {schedule.title} ({schedule.startTime || "종일"})
+                  </Text>
+                ))}
+                {conflictInfo.conflictingSchedules.length > 2 && (
+                  <Text style={styles.conflictMore}>
+                    +{conflictInfo.conflictingSchedules.length - 2}개 더
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
 
           {/* 날짜/시간 카드 */}
           <Pressable
@@ -997,6 +1071,41 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: "#F3F4F6",
     marginBottom: 24,
+  },
+  conflictBanner: {
+    flexDirection: "row",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+  },
+  conflictTextContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  conflictTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#92400E",
+    marginBottom: 2,
+  },
+  conflictMessage: {
+    fontSize: 13,
+    color: "#A16207",
+    marginBottom: 4,
+  },
+  conflictSchedule: {
+    fontSize: 12,
+    color: "#A16207",
+    marginLeft: 4,
+  },
+  conflictMore: {
+    fontSize: 12,
+    color: "#D97706",
+    marginTop: 2,
+    fontStyle: "italic",
   },
   dateTimeCard: {
     backgroundColor: "#F9FAFB",

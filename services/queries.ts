@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Schedule, User } from "../types";
 import { apiService } from "./api";
+import { updateWidgetData } from "../widgets/widgetTaskHandler";
 
 // Query Keys
 export const queryKeys = {
@@ -256,6 +257,84 @@ export const useDeleteSchedule = () => {
   });
 };
 
+// ==================== Schedule Comments ====================
+export const useScheduleComments = (scheduleId: string) => {
+  return useQuery({
+    queryKey: ["schedules", scheduleId, "comments"],
+    queryFn: () => apiService.getScheduleComments(scheduleId),
+    enabled: !!scheduleId,
+    staleTime: 30 * 1000, // 30초
+    gcTime: 5 * 60 * 1000, // 5분
+  });
+};
+
+export const useCreateScheduleComment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      content,
+    }: {
+      scheduleId: string;
+      content: string;
+    }) => apiService.createScheduleComment(scheduleId, content),
+    onSuccess: (_, variables) => {
+      // 댓글 목록 캐시 무효화
+      queryClient.invalidateQueries({
+        queryKey: ["schedules", variables.scheduleId, "comments"],
+      });
+      // 일정의 commentCount 업데이트를 위해 스케줄 캐시도 무효화
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.schedule(variables.scheduleId),
+      });
+    },
+  });
+};
+
+export const useUpdateScheduleComment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      commentId,
+      content,
+    }: {
+      scheduleId: string;
+      commentId: string;
+      content: string;
+    }) => apiService.updateScheduleComment(scheduleId, commentId, content),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["schedules", variables.scheduleId, "comments"],
+      });
+    },
+  });
+};
+
+export const useDeleteScheduleComment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      commentId,
+    }: {
+      scheduleId: string;
+      commentId: string;
+    }) => apiService.deleteScheduleComment(scheduleId, commentId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["schedules", variables.scheduleId, "comments"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.schedule(variables.scheduleId),
+      });
+    },
+  });
+};
+
 export const useUpdateUser = () => {
   const queryClient = useQueryClient();
 
@@ -446,4 +525,64 @@ export const usePrefetchSchedule = () => {
       gcTime: 30 * 60 * 1000,
     });
   };
+};
+
+// ==================== Notification History ====================
+import { notificationHistoryService } from "./notificationHistoryService";
+import { NotificationItem } from "../types";
+
+export const useNotificationHistory = () => {
+  return useQuery({
+    queryKey: ["notificationHistory"],
+    queryFn: () => notificationHistoryService.getNotificationHistory(),
+    staleTime: 1 * 60 * 1000, // 1분
+    gcTime: 5 * 60 * 1000, // 5분
+  });
+};
+
+export const useUnreadNotificationCount = () => {
+  return useQuery({
+    queryKey: ["notificationUnreadCount"],
+    queryFn: () => notificationHistoryService.getUnreadCount(),
+    staleTime: 30 * 1000, // 30초
+    gcTime: 1 * 60 * 1000, // 1분
+    refetchInterval: 60 * 1000, // 1분마다 자동 갱신
+  });
+};
+
+export const useMarkNotificationAsRead = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (notificationId: string) =>
+      notificationHistoryService.markAsRead(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notificationHistory"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationUnreadCount"] });
+    },
+  });
+};
+
+export const useMarkAllNotificationsAsRead = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => notificationHistoryService.markAllAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notificationHistory"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationUnreadCount"] });
+    },
+  });
+};
+
+export const useClearAllNotifications = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => notificationHistoryService.clearAllNotifications(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notificationHistory"] });
+      queryClient.invalidateQueries({ queryKey: ["notificationUnreadCount"] });
+    },
+  });
 };

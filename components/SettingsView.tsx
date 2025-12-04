@@ -45,6 +45,7 @@ import {
 import { useAppStore } from "../stores";
 import { Calendar, User } from "../types";
 import MonthDayPicker from "./MonthDayPicker";
+import NotificationCenter from "./NotificationCenter";
 
 // 개인정보처리방침 페이지 컴포넌트
 const PrivacyPolicyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -193,10 +194,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [locationSharingEnabled, setLocationSharingEnabled] = useState(
     currentUser?.locationEnabled ?? false
   );
-  // TEMPORARILY DISABLED - Security features
-  // const [phishingGuardEnabled, setPhishingGuardEnabled] = useState(
-  //   currentUser?.phishingGuardEnabled ?? false
-  // );
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const updateParticipantColorsMutation = useUpdateParticipantColors();
@@ -223,6 +220,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [isJoining, setIsJoining] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
+  const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
 
   const colorBottomSheetRef = useRef<BottomSheet>(null);
   const imagePickerBottomSheetRef = useRef<BottomSheet>(null);
@@ -356,8 +354,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       setBirthDate(currentUser.birthday ?? null);
       setNotificationsEnabled(currentUser.pushEnabled ?? true);
       setLocationSharingEnabled(currentUser.locationEnabled ?? false);
-      // TEMPORARILY DISABLED - Security features
-      // setPhishingGuardEnabled(currentUser.phishingGuardEnabled ?? false);
     }
   }, [currentUser, users]);
 
@@ -383,20 +379,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     };
     return colorMap[colorName] || colorMap["gray"];
   };
-
-  // TEMPORARILY DISABLED - Security features
-  // const handlePhishingGuardToggle = async (value: boolean) => {
-  //   try {
-  //     setPhishingGuardEnabled(value);
-  //     await apiService.updateProfile({
-  //       phishingGuardEnabled: value,
-  //     });
-  //   } catch (error) {
-  //     console.error("Failed to update phishing guard:", error);
-  //     setPhishingGuardEnabled(!value);
-  //     Alert.alert("오류", "피싱 가드 설정 업데이트에 실패했습니다.");
-  //   }
-  // };
 
   const renderMainPage = () => (
     <>
@@ -570,16 +552,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           iconBg="#FEF3C7"
           isLast={true}
         />
-        {/* TEMPORARILY DISABLED - Security features */}
-        {/* <SettingsItem
-          icon="shield-checkmark-outline"
-          label="피싱 가드"
-          description="SMS 피싱 탐지 및 차단 설정"
-          onPress={() => router.push("/phishing-settings")}
-          iconColor="#EF4444"
-          iconBg="#FEE2E2"
-          isLast={true}
-        /> */}
       </View>
 
       {/* Support */}
@@ -958,6 +930,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                     disabled={updateNotificationsMutation.isPending}
                   />
                 </View>
+
+                {/* 알림 센터 버튼 */}
+                <TouchableOpacity
+                  style={styles.notificationCenterButton}
+                  onPress={() => setNotificationCenterVisible(true)}
+                >
+                  <View style={styles.notificationCenterButtonContent}>
+                    <Ionicons name="mail-outline" size={18} color="#3B82F6" />
+                    <Text style={styles.notificationCenterButtonText}>
+                      알림 내역 보기
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
 
               {/* Location Card */}
@@ -1635,6 +1621,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Notification Center */}
+      <NotificationCenter
+        visible={notificationCenterVisible}
+        onClose={() => setNotificationCenterVisible(false)}
+      />
     </>
   );
 };
@@ -2403,6 +2395,26 @@ const styles = StyleSheet.create({
   toggleInfo: {
     flex: 1,
     marginRight: 16,
+  },
+  notificationCenterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+  },
+  notificationCenterButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  notificationCenterButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+    marginLeft: 8,
   },
   infoCard: {
     flexDirection: "row",

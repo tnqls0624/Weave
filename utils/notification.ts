@@ -1,4 +1,5 @@
 import { apiService } from "@/services/api";
+import { notificationHistoryService } from "@/services/notificationHistoryService";
 import { getApp } from "@react-native-firebase/app";
 import {
   AuthorizationStatus,
@@ -319,6 +320,14 @@ class NotificationManager {
       if (this.isDuplicateNotification(title, body)) {
         return;
       }
+
+      // 알림 히스토리에 저장
+      const notificationItem = notificationHistoryService.createNotificationItem(
+        title,
+        body,
+        data
+      );
+      await notificationHistoryService.saveNotification(notificationItem);
 
       // iOS에서는 sound 값을 true가 아닌 구체적인 값으로 설정
       const sound = Platform.OS === "ios" ? "default" : true;
