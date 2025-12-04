@@ -416,6 +416,9 @@ class ApiService {
     if (scheduleData.endDate) {
       if (scheduleData.endTime) {
         transformedData.endDate = `${scheduleData.endDate}T${scheduleData.endTime}:00`;
+      } else if (scheduleData.isAllDay) {
+        // 종일 일정은 시작일과 같은 시간으로 설정 (날짜만 중요)
+        transformedData.endDate = `${scheduleData.endDate}T00:00:00`;
       } else {
         transformedData.endDate = `${scheduleData.endDate}T23:59:59`;
       }
@@ -477,6 +480,9 @@ class ApiService {
     if (scheduleData.endDate) {
       if (scheduleData.endTime) {
         transformedData.endDate = `${scheduleData.endDate}T${scheduleData.endTime}:00`;
+      } else if (scheduleData.isAllDay) {
+        // 종일 일정은 시작일과 같은 시간으로 설정 (날짜만 중요)
+        transformedData.endDate = `${scheduleData.endDate}T00:00:00`;
       } else {
         transformedData.endDate = `${scheduleData.endDate}T23:59:59`;
       }
