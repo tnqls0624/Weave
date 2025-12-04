@@ -1045,13 +1045,65 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   <View style={styles.toggleInfo}>
                     <Text style={styles.toggleLabel}>지도 탭 사용</Text>
                     <Text style={styles.toggleDescription}>
-                      하단 네비게이션에 지도 탭 표시
+                      지도 탭 표시 및 실시간 위치 공유
                     </Text>
                   </View>
                   <Switch
                     value={isMapTabEnabled}
-                    onValueChange={(value) => {
-                      setIsMapTabEnabled(value);
+                    onValueChange={async (value) => {
+                      if (value) {
+                        // 활성화 시 위치 권한 및 위치 공유 함께 활성화
+                        Alert.alert(
+                          "지도 기능 활성화",
+                          "지도 탭을 사용하려면 위치 권한이 필요합니다. 실시간 위치 공유도 함께 활성화됩니다.",
+                          [
+                            {
+                              text: "취소",
+                              style: "cancel",
+                            },
+                            {
+                              text: "활성화",
+                              onPress: async () => {
+                                try {
+                                  // 위치 공유 활성화
+                                  await apiService.updateLocationSharing(true);
+
+                                  // 백그라운드 추적 시작
+                                  const success =
+                                    await locationTrackingService.startBackgroundTracking(
+                                      workspaceId
+                                    );
+
+                                  if (success) {
+                                    setLocationSharingEnabled(true);
+                                    setIsMapTabEnabled(true);
+                                  } else {
+                                    await apiService.updateLocationSharing(false);
+                                    Alert.alert(
+                                      "위치 권한 필요",
+                                      "지도 기능을 사용하려면 백그라운드 위치 권한이 필요합니다."
+                                    );
+                                  }
+                                } catch (error) {
+                                  console.error("Failed to enable map tab:", error);
+                                  Alert.alert("오류", "지도 기능 활성화에 실패했습니다.");
+                                }
+                              },
+                            },
+                          ]
+                        );
+                      } else {
+                        // 비활성화 시 위치 공유도 함께 비활성화
+                        try {
+                          await locationTrackingService.stopTracking();
+                          await apiService.updateLocationSharing(false);
+                          setLocationSharingEnabled(false);
+                          setIsMapTabEnabled(false);
+                        } catch (error) {
+                          console.error("Failed to disable map tab:", error);
+                          Alert.alert("오류", "지도 기능 비활성화에 실패했습니다.");
+                        }
+                      }
                     }}
                     trackColor={{ false: "#D1D5DB", true: "#93C5FD" }}
                     thumbColor={isMapTabEnabled ? "#3B82F6" : "#F3F4F6"}
