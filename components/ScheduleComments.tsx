@@ -152,13 +152,13 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
           keyExtractor={(item) => item.id}
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={
-            comments.length === 0 ? styles.emptyListContainer : undefined
+            comments.length === 0 ? styles.emptyListContainer : styles.listContent
           }
           showsVerticalScrollIndicator={false}
         />
       )}
 
-      {/* 댓글 입력 */}
+      {/* 댓글 입력 (하단 고정) */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -277,10 +277,14 @@ const styles = StyleSheet.create({
     padding: 8,
     marginLeft: 8,
   },
+  listContent: {
+    paddingBottom: 8,
+  },
   inputContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
     padding: 12,
+    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
     backgroundColor: "#FAFAFA",
