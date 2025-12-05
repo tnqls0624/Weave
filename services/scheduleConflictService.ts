@@ -1,5 +1,10 @@
 import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import { Schedule } from "../types";
+
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
 
 export interface ConflictInfo {
   hasConflict: boolean;
