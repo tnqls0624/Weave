@@ -900,7 +900,7 @@ class ApiService {
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : "image/jpeg";
 
-      formData.append("file", {
+      formData.append("image", {
         uri: imageUri,
         name: filename,
         type: type,
