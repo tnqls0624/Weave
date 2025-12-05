@@ -196,6 +196,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const timeSheetRef = useRef<BottomSheet>(null);
   const reminderSheetRef = useRef<BottomSheet>(null);
   const customReminderSheetRef = useRef<BottomSheet>(null);
+  const locationSheetRef = useRef<BottomSheet>(null);
+  const checklistSheetRef = useRef<BottomSheet>(null);
   const memoInputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -209,6 +211,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const timeSnapPoints = useMemo(() => ["40%"], []);
   const reminderSnapPoints = useMemo(() => ["45%"], []);
   const customReminderSnapPoints = useMemo(() => ["45%"], []);
+  const locationSnapPoints = useMemo(() => ["75%"], []);
+  const checklistSnapPoints = useMemo(() => ["60%"], []);
 
   // BottomSheet backdrop
   const renderBackdrop = useCallback(
@@ -975,201 +979,89 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
             />
           </View>
 
-          {/* 약속 장소 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="location-outline" size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>약속 장소</Text>
-              <Text style={styles.sectionOptional}>선택</Text>
-            </View>
-
-            {/* 장소 검색 입력 */}
-            <View style={styles.locationSearchContainer}>
-              <View style={styles.locationSearchInputWrapper}>
-                <Ionicons name="search" size={16} color="#9CA3AF" style={styles.locationSearchIcon} />
-                <TextInput
-                  style={styles.locationSearchInput}
-                  value={locationSearchQuery}
-                  onChangeText={setLocationSearchQuery}
-                  placeholder="장소 검색 (예: 강남역, 스타벅스)"
-                  placeholderTextColor="#9CA3AF"
-                  returnKeyType="search"
-                />
-                {locationSearchQuery.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      setLocationSearchQuery("");
-                      setShowLocationSearchResults(false);
-                    }}
-                    style={styles.locationClearButton}
-                  >
-                    <Ionicons name="close-circle" size={16} color="#9CA3AF" />
-                  </Pressable>
-                )}
-              </View>
-            </View>
-
-            {/* 검색 결과 */}
-            {showLocationSearchResults && (
-              <View style={styles.locationSearchResults}>
-                {searchPlacesMutation.isPending ? (
-                  <View style={styles.locationSearchLoading}>
-                    <ActivityIndicator size="small" color="#3B82F6" />
-                    <Text style={styles.locationSearchLoadingText}>검색 중...</Text>
-                  </View>
-                ) : searchPlacesMutation.data?.items?.length ? (
-                  <FlatList
-                    data={searchPlacesMutation.data.items}
-                    renderItem={renderPlaceSearchResult}
-                    keyExtractor={(item, index) => `${item.title}-${index}`}
-                    nestedScrollEnabled={true}
-                    style={{ maxHeight: 180 }}
-                  />
-                ) : (
-                  <View style={styles.locationNoResults}>
-                    <Text style={styles.locationNoResultsText}>검색 결과가 없습니다</Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 현재 위치 버튼 */}
-            <Pressable
-              style={styles.currentLocationButton}
-              onPress={handleGetCurrentLocation}
-              disabled={isLoadingLocation}
-            >
-              {isLoadingLocation ? (
-                <ActivityIndicator size="small" color="#3B82F6" />
-              ) : (
-                <>
-                  <Ionicons name="navigate" size={16} color="#3B82F6" />
-                  <Text style={styles.currentLocationButtonText}>현재 위치 사용</Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* 선택된 장소 */}
-            {selectedLocation && (
-              <View style={styles.selectedLocationContainer}>
-                <View style={styles.selectedLocationInfo}>
-                  <Ionicons name="pin" size={16} color="#22C55E" />
-                  <View style={styles.selectedLocationText}>
-                    {selectedLocation.placeName && (
-                      <Text style={styles.selectedLocationName}>{selectedLocation.placeName}</Text>
-                    )}
-                    <Text style={styles.selectedLocationAddress} numberOfLines={1}>
-                      {selectedLocation.address || `${selectedLocation.latitude.toFixed(4)}, ${selectedLocation.longitude.toFixed(4)}`}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => setSelectedLocation(null)}
-                    style={styles.removeLocationButton}
-                  >
-                    <Ionicons name="close" size={16} color="#9CA3AF" />
-                  </Pressable>
-                </View>
-
-                {/* 도착 알림 토글 */}
-                <Pressable
-                  style={[
-                    styles.arrivalNotificationToggle,
-                    enableArrivalNotification && styles.arrivalNotificationToggleActive,
-                  ]}
-                  onPress={() => setEnableArrivalNotification(!enableArrivalNotification)}
-                >
-                  <Ionicons
-                    name={enableArrivalNotification ? "notifications" : "notifications-outline"}
-                    size={16}
-                    color={enableArrivalNotification ? "#FFFFFF" : "#6B7280"}
-                  />
-                  <Text
-                    style={[
-                      styles.arrivalNotificationToggleText,
-                      enableArrivalNotification && styles.arrivalNotificationToggleTextActive,
-                    ]}
-                  >
-                    도착 알림 받기
+          {/* 약속 장소 - 미리보기 */}
+          {selectedLocation ? (
+            <View style={styles.previewSection}>
+              <View style={styles.previewContent}>
+                <Ionicons name="location" size={18} color="#22C55E" />
+                <View style={styles.previewTextContainer}>
+                  <Text style={styles.previewTitle} numberOfLines={1}>
+                    {selectedLocation.placeName || selectedLocation.address}
                   </Text>
-                </Pressable>
-
-                {/* 반경 선택 (도착 알림이 활성화된 경우만) */}
-                {enableArrivalNotification && (
-                  <View style={styles.radiusContainer}>
-                    <Text style={styles.radiusLabel}>도착 인식 범위</Text>
-                    <View style={styles.radiusOptions}>
-                      {RADIUS_OPTIONS.map((option) => (
-                        <Pressable
-                          key={option.value}
-                          style={[
-                            styles.radiusOption,
-                            selectedRadius === option.value && styles.radiusOptionSelected,
-                          ]}
-                          onPress={() => setSelectedRadius(option.value)}
-                        >
-                          <Text
-                            style={[
-                              styles.radiusOptionText,
-                              selectedRadius === option.value && styles.radiusOptionTextSelected,
-                            ]}
-                          >
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-
-          {/* 체크리스트 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="checkbox-outline" size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>체크리스트</Text>
-              <Text style={styles.sectionOptional}>선택</Text>
-            </View>
-
-            {/* 체크리스트 항목들 */}
-            {checklistItems.map((item, index) => (
-              <View key={item.id} style={styles.checklistItem}>
-                <View style={styles.checklistItemCheckbox}>
-                  <Ionicons name="square-outline" size={18} color="#D1D5DB" />
+                  {enableArrivalNotification && (
+                    <Text style={styles.previewSubtitle}>도착 알림 ON</Text>
+                  )}
                 </View>
-                <Text style={styles.checklistItemText}>{item.content}</Text>
+              </View>
+              <View style={styles.previewActions}>
                 <Pressable
-                  onPress={() => handleRemoveChecklistItem(item.id)}
-                  style={styles.checklistItemRemove}
+                  onPress={() => locationSheetRef.current?.expand()}
+                  style={styles.previewEditButton}
                 >
-                  <Ionicons name="close" size={16} color="#9CA3AF" />
+                  <Text style={styles.previewEditText}>수정</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setSelectedLocation(null);
+                    setEnableArrivalNotification(false);
+                  }}
+                  style={styles.previewRemoveButton}
+                >
+                  <Ionicons name="close" size={18} color="#9CA3AF" />
                 </Pressable>
               </View>
-            ))}
-
-            {/* 새 항목 추가 */}
-            <View style={styles.addChecklistItem}>
-              <Ionicons name="add-circle-outline" size={18} color="#9CA3AF" />
-              <TextInput
-                style={styles.addChecklistInput}
-                value={newChecklistItem}
-                onChangeText={setNewChecklistItem}
-                placeholder="항목 추가..."
-                placeholderTextColor="#9CA3AF"
-                returnKeyType="done"
-                onSubmitEditing={handleAddChecklistItem}
-              />
-              {newChecklistItem.trim() && (
-                <Pressable
-                  onPress={handleAddChecklistItem}
-                  style={styles.addChecklistButton}
-                >
-                  <Text style={styles.addChecklistButtonText}>추가</Text>
-                </Pressable>
-              )}
             </View>
-          </View>
+          ) : (
+            <Pressable
+              style={styles.addOptionButton}
+              onPress={() => locationSheetRef.current?.expand()}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#007AFF" />
+              <Text style={styles.addOptionText}>약속 장소 추가</Text>
+            </Pressable>
+          )}
+
+          {/* 체크리스트 - 미리보기 */}
+          {checklistItems.length > 0 ? (
+            <View style={styles.previewSection}>
+              <Pressable
+                style={styles.previewContent}
+                onPress={() => checklistSheetRef.current?.expand()}
+              >
+                <Ionicons name="checkbox" size={18} color="#007AFF" />
+                <View style={styles.previewTextContainer}>
+                  <Text style={styles.previewTitle}>
+                    체크리스트 {checklistItems.length}개
+                  </Text>
+                  <Text style={styles.previewSubtitle} numberOfLines={1}>
+                    {checklistItems.map(item => item.content).join(", ")}
+                  </Text>
+                </View>
+              </Pressable>
+              <View style={styles.previewActions}>
+                <Pressable
+                  onPress={() => checklistSheetRef.current?.expand()}
+                  style={styles.previewEditButton}
+                >
+                  <Text style={styles.previewEditText}>수정</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setChecklistItems([])}
+                  style={styles.previewRemoveButton}
+                >
+                  <Ionicons name="close" size={18} color="#9CA3AF" />
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={styles.addOptionButton}
+              onPress={() => checklistSheetRef.current?.expand()}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#007AFF" />
+              <Text style={styles.addOptionText}>체크리스트 추가</Text>
+            </Pressable>
+          )}
         </ScrollView>
 
         {/* 참가자 선택 BottomSheet */}
@@ -1404,6 +1296,235 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               }}
             >
               <Text style={styles.customReminderConfirmText}>확인</Text>
+            </TouchableOpacity>
+          </BottomSheetView>
+        </BottomSheet>
+
+        {/* 장소 설정 BottomSheet */}
+        <BottomSheet
+          ref={locationSheetRef}
+          index={-1}
+          snapPoints={locationSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>약속 장소</Text>
+
+            {/* 장소 검색 입력 */}
+            <View style={styles.locationSearchContainer}>
+              <View style={styles.locationSearchInputWrapper}>
+                <Ionicons name="search" size={16} color="#9CA3AF" style={styles.locationSearchIcon} />
+                <TextInput
+                  style={styles.locationSearchInput}
+                  value={locationSearchQuery}
+                  onChangeText={setLocationSearchQuery}
+                  placeholder="장소 검색 (예: 강남역, 스타벅스)"
+                  placeholderTextColor="#9CA3AF"
+                  returnKeyType="search"
+                />
+                {locationSearchQuery.length > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      setLocationSearchQuery("");
+                      setShowLocationSearchResults(false);
+                    }}
+                    style={styles.locationClearButton}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#9CA3AF" />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {/* 검색 결과 */}
+            {showLocationSearchResults && (
+              <View style={styles.locationSearchResults}>
+                {searchPlacesMutation.isPending ? (
+                  <View style={styles.locationSearchLoading}>
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <Text style={styles.locationSearchLoadingText}>검색 중...</Text>
+                  </View>
+                ) : searchPlacesMutation.data?.items?.length ? (
+                  <FlatList
+                    data={searchPlacesMutation.data.items}
+                    renderItem={renderPlaceSearchResult}
+                    keyExtractor={(item, index) => `${item.title}-${index}`}
+                    nestedScrollEnabled={true}
+                    style={{ maxHeight: 180 }}
+                  />
+                ) : (
+                  <View style={styles.locationNoResults}>
+                    <Text style={styles.locationNoResultsText}>검색 결과가 없습니다</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* 현재 위치 버튼 */}
+            <Pressable
+              style={styles.currentLocationButton}
+              onPress={handleGetCurrentLocation}
+              disabled={isLoadingLocation}
+            >
+              {isLoadingLocation ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <>
+                  <Ionicons name="navigate" size={16} color="#3B82F6" />
+                  <Text style={styles.currentLocationButtonText}>현재 위치 사용</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* 선택된 장소 */}
+            {selectedLocation && (
+              <View style={styles.selectedLocationContainer}>
+                <View style={styles.selectedLocationInfo}>
+                  <Ionicons name="pin" size={16} color="#22C55E" />
+                  <View style={styles.selectedLocationText}>
+                    {selectedLocation.placeName && (
+                      <Text style={styles.selectedLocationName}>{selectedLocation.placeName}</Text>
+                    )}
+                    <Text style={styles.selectedLocationAddress} numberOfLines={1}>
+                      {selectedLocation.address || `${selectedLocation.latitude.toFixed(4)}, ${selectedLocation.longitude.toFixed(4)}`}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setSelectedLocation(null)}
+                    style={styles.removeLocationButton}
+                  >
+                    <Ionicons name="close" size={16} color="#9CA3AF" />
+                  </Pressable>
+                </View>
+
+                {/* 도착 알림 토글 */}
+                <Pressable
+                  style={[
+                    styles.arrivalNotificationToggle,
+                    enableArrivalNotification && styles.arrivalNotificationToggleActive,
+                  ]}
+                  onPress={() => setEnableArrivalNotification(!enableArrivalNotification)}
+                >
+                  <Ionicons
+                    name={enableArrivalNotification ? "notifications" : "notifications-outline"}
+                    size={16}
+                    color={enableArrivalNotification ? "#FFFFFF" : "#6B7280"}
+                  />
+                  <Text
+                    style={[
+                      styles.arrivalNotificationToggleText,
+                      enableArrivalNotification && styles.arrivalNotificationToggleTextActive,
+                    ]}
+                  >
+                    도착 알림 받기
+                  </Text>
+                </Pressable>
+
+                {/* 반경 선택 */}
+                {enableArrivalNotification && (
+                  <View style={styles.radiusContainer}>
+                    <Text style={styles.radiusLabel}>도착 인식 범위</Text>
+                    <View style={styles.radiusOptions}>
+                      {RADIUS_OPTIONS.map((option) => (
+                        <Pressable
+                          key={option.value}
+                          style={[
+                            styles.radiusOption,
+                            selectedRadius === option.value && styles.radiusOptionSelected,
+                          ]}
+                          onPress={() => setSelectedRadius(option.value)}
+                        >
+                          <Text
+                            style={[
+                              styles.radiusOptionText,
+                              selectedRadius === option.value && styles.radiusOptionTextSelected,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* 확인 버튼 */}
+            <TouchableOpacity
+              style={[
+                styles.locationConfirmButton,
+                !selectedLocation && styles.locationConfirmButtonDisabled,
+              ]}
+              onPress={() => locationSheetRef.current?.close()}
+            >
+              <Text style={styles.locationConfirmButtonText}>
+                {selectedLocation ? "확인" : "닫기"}
+              </Text>
+            </TouchableOpacity>
+          </BottomSheetView>
+        </BottomSheet>
+
+        {/* 체크리스트 BottomSheet */}
+        <BottomSheet
+          ref={checklistSheetRef}
+          index={-1}
+          snapPoints={checklistSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>체크리스트</Text>
+
+            <ScrollView style={styles.checklistScrollView}>
+              {/* 체크리스트 항목들 */}
+              {checklistItems.map((item) => (
+                <View key={item.id} style={styles.checklistItem}>
+                  <View style={styles.checklistItemCheckbox}>
+                    <Ionicons name="square-outline" size={18} color="#D1D5DB" />
+                  </View>
+                  <Text style={styles.checklistItemText}>{item.content}</Text>
+                  <Pressable
+                    onPress={() => handleRemoveChecklistItem(item.id)}
+                    style={styles.checklistItemRemove}
+                  >
+                    <Ionicons name="close" size={16} color="#9CA3AF" />
+                  </Pressable>
+                </View>
+              ))}
+
+              {/* 새 항목 추가 */}
+              <View style={styles.addChecklistItem}>
+                <Ionicons name="add-circle-outline" size={18} color="#9CA3AF" />
+                <TextInput
+                  style={styles.addChecklistInput}
+                  value={newChecklistItem}
+                  onChangeText={setNewChecklistItem}
+                  placeholder="항목 추가..."
+                  placeholderTextColor="#9CA3AF"
+                  returnKeyType="done"
+                  onSubmitEditing={handleAddChecklistItem}
+                />
+                {newChecklistItem.trim() && (
+                  <Pressable
+                    onPress={handleAddChecklistItem}
+                    style={styles.addChecklistButton}
+                  >
+                    <Text style={styles.addChecklistButtonText}>추가</Text>
+                  </Pressable>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* 확인 버튼 */}
+            <TouchableOpacity
+              style={styles.checklistConfirmButton}
+              onPress={() => checklistSheetRef.current?.close()}
+            >
+              <Text style={styles.checklistConfirmButtonText}>확인</Text>
             </TouchableOpacity>
           </BottomSheetView>
         </BottomSheet>
@@ -1986,6 +2107,101 @@ const styles = StyleSheet.create({
   },
   addChecklistButtonText: {
     fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  // 미리보기 스타일
+  previewSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  previewContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  previewTextContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  previewSubtitle: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 2,
+  },
+  previewActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  previewEditButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  previewEditText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#007AFF",
+  },
+  previewRemoveButton: {
+    padding: 4,
+  },
+  addOptionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+  },
+  addOptionText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#007AFF",
+    marginLeft: 8,
+  },
+  // BottomSheet 확인 버튼 스타일
+  locationConfirmButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  locationConfirmButtonDisabled: {
+    backgroundColor: "#E5E7EB",
+  },
+  locationConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  checklistScrollView: {
+    flex: 1,
+    marginBottom: 8,
+  },
+  checklistConfirmButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  checklistConfirmButtonText: {
+    fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
   },
