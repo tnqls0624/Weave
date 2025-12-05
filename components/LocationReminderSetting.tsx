@@ -338,20 +338,16 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
           {currentLocation && (
             <View style={styles.selectedLocation}>
               <Ionicons name="pin" size={16} color="#22C55E" />
-              <Text style={styles.locationAddress} numberOfLines={2}>
-                {currentLocation.address || `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`}
-              </Text>
+              <View style={styles.selectedLocationInfo}>
+                {placeName && (
+                  <Text style={styles.selectedPlaceName}>{placeName}</Text>
+                )}
+                <Text style={styles.locationAddress} numberOfLines={2}>
+                  {currentLocation.address || `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`}
+                </Text>
+              </View>
             </View>
           )}
-
-          {/* 장소 이름 입력 */}
-          <TextInput
-            style={styles.input}
-            value={placeName}
-            onChangeText={setPlaceName}
-            placeholder="장소 이름 (선택사항)"
-            placeholderTextColor="#9CA3AF"
-          />
 
           {/* 반경 선택 */}
           <Text style={styles.radiusLabel}>도착 인식 범위</Text>
@@ -582,26 +578,25 @@ const styles = StyleSheet.create({
   },
   selectedLocation: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: "#F0FDF4",
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
   },
-  locationAddress: {
+  selectedLocationInfo: {
     flex: 1,
-    fontSize: 14,
-    color: "#374151",
     marginLeft: 8,
   },
-  input: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
+  selectedPlaceName: {
+    fontSize: 15,
+    fontWeight: "600",
     color: "#374151",
-    marginBottom: 16,
+    marginBottom: 2,
+  },
+  locationAddress: {
+    fontSize: 13,
+    color: "#6B7280",
   },
   radiusLabel: {
     fontSize: 14,
