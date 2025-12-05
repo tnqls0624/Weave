@@ -21,6 +21,7 @@ import {
   useSearchPlaces,
 } from "../services/queries";
 import { PlaceItem } from "../services/api";
+import locationTrackingService from "../services/locationTrackingService";
 
 interface LocationReminderSettingProps {
   scheduleId: string;
@@ -148,7 +149,17 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
           placeName: placeName.trim() || undefined,
         },
       });
-      Alert.alert("완료", "위치 알림이 설정되었습니다.");
+
+      // 위치 추적에 알림 등록 (백그라운드에서 도착 감지)
+      await locationTrackingService.addLocationReminder({
+        scheduleId,
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        radius: selectedRadius,
+        placeName: placeName.trim() || currentLocation.address,
+      });
+
+      Alert.alert("완료", "위치 알림이 설정되었습니다.\n해당 장소에 도착하면 참여자들에게 알림이 전송됩니다.");
     } catch (error) {
       Alert.alert("오류", "위치 알림 설정에 실패했습니다.");
     }
@@ -171,6 +182,8 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
         onPress: async () => {
           try {
             await deleteReminderMutation.mutateAsync(scheduleId);
+            // 위치 추적에서도 제거
+            await locationTrackingService.removeLocationReminder(scheduleId);
             setCurrentLocation(null);
             setPlaceName("");
           } catch (error) {

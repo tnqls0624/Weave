@@ -20,11 +20,43 @@ if (TASK_MANAGER_AVAILABLE) {
 const LOCATION_TASK_NAME = "background-location-task";
 const WORKSPACE_ID_KEY = "background_tracking_workspace_id";
 const BACKGROUND_UPDATE_COUNT_KEY = "background_update_count";
+const TRACKED_LOCATION_REMINDERS_KEY = "tracked_location_reminders";
+const NOTIFIED_ARRIVALS_KEY = "notified_arrivals";
 
 interface LocationTrackingState {
   isTracking: boolean;
   workspaceId: string | null;
   foregroundSubscription: Location.LocationSubscription | null;
+}
+
+interface TrackedLocationReminder {
+  scheduleId: string;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  placeName?: string;
+}
+
+/**
+ * Haversine 공식을 사용한 두 지점 간 거리 계산 (미터 단위)
+ */
+function calculateDistanceInMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000; // 지구 반지름 (미터)
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 // 백그라운드 태스크를 앱 시작 시 정의 (한 번만)
@@ -123,6 +155,43 @@ if (TASK_MANAGER_AVAILABLE) {
                   wsError?.message || wsError
                 );
                 // WebSocket 실패는 무시 (REST API로 이미 저장됨)
+              }
+
+              // 3. 위치 기반 알림 체크 (도착 감지)
+              try {
+                const trackRemindersJson = await AsyncStorage.getItem(TRACKED_LOCATION_REMINDERS_KEY);
+                if (trackRemindersJson) {
+                  const trackedReminders: TrackedLocationReminder[] = JSON.parse(trackRemindersJson);
+                  const notifiedJson = await AsyncStorage.getItem(NOTIFIED_ARRIVALS_KEY);
+                  const notifiedArrivals: string[] = notifiedJson ? JSON.parse(notifiedJson) : [];
+
+                  for (const reminder of trackedReminders) {
+                    // 이미 알림 전송한 일정은 건너뛰기
+                    if (notifiedArrivals.includes(reminder.scheduleId)) continue;
+
+                    const distance = calculateDistanceInMeters(
+                      latitude, longitude,
+                      reminder.latitude, reminder.longitude
+                    );
+
+                    console.log(`📍 [BACKGROUND] Schedule ${reminder.scheduleId}: ${distance.toFixed(0)}m / ${reminder.radius}m`);
+
+                    if (distance <= reminder.radius) {
+                      console.log(`🎉 [BACKGROUND] Arrived at ${reminder.placeName || "location"}!`);
+
+                      try {
+                        await apiService.notifyLocationArrival(reminder.scheduleId, { latitude, longitude });
+                        notifiedArrivals.push(reminder.scheduleId);
+                        await AsyncStorage.setItem(NOTIFIED_ARRIVALS_KEY, JSON.stringify(notifiedArrivals));
+                        console.log("✅ [BACKGROUND] Arrival notification sent");
+                      } catch (arrivalError: any) {
+                        console.error("❌ [BACKGROUND] Failed to send arrival notification:", arrivalError?.message);
+                      }
+                    }
+                  }
+                }
+              } catch (reminderError: any) {
+                console.error("❌ [BACKGROUND] Location reminder check failed:", reminderError?.message);
               }
 
               console.log("🌙".repeat(30) + "\n");
@@ -527,6 +596,90 @@ class LocationTrackingService {
 
     return status;
   }
+
+  // ==================== 위치 기반 알림 (도착 감지) ====================
+
+  /**
+   * 위치 기반 알림 추적 대상에 추가
+   */
+  async addLocationReminder(reminder: TrackedLocationReminder): Promise<void> {
+    try {
+      const json = await AsyncStorage.getItem(TRACKED_LOCATION_REMINDERS_KEY);
+      const reminders: TrackedLocationReminder[] = json ? JSON.parse(json) : [];
+
+      // 이미 있으면 업데이트
+      const existingIdx = reminders.findIndex(r => r.scheduleId === reminder.scheduleId);
+      if (existingIdx >= 0) {
+        reminders[existingIdx] = reminder;
+      } else {
+        reminders.push(reminder);
+      }
+
+      await AsyncStorage.setItem(TRACKED_LOCATION_REMINDERS_KEY, JSON.stringify(reminders));
+      console.log(`📍 Added location reminder for schedule ${reminder.scheduleId}`);
+    } catch (error) {
+      console.error("Failed to add location reminder:", error);
+    }
+  }
+
+  /**
+   * 위치 기반 알림 추적 대상에서 제거
+   */
+  async removeLocationReminder(scheduleId: string): Promise<void> {
+    try {
+      const json = await AsyncStorage.getItem(TRACKED_LOCATION_REMINDERS_KEY);
+      if (!json) return;
+
+      let reminders: TrackedLocationReminder[] = JSON.parse(json);
+      reminders = reminders.filter(r => r.scheduleId !== scheduleId);
+
+      await AsyncStorage.setItem(TRACKED_LOCATION_REMINDERS_KEY, JSON.stringify(reminders));
+
+      // 도착 알림 기록도 삭제
+      const notifiedJson = await AsyncStorage.getItem(NOTIFIED_ARRIVALS_KEY);
+      if (notifiedJson) {
+        let notified: string[] = JSON.parse(notifiedJson);
+        notified = notified.filter(id => id !== scheduleId);
+        await AsyncStorage.setItem(NOTIFIED_ARRIVALS_KEY, JSON.stringify(notified));
+      }
+
+      console.log(`📍 Removed location reminder for schedule ${scheduleId}`);
+    } catch (error) {
+      console.error("Failed to remove location reminder:", error);
+    }
+  }
+
+  /**
+   * 도착 알림 기록 초기화 (다시 알림 받고 싶을 때)
+   */
+  async clearArrivalNotification(scheduleId: string): Promise<void> {
+    try {
+      const json = await AsyncStorage.getItem(NOTIFIED_ARRIVALS_KEY);
+      if (!json) return;
+
+      let notified: string[] = JSON.parse(json);
+      notified = notified.filter(id => id !== scheduleId);
+      await AsyncStorage.setItem(NOTIFIED_ARRIVALS_KEY, JSON.stringify(notified));
+
+      console.log(`📍 Cleared arrival notification for schedule ${scheduleId}`);
+    } catch (error) {
+      console.error("Failed to clear arrival notification:", error);
+    }
+  }
+
+  /**
+   * 모든 위치 기반 알림 데이터 초기화
+   */
+  async clearAllLocationReminders(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(TRACKED_LOCATION_REMINDERS_KEY);
+      await AsyncStorage.removeItem(NOTIFIED_ARRIVALS_KEY);
+      console.log("📍 Cleared all location reminders");
+    } catch (error) {
+      console.error("Failed to clear location reminders:", error);
+    }
+  }
 }
 
 export default new LocationTrackingService();
+export type { TrackedLocationReminder };

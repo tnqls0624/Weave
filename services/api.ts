@@ -993,6 +993,18 @@ class ApiService {
     });
   }
 
+  // 위치 도착 알림 전송
+  async notifyLocationArrival(
+    scheduleId: string,
+    location: { latitude: number; longitude: number }
+  ): Promise<void> {
+    return this.request<void>({
+      url: `/api/schedule/${scheduleId}/location-reminder/arrival`,
+      method: "POST",
+      data: location,
+    });
+  }
+
   // ==================== 장소 검색 ====================
 
   // 장소 검색 (네이버 지역 검색 API)
