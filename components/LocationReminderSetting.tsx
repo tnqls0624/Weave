@@ -315,7 +315,7 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
                   data={searchPlacesMutation.data.items}
                   renderItem={renderSearchResult}
                   keyExtractor={(item, index) => `${item.title}-${index}`}
-                  scrollEnabled={false}
+                  nestedScrollEnabled={true}
                 />
               ) : (
                 <View style={styles.noResults}>
