@@ -212,7 +212,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const timeSnapPoints = useMemo(() => ["40%"], []);
   const reminderSnapPoints = useMemo(() => ["45%"], []);
   const customReminderSnapPoints = useMemo(() => ["45%"], []);
-  const repeatSnapPoints = useMemo(() => ["40%"], []);
+  const repeatSnapPoints = useMemo(() => ["45%"], []);
   const locationSnapPoints = useMemo(() => ["75%"], []);
   const checklistSnapPoints = useMemo(() => ["60%"], []);
 
