@@ -716,6 +716,36 @@ class ApiService {
         })
       : [];
 
+    // locationReminder 변환
+    const locationReminderData = serverSchedule.location_reminder || serverSchedule.locationReminder;
+    const locationReminder = locationReminderData
+      ? {
+          id: locationReminderData.id,
+          scheduleId: locationReminderData.scheduleId,
+          latitude: locationReminderData.latitude,
+          longitude: locationReminderData.longitude,
+          radius: locationReminderData.radius,
+          address: locationReminderData.address,
+          placeName: locationReminderData.placeName,
+          isEnabled: locationReminderData.isEnabled,
+          triggeredAt: locationReminderData.triggeredAt,
+        }
+      : undefined;
+
+    // checklist 변환
+    const checklistData = serverSchedule.checklist;
+    const checklist = checklistData
+      ? checklistData.map((item: any) => ({
+          id: item.id,
+          content: item.content,
+          isCompleted: item.isCompleted,
+          completedBy: item.completedBy,
+          completedAt: item.completedAt,
+          createdBy: item.createdBy,
+          createdAt: item.createdAt,
+        }))
+      : undefined;
+
     return {
       id: serverSchedule._id || serverSchedule.id,
       workspace: serverSchedule.workspace,
@@ -735,6 +765,8 @@ class ApiService {
       isAllDay: serverSchedule.is_all_day ?? serverSchedule.isAllDay,
       reminderMinutes: serverSchedule.reminder_minutes ?? serverSchedule.reminderMinutes,
       isImportant: serverSchedule.is_important ?? serverSchedule.isImportant,
+      locationReminder,
+      checklist,
     };
   }
 

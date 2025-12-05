@@ -580,7 +580,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         address: addressString,
-        placeName: "현재 위치",
+        placeName: addressString || "현재 위치",
       });
       setLocationSearchQuery("");
       setShowLocationSearchResults(false);

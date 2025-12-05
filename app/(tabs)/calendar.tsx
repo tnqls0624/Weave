@@ -80,9 +80,18 @@ export default function CalendarScreen() {
   );
 
   const handleStartEdit = useCallback(
-    (schedule: any) => {
-      setScheduleToEdit(schedule);
-      router.push("/create");
+    async (schedule: any) => {
+      try {
+        // 개별 일정 API 호출하여 locationReminder, checklist 포함된 전체 데이터 가져오기
+        const fullSchedule = await apiService.getSchedule(schedule.id);
+        setScheduleToEdit(fullSchedule);
+        router.push("/create");
+      } catch (error) {
+        console.error("Failed to fetch schedule details:", error);
+        // 실패 시 기존 데이터로 fallback
+        setScheduleToEdit(schedule);
+        router.push("/create");
+      }
     },
     [setScheduleToEdit, router]
   );
