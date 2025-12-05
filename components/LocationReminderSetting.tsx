@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
   StyleSheet,
   Switch,
@@ -17,7 +18,9 @@ import {
   useSetLocationReminder,
   useToggleLocationReminder,
   useDeleteLocationReminder,
+  useSearchPlaces,
 } from "../services/queries";
+import { PlaceItem } from "../services/api";
 
 interface LocationReminderSettingProps {
   scheduleId: string;
@@ -35,8 +38,10 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [placeName, setPlaceName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedRadius, setSelectedRadius] = useState(300);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -47,6 +52,7 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
   const setReminderMutation = useSetLocationReminder();
   const toggleReminderMutation = useToggleLocationReminder();
   const deleteReminderMutation = useDeleteLocationReminder();
+  const searchPlacesMutation = useSearchPlaces();
 
   useEffect(() => {
     if (reminder) {
@@ -61,6 +67,21 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
       }
     }
   }, [reminder]);
+
+  // 디바운스된 검색
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setShowSearchResults(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      searchPlacesMutation.mutate({ query: searchQuery, display: 5 });
+      setShowSearchResults(true);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleGetCurrentLocation = async () => {
     setIsLoadingLocation(true);
@@ -90,11 +111,24 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
         longitude: location.coords.longitude,
         address: addressString,
       });
+      setSearchQuery("");
+      setShowSearchResults(false);
     } catch (error) {
       Alert.alert("오류", "현재 위치를 가져올 수 없습니다.");
     } finally {
       setIsLoadingLocation(false);
     }
+  };
+
+  const handleSelectPlace = (place: PlaceItem) => {
+    setCurrentLocation({
+      latitude: place.latitude,
+      longitude: place.longitude,
+      address: place.roadAddress || place.address,
+    });
+    setPlaceName(place.title);
+    setSearchQuery("");
+    setShowSearchResults(false);
   };
 
   const handleSaveReminder = async () => {
@@ -146,6 +180,30 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
       },
     ]);
   };
+
+  const renderSearchResult = ({ item }: { item: PlaceItem }) => (
+    <Pressable
+      style={styles.searchResultItem}
+      onPress={() => handleSelectPlace(item)}
+    >
+      <View style={styles.searchResultIcon}>
+        <Ionicons name="location" size={18} color="#3B82F6" />
+      </View>
+      <View style={styles.searchResultInfo}>
+        <Text style={styles.searchResultTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.searchResultAddress} numberOfLines={1}>
+          {item.roadAddress || item.address}
+        </Text>
+        {item.category && (
+          <Text style={styles.searchResultCategory} numberOfLines={1}>
+            {item.category}
+          </Text>
+        )}
+      </View>
+    </Pressable>
+  );
 
   if (isLoading) {
     return (
@@ -205,7 +263,62 @@ const LocationReminderSetting: React.FC<LocationReminderSettingProps> = ({
             </View>
           )}
 
-          {/* 현재 위치 버튼 */}
+          {/* 장소 검색 입력 */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Ionicons name="search" size={18} color="#9CA3AF" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="장소 검색 (예: 강남역, 스타벅스)"
+                placeholderTextColor="#9CA3AF"
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <Pressable
+                  onPress={() => {
+                    setSearchQuery("");
+                    setShowSearchResults(false);
+                  }}
+                  style={styles.clearButton}
+                >
+                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          {/* 검색 결과 */}
+          {showSearchResults && (
+            <View style={styles.searchResultsContainer}>
+              {searchPlacesMutation.isPending ? (
+                <View style={styles.searchLoading}>
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                  <Text style={styles.searchLoadingText}>검색 중...</Text>
+                </View>
+              ) : searchPlacesMutation.data?.items?.length ? (
+                <FlatList
+                  data={searchPlacesMutation.data.items}
+                  renderItem={renderSearchResult}
+                  keyExtractor={(item, index) => `${item.title}-${index}`}
+                  scrollEnabled={false}
+                />
+              ) : (
+                <View style={styles.noResults}>
+                  <Text style={styles.noResultsText}>검색 결과가 없습니다</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* 또는 현재 위치 버튼 */}
+          <View style={styles.orDivider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>또는</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <Pressable
             style={styles.locationButton}
             onPress={handleGetCurrentLocation}
@@ -353,6 +466,104 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 15,
     color: "#374151",
+  },
+  searchContainer: {
+    marginBottom: 12,
+  },
+  searchInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#374151",
+  },
+  clearButton: {
+    padding: 4,
+  },
+  searchResultsContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 12,
+    maxHeight: 250,
+  },
+  searchResultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  searchResultIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 2,
+  },
+  searchResultAddress: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  searchResultCategory: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 2,
+  },
+  searchLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  searchLoadingText: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginLeft: 8,
+  },
+  noResults: {
+    padding: 20,
+    alignItems: "center",
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: "#9CA3AF",
+  },
+  orDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  dividerText: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginHorizontal: 12,
   },
   locationButton: {
     flexDirection: "row",

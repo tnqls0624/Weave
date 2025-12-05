@@ -731,3 +731,12 @@ export const useDeleteLocationReminder = () => {
     },
   });
 };
+
+// ==================== Place Search ====================
+
+export const useSearchPlaces = () => {
+  return useMutation({
+    mutationFn: ({ query, display = 5 }: { query: string; display?: number }) =>
+      apiService.searchPlaces(query, display),
+  });
+};

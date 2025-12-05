@@ -992,6 +992,33 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // ==================== 장소 검색 ====================
+
+  // 장소 검색 (네이버 지역 검색 API)
+  async searchPlaces(query: string, display: number = 5): Promise<PlaceSearchResult> {
+    return this.request<PlaceSearchResult>({
+      url: `/api/places/search`,
+      method: "GET",
+      params: { query, display },
+    });
+  }
+}
+
+// 장소 검색 결과 타입
+export interface PlaceSearchResult {
+  items: PlaceItem[];
+  total: number;
+}
+
+export interface PlaceItem {
+  title: string;
+  address: string;
+  roadAddress: string;
+  latitude: number;
+  longitude: number;
+  category: string;
+  telephone: string;
 }
 
 export const apiService = ApiService.getInstance();
