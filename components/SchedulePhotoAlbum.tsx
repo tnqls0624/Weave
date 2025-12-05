@@ -5,13 +5,13 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  FlatList,
   Image,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SchedulePhoto } from "../types";
@@ -21,27 +21,33 @@ import {
   useDeleteSchedulePhoto,
 } from "../services/queries";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const PHOTO_SIZE = (SCREEN_WIDTH - 48 - 8) / 3; // 3열, 패딩 고려
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const PHOTO_SIZE = (SCREEN_WIDTH - 48 - 16) / 3; // 3열, 패딩 고려 (카드뷰)
+const PHOTO_SIZE_FULLSCREEN = (SCREEN_WIDTH - 32 - 8) / 3; // 3열, 전체화면
 
 interface SchedulePhotoAlbumProps {
   scheduleId: string;
   currentUserId: string;
+  isFullScreen?: boolean;
 }
 
 const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
   scheduleId,
   currentUserId,
+  isFullScreen = false,
 }) => {
   const insets = useSafeAreaInsets();
   const [selectedPhoto, setSelectedPhoto] = useState<SchedulePhoto | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   const { data: photos = [], isLoading } = useSchedulePhotos(scheduleId);
   const uploadPhotoMutation = useUploadSchedulePhoto();
   const deletePhotoMutation = useDeleteSchedulePhoto();
 
-  const handlePickImage = async () => {
+  // 여러 장 선택 가능
+  const handlePickImages = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
@@ -49,14 +55,27 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      handleUploadPhoto(result.assets[0].uri);
+      if (!result.canceled && result.assets.length > 0) {
+        handleUploadPhotos(result.assets.map(asset => asset.uri));
+      }
+    } catch (error: any) {
+      console.error("Image picker error:", error);
+      if (error?.code === "ERR_FAILED_TO_READ_IMAGE") {
+        Alert.alert(
+          "사진을 불러올 수 없음",
+          "iCloud에서 다운로드되지 않은 사진일 수 있습니다. 사진 앱에서 먼저 다운로드해주세요."
+        );
+      } else {
+        Alert.alert("오류", "사진을 불러올 수 없습니다.");
+      }
     }
   };
 
@@ -68,27 +87,38 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.8,
-    });
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      handleUploadPhoto(result.assets[0].uri);
+      if (!result.canceled && result.assets[0]) {
+        handleUploadPhotos([result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error("Camera error:", error);
+      Alert.alert("오류", "카메라를 사용할 수 없습니다.");
     }
   };
 
-  const handleUploadPhoto = async (imageUri: string) => {
+  const handleUploadPhotos = async (imageUris: string[]) => {
     setIsUploading(true);
+    setUploadProgress({ current: 0, total: imageUris.length });
+
     try {
-      await uploadPhotoMutation.mutateAsync({
-        scheduleId,
-        imageUri,
-      });
+      for (let i = 0; i < imageUris.length; i++) {
+        setUploadProgress({ current: i + 1, total: imageUris.length });
+        await uploadPhotoMutation.mutateAsync({
+          scheduleId,
+          imageUri: imageUris[i],
+        });
+      }
     } catch (error) {
-      Alert.alert("오류", "사진 업로드에 실패했습니다.");
+      Alert.alert("오류", "일부 사진 업로드에 실패했습니다.");
     } finally {
       setIsUploading(false);
+      setUploadProgress({ current: 0, total: 0 });
     }
   };
 
@@ -116,40 +146,29 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
   const showAddOptions = () => {
     Alert.alert("사진 추가", "사진을 어디서 가져올까요?", [
       { text: "취소", style: "cancel" },
-      { text: "카메라", onPress: handleTakePhoto },
-      { text: "갤러리", onPress: handlePickImage },
+      { text: "카메라로 촬영", onPress: handleTakePhoto },
+      { text: "갤러리에서 선택", onPress: handlePickImages },
     ]);
   };
 
-  const renderPhoto = ({ item }: { item: SchedulePhoto }) => (
-    <Pressable
-      style={styles.photoItem}
-      onPress={() => setSelectedPhoto(item)}
-    >
-      <Image
-        source={{ uri: item.thumbnailUrl || item.url }}
-        style={styles.photoImage}
-        resizeMode="cover"
-      />
-    </Pressable>
-  );
+  const openPhotoViewer = (photo: SchedulePhoto, index: number) => {
+    setSelectedPhoto(photo);
+    setSelectedIndex(index);
+  };
 
-  const renderAddButton = () => (
-    <Pressable
-      style={[styles.photoItem, styles.addPhotoButton]}
-      onPress={showAddOptions}
-      disabled={isUploading}
-    >
-      {isUploading ? (
-        <ActivityIndicator size="small" color="#9CA3AF" />
-      ) : (
-        <>
-          <Ionicons name="add" size={32} color="#9CA3AF" />
-          <Text style={styles.addPhotoText}>추가</Text>
-        </>
-      )}
-    </Pressable>
-  );
+  const goToPreviousPhoto = () => {
+    if (selectedIndex > 0) {
+      setSelectedIndex(selectedIndex - 1);
+      setSelectedPhoto(photos[selectedIndex - 1]);
+    }
+  };
+
+  const goToNextPhoto = () => {
+    if (selectedIndex < photos.length - 1) {
+      setSelectedIndex(selectedIndex + 1);
+      setSelectedPhoto(photos[selectedIndex + 1]);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -160,34 +179,115 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
     });
   };
 
+  const photoSize = isFullScreen ? PHOTO_SIZE_FULLSCREEN : PHOTO_SIZE;
+
   return (
-    <View style={styles.container}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="images-outline" size={20} color="#374151" />
-          <Text style={styles.headerTitle}>사진 앨범</Text>
+    <ScrollView
+      style={[
+        styles.container,
+        isFullScreen && styles.containerFullScreen,
+      ]}
+      contentContainerStyle={isFullScreen && styles.contentFullScreen}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* 헤더 - 전체화면 모드가 아닐 때만 표시 */}
+      {!isFullScreen && (
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Ionicons name="images-outline" size={18} color="#6B7280" />
+            <Text style={styles.headerTitle}>사진</Text>
+          </View>
+          {photos.length > 0 && (
+            <Text style={styles.photoBadgeText}>{photos.length}</Text>
+          )}
         </View>
-        <Text style={styles.photoCount}>{photos.length}장</Text>
-      </View>
+      )}
 
       {/* 사진 그리드 */}
       {isLoading ? (
-        <View style={styles.loadingContainer}>
+        <View style={[styles.loadingContainer, isFullScreen && styles.loadingContainerFullScreen]}>
           <ActivityIndicator size="small" color="#007AFF" />
         </View>
+      ) : photos.length === 0 ? (
+        <View style={[styles.emptyContainer, isFullScreen && styles.emptyContainerFullScreen]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.emptyAddButton,
+              isFullScreen && styles.emptyAddButtonFullScreen,
+              pressed && styles.emptyAddButtonPressed,
+            ]}
+            onPress={showAddOptions}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <View style={styles.uploadingContainer}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.uploadingText}>
+                  {uploadProgress.current}/{uploadProgress.total}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Ionicons name="images-outline" size={isFullScreen ? 40 : 28} color="#9CA3AF" />
+                <Text style={[styles.emptyTitle, isFullScreen && styles.emptyTitleFullScreen]}>
+                  사진 없음
+                </Text>
+                {isFullScreen && (
+                  <Text style={styles.emptySubtitleFullScreen}>
+                    탭하여 추가
+                  </Text>
+                )}
+              </>
+            )}
+          </Pressable>
+        </View>
       ) : (
-        <View style={styles.gridContainer}>
-          {renderAddButton()}
-          {photos.map((photo: SchedulePhoto) => (
-            <View key={photo.id}>
-              {renderPhoto({ item: photo })}
-            </View>
+        <View style={[styles.gridContainer, isFullScreen && styles.gridContainerFullScreen]}>
+          {/* 사진 추가 버튼 */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.photoItem,
+              { width: photoSize, height: photoSize },
+              styles.addPhotoButton,
+              pressed && styles.addPhotoButtonPressed,
+            ]}
+            onPress={showAddOptions}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <View style={styles.uploadingSmall}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.uploadingSmallText}>
+                  {uploadProgress.current}/{uploadProgress.total}
+                </Text>
+              </View>
+            ) : (
+              <Ionicons name="add" size={24} color="#9CA3AF" />
+            )}
+          </Pressable>
+
+          {/* 사진 목록 */}
+          {photos.map((photo: SchedulePhoto, index: number) => (
+            <Pressable
+              key={photo.id}
+              style={({ pressed }) => [
+                styles.photoItem,
+                { width: photoSize, height: photoSize },
+                pressed && styles.photoItemPressed,
+              ]}
+              onPress={() => openPhotoViewer(photo, index)}
+            >
+              <Image
+                source={{ uri: photo.thumbnailUrl || photo.url }}
+                style={styles.photoImage}
+                resizeMode="cover"
+              />
+            </Pressable>
           ))}
         </View>
       )}
 
-      {/* 사진 상세 모달 */}
+      {/* 사진 상세 모달 (갤러리 뷰어) */}
       <Modal
         visible={!!selectedPhoto}
         transparent
@@ -195,6 +295,7 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
         onRequestClose={() => setSelectedPhoto(null)}
       >
         <View style={styles.modalOverlay}>
+          {/* 헤더 */}
           <View style={[styles.modalHeader, { paddingTop: insets.top + 10 }]}>
             <Pressable
               style={styles.modalCloseButton}
@@ -202,6 +303,11 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
             >
               <Ionicons name="close" size={28} color="#FFFFFF" />
             </Pressable>
+
+            <Text style={styles.modalCounter}>
+              {selectedIndex + 1} / {photos.length}
+            </Text>
+
             {selectedPhoto?.uploadedBy === currentUserId && (
               <Pressable
                 style={styles.modalDeleteButton}
@@ -212,6 +318,7 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
             )}
           </View>
 
+          {/* 이미지 */}
           {selectedPhoto && (
             <View style={styles.modalContent}>
               <Image
@@ -219,7 +326,31 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
                 style={styles.fullImage}
                 resizeMode="contain"
               />
-              <View style={styles.photoInfo}>
+
+              {/* 이전/다음 버튼 */}
+              {photos.length > 1 && (
+                <>
+                  {selectedIndex > 0 && (
+                    <Pressable
+                      style={[styles.navButton, styles.navButtonLeft]}
+                      onPress={goToPreviousPhoto}
+                    >
+                      <Ionicons name="chevron-back" size={32} color="#FFFFFF" />
+                    </Pressable>
+                  )}
+                  {selectedIndex < photos.length - 1 && (
+                    <Pressable
+                      style={[styles.navButton, styles.navButtonRight]}
+                      onPress={goToNextPhoto}
+                    >
+                      <Ionicons name="chevron-forward" size={32} color="#FFFFFF" />
+                    </Pressable>
+                  )}
+                </>
+              )}
+
+              {/* 사진 정보 */}
+              <View style={[styles.photoInfo, { paddingBottom: insets.bottom + 20 }]}>
                 {selectedPhoto.uploadedByName && (
                   <Text style={styles.uploaderName}>
                     {selectedPhoto.uploadedByName}
@@ -228,24 +359,70 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
                 <Text style={styles.uploadDate}>
                   {formatDate(selectedPhoto.uploadedAt)}
                 </Text>
-                {selectedPhoto.caption && (
-                  <Text style={styles.caption}>{selectedPhoto.caption}</Text>
-                )}
               </View>
+            </View>
+          )}
+
+          {/* 썸네일 스크롤 */}
+          {photos.length > 1 && (
+            <View style={styles.thumbnailContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.thumbnailScroll}
+              >
+                {photos.map((photo: SchedulePhoto, index: number) => (
+                  <Pressable
+                    key={photo.id}
+                    style={[
+                      styles.thumbnailItem,
+                      index === selectedIndex && styles.thumbnailItemSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedPhoto(photo);
+                      setSelectedIndex(index);
+                    }}
+                  >
+                    <Image
+                      source={{ uri: photo.thumbnailUrl || photo.url }}
+                      style={styles.thumbnailImage}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
           )}
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  containerFullScreen: {
+    flex: 1,
+    borderRadius: 0,
+    margin: 0,
+    padding: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  contentFullScreen: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: "row",
@@ -256,48 +433,109 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: "#374151",
-    marginLeft: 8,
   },
-  photoCount: {
-    fontSize: 13,
-    color: "#6B7280",
+  photoBadgeText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#9CA3AF",
   },
   loadingContainer: {
-    paddingVertical: 40,
+    paddingVertical: 32,
     alignItems: "center",
+  },
+  loadingContainerFullScreen: {
+    paddingVertical: 80,
+  },
+  emptyContainer: {
+    paddingVertical: 4,
+  },
+  emptyContainerFullScreen: {
+    flex: 1,
+    paddingTop: 80,
+  },
+  emptyAddButton: {
+    alignItems: "center",
+    paddingVertical: 24,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+  },
+  emptyAddButtonFullScreen: {
+    paddingVertical: 48,
+    marginHorizontal: 20,
+    borderRadius: 12,
+  },
+  emptyAddButtonPressed: {
+    backgroundColor: "#F3F4F6",
+  },
+  emptyTitle: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#9CA3AF",
+    marginTop: 8,
+  },
+  emptyTitleFullScreen: {
+    fontSize: 15,
+    marginTop: 12,
+  },
+  emptySubtitleFullScreen: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    marginTop: 4,
+  },
+  uploadingContainer: {
+    alignItems: "center",
+  },
+  uploadingText: {
+    fontSize: 13,
+    color: "#007AFF",
+    marginTop: 8,
   },
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
+    marginHorizontal: -4,
+  },
+  gridContainerFullScreen: {
     marginHorizontal: -2,
   },
   photoItem: {
-    width: PHOTO_SIZE,
-    height: PHOTO_SIZE,
-    margin: 2,
-    borderRadius: 8,
+    margin: 4,
+    borderRadius: 12,
     overflow: "hidden",
+  },
+  photoItemPressed: {
+    opacity: 0.8,
   },
   photoImage: {
     width: "100%",
     height: "100%",
   },
   addPhotoButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F9FAFB",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: "#E5E7EB",
     borderStyle: "dashed",
   },
-  addPhotoText: {
-    fontSize: 12,
-    color: "#9CA3AF",
+  addPhotoButtonPressed: {
+    backgroundColor: "#F3F4F6",
+  },
+  uploadingSmall: {
+    alignItems: "center",
+  },
+  uploadingSmallText: {
+    fontSize: 11,
+    color: "#007AFF",
     marginTop: 4,
   },
   modalOverlay: {
@@ -307,6 +545,7 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
@@ -315,6 +554,11 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     alignItems: "center",
+  },
+  modalCounter: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   modalDeleteButton: {
     width: 44,
@@ -328,27 +572,64 @@ const styles = StyleSheet.create({
   },
   fullImage: {
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.6,
+  },
+  navButton: {
+    position: "absolute",
+    top: "50%",
+    marginTop: -24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  navButtonLeft: {
+    left: 16,
+  },
+  navButtonRight: {
+    right: 16,
   },
   photoInfo: {
-    padding: 16,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
     alignItems: "center",
   },
   uploaderName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
   },
   uploadDate: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#9CA3AF",
     marginTop: 4,
   },
-  caption: {
-    fontSize: 14,
-    color: "#D1D5DB",
-    marginTop: 12,
-    textAlign: "center",
+  thumbnailContainer: {
+    paddingVertical: 16,
+  },
+  thumbnailScroll: {
+    paddingHorizontal: 16,
+  },
+  thumbnailItem: {
+    width: 60,
+    height: 60,
+    marginRight: 8,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  thumbnailItemSelected: {
+    borderColor: "#FFFFFF",
+  },
+  thumbnailImage: {
+    width: "100%",
+    height: "100%",
   },
 });
 

@@ -640,9 +640,9 @@ class ApiService {
       url: "/api/user/notifications",
       method: "PUT",
       data: {
-        ...(pushEnabled && { pushEnabled }),
+        ...(pushEnabled !== undefined && { pushEnabled }),
         ...(fcmToken && { fcmToken }),
-        ...(locationEnabled && { locationEnabled }),
+        ...(locationEnabled !== undefined && { locationEnabled }),
       },
     });
   }
@@ -810,10 +810,21 @@ class ApiService {
 
   // 일정 댓글 목록 조회
   async getScheduleComments(scheduleId: string): Promise<any[]> {
-    return this.request<any[]>({
+    const comments = await this.request<any[]>({
       url: `/api/schedule/${scheduleId}/comments`,
       method: "GET",
     });
+    // 백엔드 필드명을 프론트엔드 타입에 맞게 변환
+    return comments.map((comment) => ({
+      id: comment.id,
+      scheduleId: comment.scheduleId,
+      userId: comment.authorId,
+      userName: comment.authorName,
+      userAvatarUrl: comment.authorAvatarUrl,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+    }));
   }
 
   // 일정 댓글 작성

@@ -13,9 +13,7 @@ import { isHoliday } from "../../constants/holidays";
 import { useDeleteSchedule } from "../../services/queries";
 import type { Schedule, User } from "../../types";
 import ScheduleComments from "../ScheduleComments";
-import ScheduleChecklist from "../ScheduleChecklist";
 import SchedulePhotoAlbum from "../SchedulePhotoAlbum";
-import LocationReminderSetting from "../LocationReminderSetting";
 
 dayjs.locale("ko");
 
@@ -493,8 +491,8 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                           style={styles.detailButton}
                           onPress={() => openDetailModal(schedule)}
                         >
-                          <Ionicons name="ellipsis-horizontal" size={16} color="#6b7280" />
-                          <Text style={styles.detailButtonText}>더보기</Text>
+                          <Ionicons name="images-outline" size={16} color="#6b7280" />
+                          <Text style={styles.detailButtonText}>사진</Text>
                         </Pressable>
                       </View>
 
@@ -575,41 +573,29 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
         </View>
       </Modal>
 
-      {/* 일정 상세 모달 (체크리스트, 앨범, 위치 알림) */}
+      {/* 사진 앨범 모달 */}
       <Modal
         visible={detailModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={closeDetailModal}
       >
-        <View style={styles.detailModal}>
-          <View style={styles.detailModalHeader}>
+        <View style={styles.albumModal}>
+          <View style={styles.albumHeader}>
             <Pressable onPress={closeDetailModal} style={styles.modalCloseButton}>
               <Ionicons name="close" size={24} color="#6b7280" />
             </Pressable>
-            <Text style={styles.detailModalTitle} numberOfLines={1}>
-              {selectedScheduleForDetail?.title || "일정 상세"}
+            <Text style={styles.albumTitle} numberOfLines={1}>
+              {selectedScheduleForDetail?.title || "사진"}
             </Text>
             <View style={{ width: 32 }} />
           </View>
           {selectedScheduleForDetail && (
-            <ScrollView
-              style={styles.detailModalContent}
-              contentContainerStyle={styles.detailModalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <ScheduleChecklist
-                scheduleId={selectedScheduleForDetail.id}
-                currentUserId={currentUser.id}
-              />
-              <SchedulePhotoAlbum
-                scheduleId={selectedScheduleForDetail.id}
-                currentUserId={currentUser.id}
-              />
-              <LocationReminderSetting
-                scheduleId={selectedScheduleForDetail.id}
-              />
-            </ScrollView>
+            <SchedulePhotoAlbum
+              scheduleId={selectedScheduleForDetail.id}
+              currentUserId={currentUser.id}
+              isFullScreen={true}
+            />
           )}
         </View>
       </Modal>
@@ -879,33 +865,26 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
   },
-  detailModal: {
+  // 앨범 모달 스타일
+  albumModal: {
     flex: 1,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#ffffff",
   },
-  detailModalHeader: {
+  albumHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: "#f3f4f6",
   },
-  detailModalTitle: {
+  albumTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
     flex: 1,
     textAlign: "center",
-  },
-  detailModalContent: {
-    flex: 1,
-  },
-  detailModalScrollContent: {
-    padding: 16,
-    paddingBottom: 32,
   },
 });
 

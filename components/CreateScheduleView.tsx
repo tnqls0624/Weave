@@ -129,7 +129,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   // 체크리스트 관련 상태
-  const [checklistItems, setChecklistItems] = useState<Array<{ id: string; content: string }>>([]);
+  const [checklistItems, setChecklistItems] = useState<Array<{ id: string; content: string; isCompleted: boolean }>>([]);
   const [newChecklistItem, setNewChecklistItem] = useState("");
 
   // 장소 검색 mutation
@@ -263,6 +263,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           scheduleToEdit.checklist.map((item) => ({
             id: item.id,
             content: item.content,
+            isCompleted: item.isCompleted ?? false,
           }))
         );
       }
@@ -329,8 +330,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         endTime: isAllDay ? undefined : endTime,
         reminderMinutes: reminderMinutes ?? undefined,
         isImportant,
-        // 위치 알림 데이터
-        locationReminder: selectedLocation && enableArrivalNotification
+        // 위치 알림 데이터 (장소가 선택되면 저장, isEnabled는 도착 알림 설정에 따라)
+        locationReminder: selectedLocation
           ? {
               id: scheduleToEdit?.locationReminder?.id || "",
               scheduleId: scheduleToEdit?.id || "",
@@ -339,7 +340,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               radius: selectedRadius,
               address: selectedLocation.address,
               placeName: selectedLocation.placeName,
-              isEnabled: true,
+              isEnabled: enableArrivalNotification,
             }
           : undefined,
         // 체크리스트 데이터
@@ -347,7 +348,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           ? checklistItems.map((item) => ({
               id: item.id,
               content: item.content,
-              isCompleted: false,
+              isCompleted: item.isCompleted,
               createdBy: currentUser.id,
               createdAt: new Date().toISOString(),
             }))
@@ -599,6 +600,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         {
           id: `temp-${Date.now()}`,
           content: newChecklistItem.trim(),
+          isCompleted: false,
         },
       ]);
       setNewChecklistItem("");
@@ -608,6 +610,15 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   // 체크리스트 항목 삭제
   const handleRemoveChecklistItem = (id: string) => {
     setChecklistItems(checklistItems.filter((item) => item.id !== id));
+  };
+
+  // 체크리스트 항목 토글
+  const handleToggleChecklistItem = (id: string) => {
+    setChecklistItems(
+      checklistItems.map((item) =>
+        item.id === id ? { ...item, isCompleted: !item.isCompleted } : item
+      )
+    );
   };
 
   // 장소 검색 결과 렌더링
@@ -1004,10 +1015,14 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 style={styles.previewContent}
                 onPress={() => checklistSheetRef.current?.expand()}
               >
-                <Ionicons name="checkbox" size={18} color="#007AFF" />
+                <Ionicons
+                  name={checklistItems.every(item => item.isCompleted) ? "checkbox" : "checkbox-outline"}
+                  size={18}
+                  color={checklistItems.every(item => item.isCompleted) ? "#22C55E" : "#007AFF"}
+                />
                 <View style={styles.previewTextContainer}>
                   <Text style={styles.previewTitle}>
-                    체크리스트 {checklistItems.length}개
+                    체크리스트 {checklistItems.filter(item => item.isCompleted).length}/{checklistItems.length} 완료
                   </Text>
                   <Text style={styles.previewSubtitle} numberOfLines={1}>
                     {checklistItems.map(item => item.content).join(", ")}
@@ -1520,54 +1535,107 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           handleIndicatorStyle={styles.bottomSheetHandle}
         >
           <BottomSheetView style={styles.bottomSheetContent}>
-            <Text style={styles.bottomSheetTitle}>체크리스트</Text>
-
-            <ScrollView style={styles.checklistScrollView}>
-              {/* 체크리스트 항목들 */}
-              {checklistItems.map((item) => (
-                <View key={item.id} style={styles.checklistItem}>
-                  <View style={styles.checklistItemCheckbox}>
-                    <Ionicons name="square-outline" size={18} color="#D1D5DB" />
-                  </View>
-                  <Text style={styles.checklistItemText}>{item.content}</Text>
-                  <Pressable
-                    onPress={() => handleRemoveChecklistItem(item.id)}
-                    style={styles.checklistItemRemove}
-                  >
-                    <Ionicons name="close" size={16} color="#9CA3AF" />
-                  </Pressable>
+            {/* 헤더 */}
+            <View style={styles.checklistHeader}>
+              <View style={styles.checklistHeaderIcon}>
+                <Ionicons name="list" size={16} color="#FFFFFF" />
+              </View>
+              <Text style={styles.checklistHeaderTitle}>체크리스트</Text>
+              {checklistItems.length > 0 && (
+                <View style={styles.checklistBadge}>
+                  <Text style={styles.checklistBadgeText}>{checklistItems.length}</Text>
                 </View>
-              ))}
+              )}
+            </View>
 
-              {/* 새 항목 추가 */}
-              <View style={styles.addChecklistItem}>
-                <Ionicons name="add-circle-outline" size={18} color="#9CA3AF" />
+            <ScrollView style={styles.checklistScrollView} showsVerticalScrollIndicator={false}>
+              {/* 체크리스트 항목들 */}
+              {checklistItems.length > 0 ? (
+                <View style={styles.checklistItemsContainer}>
+                  {checklistItems.map((item, index) => (
+                    <Pressable
+                      key={item.id}
+                      style={[
+                        styles.checklistItem,
+                        index === checklistItems.length - 1 && styles.checklistItemLast,
+                      ]}
+                      onPress={() => handleToggleChecklistItem(item.id)}
+                    >
+                      <View style={[
+                        styles.checklistItemCheckbox,
+                        item.isCompleted && styles.checklistItemCheckboxCompleted,
+                      ]}>
+                        {item.isCompleted && (
+                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.checklistItemText,
+                          item.isCompleted && styles.checklistItemTextCompleted,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.content}
+                      </Text>
+                      <Pressable
+                        onPress={() => handleRemoveChecklistItem(item.id)}
+                        style={({ pressed }) => [
+                          styles.checklistItemRemove,
+                          pressed && styles.checklistItemRemovePressed,
+                        ]}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
+                      </Pressable>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.checklistEmptyState}>
+                  <View style={styles.checklistEmptyIcon}>
+                    <Ionicons name="checkbox-outline" size={32} color="#D1D5DB" />
+                  </View>
+                  <Text style={styles.checklistEmptyTitle}>체크리스트가 비어있어요</Text>
+                  <Text style={styles.checklistEmptySubtitle}>준비물이나 할 일을 추가해보세요</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* 새 항목 추가 입력 */}
+            <View style={styles.checklistInputContainer}>
+              <View style={styles.checklistInputWrapper}>
+                <Ionicons name="add" size={20} color="#9CA3AF" />
                 <TextInput
-                  style={styles.addChecklistInput}
+                  style={styles.checklistInput}
                   value={newChecklistItem}
                   onChangeText={setNewChecklistItem}
-                  placeholder="항목 추가..."
+                  placeholder="새 항목 추가"
                   placeholderTextColor="#9CA3AF"
                   returnKeyType="done"
                   onSubmitEditing={handleAddChecklistItem}
                 />
-                {newChecklistItem.trim() && (
-                  <Pressable
-                    onPress={handleAddChecklistItem}
-                    style={styles.addChecklistButton}
-                  >
-                    <Text style={styles.addChecklistButtonText}>추가</Text>
-                  </Pressable>
-                )}
               </View>
-            </ScrollView>
+              {newChecklistItem.trim() ? (
+                <Pressable
+                  onPress={handleAddChecklistItem}
+                  style={({ pressed }) => [
+                    styles.checklistAddButton,
+                    pressed && styles.checklistAddButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.checklistAddButtonText}>추가</Text>
+                </Pressable>
+              ) : null}
+            </View>
 
             {/* 확인 버튼 */}
             <TouchableOpacity
               style={styles.checklistConfirmButton}
               onPress={() => checklistSheetRef.current?.close()}
+              activeOpacity={0.8}
             >
-              <Text style={styles.checklistConfirmButtonText}>확인</Text>
+              <Text style={styles.checklistConfirmButtonText}>완료</Text>
             </TouchableOpacity>
           </BottomSheetView>
         </BottomSheet>
@@ -2218,52 +2286,146 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   // 체크리스트 스타일
+  checklistHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  checklistHeaderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#3B82F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checklistHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginLeft: 12,
+    flex: 1,
+  },
+  checklistBadge: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  checklistBadgeText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3B82F6",
+  },
+  checklistItemsContainer: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
   checklistItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  checklistItemLast: {
+    borderBottomWidth: 0,
   },
   checklistItemCheckbox: {
-    marginRight: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#D1D5DB",
+    marginRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  checklistItemCheckboxCompleted: {
+    backgroundColor: "#22C55E",
+    borderColor: "#22C55E",
   },
   checklistItemText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: "#374151",
+    lineHeight: 20,
+  },
+  checklistItemTextCompleted: {
+    textDecorationLine: "line-through",
+    color: "#9CA3AF",
   },
   checklistItemRemove: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 8,
   },
-  addChecklistItem: {
+  checklistItemRemovePressed: {
+    backgroundColor: "#FEE2E2",
+  },
+  checklistEmptyState: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  checklistEmptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  checklistEmptyTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  checklistEmptySubtitle: {
+    fontSize: 14,
+    color: "#9CA3AF",
+  },
+  checklistInputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderStyle: "dashed",
+    marginTop: 16,
+    marginBottom: 8,
   },
-  addChecklistInput: {
+  checklistInputWrapper: {
     flex: 1,
-    fontSize: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  checklistInput: {
+    flex: 1,
+    fontSize: 15,
     color: "#374151",
     marginLeft: 10,
     paddingVertical: 0,
   },
-  addChecklistButton: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+  checklistAddButton: {
+    backgroundColor: "#3B82F6",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginLeft: 10,
   },
-  addChecklistButtonText: {
-    fontSize: 12,
+  checklistAddButtonPressed: {
+    backgroundColor: "#2563EB",
+  },
+  checklistAddButtonText: {
+    fontSize: 15,
     fontWeight: "600",
     color: "#FFFFFF",
   },
@@ -2348,18 +2510,22 @@ const styles = StyleSheet.create({
   },
   checklistScrollView: {
     flex: 1,
-    marginBottom: 8,
   },
   checklistConfirmButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: "#3B82F6",
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 12,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   checklistConfirmButtonText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#FFFFFF",
   },
 });

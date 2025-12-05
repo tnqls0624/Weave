@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  Animated,
 } from "react-native";
 import { ChecklistItem } from "../types";
 import {
@@ -27,6 +28,7 @@ const ScheduleChecklist: React.FC<ScheduleChecklistProps> = ({
   currentUserId,
 }) => {
   const [newItemContent, setNewItemContent] = useState("");
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const { data: checklist = [], isLoading } = useScheduleChecklist(scheduleId);
   const addItemMutation = useAddChecklistItem();
   const toggleItemMutation = useToggleChecklistItem();
@@ -75,33 +77,41 @@ const ScheduleChecklist: React.FC<ScheduleChecklistProps> = ({
   const totalCount = checklist.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
-  const renderItem = (item: ChecklistItem) => (
-    <View key={item.id} style={styles.itemContainer}>
-      <Pressable
-        style={styles.checkbox}
-        onPress={() => handleToggleItem(item.id)}
-      >
-        <Ionicons
-          name={item.isCompleted ? "checkbox" : "square-outline"}
-          size={24}
-          color={item.isCompleted ? "#22C55E" : "#9CA3AF"}
-        />
-      </Pressable>
+  const renderItem = (item: ChecklistItem, index: number) => (
+    <Pressable
+      key={item.id}
+      style={({ pressed }) => [
+        styles.itemContainer,
+        index === checklist.length - 1 && styles.itemContainerLast,
+        pressed && styles.itemPressed,
+      ]}
+      onPress={() => handleToggleItem(item.id)}
+    >
+      <View style={[styles.checkbox, item.isCompleted && styles.checkboxCompleted]}>
+        {item.isCompleted && (
+          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+        )}
+      </View>
       <Text
         style={[
           styles.itemText,
           item.isCompleted && styles.itemTextCompleted,
         ]}
+        numberOfLines={2}
       >
         {item.content}
       </Text>
       <Pressable
-        style={styles.deleteButton}
+        style={({ pressed }) => [
+          styles.deleteButton,
+          pressed && styles.deleteButtonPressed,
+        ]}
         onPress={() => handleDeleteItem(item.id)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="close-circle-outline" size={20} color="#9CA3AF" />
+        <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
       </Pressable>
-    </View>
+    </Pressable>
   );
 
   return (
@@ -109,13 +119,17 @@ const ScheduleChecklist: React.FC<ScheduleChecklistProps> = ({
       {/* 헤더 */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="checkbox-outline" size={20} color="#374151" />
+          <View style={styles.headerIcon}>
+            <Ionicons name="list" size={16} color="#FFFFFF" />
+          </View>
           <Text style={styles.headerTitle}>체크리스트</Text>
         </View>
         {totalCount > 0 && (
-          <Text style={styles.progressText}>
-            {completedCount}/{totalCount} 완료
-          </Text>
+          <View style={styles.progressBadge}>
+            <Text style={styles.progressText}>
+              {completedCount}/{totalCount}
+            </Text>
+          </View>
         )}
       </View>
 
@@ -129,47 +143,57 @@ const ScheduleChecklist: React.FC<ScheduleChecklistProps> = ({
       {/* 체크리스트 목록 */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#007AFF" />
+          <ActivityIndicator size="small" color="#3B82F6" />
         </View>
       ) : (
         <View style={styles.listContainer}>
-          {checklist.map((item: ChecklistItem) => renderItem(item))}
+          {checklist.map((item: ChecklistItem, index: number) => renderItem(item, index))}
 
           {checklist.length === 0 && (
             <View style={styles.emptyContainer}>
-              <Ionicons name="list-outline" size={32} color="#D1D5DB" />
-              <Text style={styles.emptyText}>체크리스트를 추가해보세요</Text>
+              <View style={styles.emptyIconContainer}>
+                <Ionicons name="checkbox-outline" size={28} color="#D1D5DB" />
+              </View>
+              <Text style={styles.emptyTitle}>체크리스트가 비어있어요</Text>
+              <Text style={styles.emptySubtitle}>할 일을 추가해보세요</Text>
             </View>
           )}
         </View>
       )}
 
       {/* 입력 필드 */}
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, isInputFocused && styles.inputContainerFocused]}>
+        <View style={styles.inputIconContainer}>
+          <Ionicons name="add" size={18} color={isInputFocused ? "#3B82F6" : "#9CA3AF"} />
+        </View>
         <TextInput
           style={styles.input}
           value={newItemContent}
           onChangeText={setNewItemContent}
-          placeholder="새 항목 추가..."
+          placeholder="새 항목 추가"
           placeholderTextColor="#9CA3AF"
           onSubmitEditing={handleAddItem}
+          onFocus={() => setIsInputFocused(true)}
+          onBlur={() => setIsInputFocused(false)}
           returnKeyType="done"
         />
-        <Pressable
-          style={[
-            styles.addButton,
-            (!newItemContent.trim() || addItemMutation.isPending) &&
-              styles.addButtonDisabled,
-          ]}
-          onPress={handleAddItem}
-          disabled={!newItemContent.trim() || addItemMutation.isPending}
-        >
-          {addItemMutation.isPending ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-          )}
-        </Pressable>
+        {newItemContent.trim() && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.addButtonPressed,
+              addItemMutation.isPending && styles.addButtonDisabled,
+            ]}
+            onPress={handleAddItem}
+            disabled={addItemMutation.isPending}
+          >
+            {addItemMutation.isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.addButtonText}>추가</Text>
+            )}
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -178,105 +202,182 @@ const ScheduleChecklist: React.FC<ScheduleChecklistProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 16,
   },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#3B82F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   headerTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#374151",
-    marginLeft: 8,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginLeft: 10,
+  },
+  progressBadge: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   progressText: {
     fontSize: 13,
-    color: "#6B7280",
+    fontWeight: "600",
+    color: "#3B82F6",
   },
   progressBarContainer: {
-    height: 4,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 2,
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
     marginBottom: 16,
     overflow: "hidden",
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "#22C55E",
-    borderRadius: 2,
+    backgroundColor: "#3B82F6",
+    borderRadius: 3,
   },
   loadingContainer: {
-    paddingVertical: 20,
+    paddingVertical: 32,
     alignItems: "center",
   },
   listContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   itemContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
+  itemContainerLast: {
+    borderBottomWidth: 0,
+  },
+  itemPressed: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    marginHorizontal: -4,
+    paddingHorizontal: 8,
+  },
   checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#D1D5DB",
     marginRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxCompleted: {
+    backgroundColor: "#22C55E",
+    borderColor: "#22C55E",
   },
   itemText: {
     flex: 1,
     fontSize: 15,
     color: "#374151",
+    lineHeight: 20,
   },
   itemTextCompleted: {
     textDecorationLine: "line-through",
     color: "#9CA3AF",
   },
   deleteButton: {
-    padding: 4,
+    padding: 6,
     marginLeft: 8,
+    borderRadius: 6,
+  },
+  deleteButtonPressed: {
+    backgroundColor: "#FEE2E2",
   },
   emptyContainer: {
     alignItems: "center",
-    paddingVertical: 24,
+    paddingVertical: 32,
   },
-  emptyText: {
-    fontSize: 14,
+  emptyIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 13,
     color: "#9CA3AF",
-    marginTop: 8,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 4,
+  },
+  inputContainerFocused: {
+    borderColor: "#3B82F6",
+    backgroundColor: "#FFFFFF",
+  },
+  inputIconContainer: {
+    marginRight: 8,
   },
   input: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 15,
     color: "#374151",
+    paddingVertical: 10,
   },
   addButton: {
     backgroundColor: "#3B82F6",
-    width: 36,
-    height: 36,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
     marginLeft: 8,
   },
+  addButtonPressed: {
+    backgroundColor: "#2563EB",
+  },
   addButtonDisabled: {
-    backgroundColor: "#D1D5DB",
+    backgroundColor: "#93C5FD",
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });
 

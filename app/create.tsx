@@ -60,7 +60,8 @@ export default function CreateScreen() {
       }
 
       // LocationReminder 저장/삭제
-      if (locationReminder && locationReminder.isEnabled) {
+      if (locationReminder) {
+        // 장소가 선택되어 있으면 저장 (isEnabled 여부 포함)
         await apiService.setLocationReminder(savedScheduleId, {
           latitude: locationReminder.latitude,
           longitude: locationReminder.longitude,
@@ -69,7 +70,7 @@ export default function CreateScreen() {
           placeName: locationReminder.placeName,
         });
       } else if (id) {
-        // 수정 시 기존 위치 알림이 있었는데 삭제한 경우
+        // 수정 시 장소가 삭제된 경우
         try {
           await apiService.deleteLocationReminder(savedScheduleId);
         } catch (e) {
