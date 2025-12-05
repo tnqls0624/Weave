@@ -4,6 +4,7 @@ import BottomSheet, {
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import dayjs from "dayjs";
+import * as Location from "expo-location";
 import React, {
   useCallback,
   useEffect,
@@ -15,6 +16,7 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -30,11 +32,20 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
-import { RepeatOption, Schedule, User } from "../types";
+import { RepeatOption, Schedule, User, ChecklistItem } from "../types";
 import DateTimePicker from "./DateTimePicker";
 import ScheduleConflictService, { ConflictInfo } from "../services/scheduleConflictService";
+import { useSearchPlaces } from "../services/queries";
+import { PlaceItem } from "../services/api";
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+const RADIUS_OPTIONS = [
+  { label: "100m", value: 100 },
+  { label: "300m", value: 300 },
+  { label: "500m", value: 500 },
+  { label: "1km", value: 1000 },
+];
 
 // 음력을 양력으로 변환
 const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
@@ -104,6 +115,26 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const [isImportant, setIsImportant] = useState(false);
   const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
 
+  // 장소 검색 및 위치 알림 관련 상태
+  const [locationSearchQuery, setLocationSearchQuery] = useState("");
+  const [showLocationSearchResults, setShowLocationSearchResults] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    address?: string;
+    placeName?: string;
+  } | null>(null);
+  const [selectedRadius, setSelectedRadius] = useState(300);
+  const [enableArrivalNotification, setEnableArrivalNotification] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+
+  // 체크리스트 관련 상태
+  const [checklistItems, setChecklistItems] = useState<Array<{ id: string; content: string }>>([]);
+  const [newChecklistItem, setNewChecklistItem] = useState("");
+
+  // 장소 검색 mutation
+  const searchPlacesMutation = useSearchPlaces();
+
   // 충돌 감지 - 일정 정보가 변경될 때마다 체크
   useEffect(() => {
     if (existingSchedules.length === 0) {
@@ -143,6 +174,21 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       hideSubscription.remove();
     };
   }, []);
+
+  // 디바운스된 장소 검색
+  useEffect(() => {
+    if (locationSearchQuery.length < 2) {
+      setShowLocationSearchResults(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      searchPlacesMutation.mutate({ query: locationSearchQuery, display: 5 });
+      setShowLocationSearchResults(true);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [locationSearchQuery]);
 
   // BottomSheet refs
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -192,6 +238,28 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       setIsLunar(scheduleToEdit.calendarType === "lunar");
       setReminderMinutes(scheduleToEdit.reminderMinutes ?? null);
       setIsImportant(scheduleToEdit.isImportant ?? false);
+
+      // 위치 알림 데이터 불러오기
+      if (scheduleToEdit.locationReminder) {
+        setSelectedLocation({
+          latitude: scheduleToEdit.locationReminder.latitude,
+          longitude: scheduleToEdit.locationReminder.longitude,
+          address: scheduleToEdit.locationReminder.address,
+          placeName: scheduleToEdit.locationReminder.placeName,
+        });
+        setSelectedRadius(scheduleToEdit.locationReminder.radius || 300);
+        setEnableArrivalNotification(scheduleToEdit.locationReminder.isEnabled);
+      }
+
+      // 체크리스트 데이터 불러오기
+      if (scheduleToEdit.checklist && scheduleToEdit.checklist.length > 0) {
+        setChecklistItems(
+          scheduleToEdit.checklist.map((item) => ({
+            id: item.id,
+            content: item.content,
+          }))
+        );
+      }
     } else {
       setTitle("");
       const initialDateStr = initialDate
@@ -208,6 +276,11 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       setIsImportant(false);
       setIsAllDay(false);
       setIsLunar(false);
+      setSelectedLocation(null);
+      setSelectedRadius(300);
+      setEnableArrivalNotification(false);
+      setChecklistItems([]);
+      setNewChecklistItem("");
     }
   }, [scheduleToEdit, currentUser.id, initialDate]);
 
@@ -250,6 +323,29 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
         endTime: isAllDay ? undefined : endTime,
         reminderMinutes: reminderMinutes ?? undefined,
         isImportant,
+        // 위치 알림 데이터
+        locationReminder: selectedLocation && enableArrivalNotification
+          ? {
+              id: scheduleToEdit?.locationReminder?.id || "",
+              scheduleId: scheduleToEdit?.id || "",
+              latitude: selectedLocation.latitude,
+              longitude: selectedLocation.longitude,
+              radius: selectedRadius,
+              address: selectedLocation.address,
+              placeName: selectedLocation.placeName,
+              isEnabled: true,
+            }
+          : undefined,
+        // 체크리스트 데이터
+        checklist: checklistItems.length > 0
+          ? checklistItems.map((item) => ({
+              id: item.id,
+              content: item.content,
+              isCompleted: false,
+              createdBy: currentUser.id,
+              createdAt: new Date().toISOString(),
+            }))
+          : undefined,
       };
       await onSave(scheduleData, scheduleToEdit?.id);
     } finally {
@@ -437,6 +533,96 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       </View>
     );
   }, [displayDate, selectedDateForCalendar, activeField]);
+
+  // 장소 선택 핸들러
+  const handleSelectPlace = (place: PlaceItem) => {
+    setSelectedLocation({
+      latitude: place.latitude,
+      longitude: place.longitude,
+      address: place.roadAddress || place.address,
+      placeName: place.title,
+    });
+    setLocationSearchQuery("");
+    setShowLocationSearchResults(false);
+  };
+
+  // 현재 위치 가져오기
+  const handleGetCurrentLocation = async () => {
+    setIsLoadingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("권한 필요", "위치 접근 권한이 필요합니다.");
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      // 역지오코딩으로 주소 가져오기
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      const addressString = address
+        ? `${address.city || ""} ${address.district || ""} ${address.street || ""}`.trim()
+        : undefined;
+
+      setSelectedLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        address: addressString,
+        placeName: "현재 위치",
+      });
+      setLocationSearchQuery("");
+      setShowLocationSearchResults(false);
+    } catch (error) {
+      Alert.alert("오류", "현재 위치를 가져올 수 없습니다.");
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+
+  // 체크리스트 항목 추가
+  const handleAddChecklistItem = () => {
+    if (newChecklistItem.trim()) {
+      setChecklistItems([
+        ...checklistItems,
+        {
+          id: `temp-${Date.now()}`,
+          content: newChecklistItem.trim(),
+        },
+      ]);
+      setNewChecklistItem("");
+    }
+  };
+
+  // 체크리스트 항목 삭제
+  const handleRemoveChecklistItem = (id: string) => {
+    setChecklistItems(checklistItems.filter((item) => item.id !== id));
+  };
+
+  // 장소 검색 결과 렌더링
+  const renderPlaceSearchResult = ({ item }: { item: PlaceItem }) => (
+    <Pressable
+      style={styles.searchResultItem}
+      onPress={() => handleSelectPlace(item)}
+    >
+      <View style={styles.searchResultIcon}>
+        <Ionicons name="location" size={16} color="#3B82F6" />
+      </View>
+      <View style={styles.searchResultInfo}>
+        <Text style={styles.searchResultTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.searchResultAddress} numberOfLines={1}>
+          {item.roadAddress || item.address}
+        </Text>
+      </View>
+    </Pressable>
+  );
 
   const repeatOptions: { key: RepeatOption; label: string; icon: string }[] = [
     { key: "none", label: "없음", icon: "close-circle-outline" },
@@ -787,6 +973,202 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 }, 300);
               }}
             />
+          </View>
+
+          {/* 약속 장소 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="location-outline" size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>약속 장소</Text>
+              <Text style={styles.sectionOptional}>선택</Text>
+            </View>
+
+            {/* 장소 검색 입력 */}
+            <View style={styles.locationSearchContainer}>
+              <View style={styles.locationSearchInputWrapper}>
+                <Ionicons name="search" size={16} color="#9CA3AF" style={styles.locationSearchIcon} />
+                <TextInput
+                  style={styles.locationSearchInput}
+                  value={locationSearchQuery}
+                  onChangeText={setLocationSearchQuery}
+                  placeholder="장소 검색 (예: 강남역, 스타벅스)"
+                  placeholderTextColor="#9CA3AF"
+                  returnKeyType="search"
+                />
+                {locationSearchQuery.length > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      setLocationSearchQuery("");
+                      setShowLocationSearchResults(false);
+                    }}
+                    style={styles.locationClearButton}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#9CA3AF" />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+
+            {/* 검색 결과 */}
+            {showLocationSearchResults && (
+              <View style={styles.locationSearchResults}>
+                {searchPlacesMutation.isPending ? (
+                  <View style={styles.locationSearchLoading}>
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <Text style={styles.locationSearchLoadingText}>검색 중...</Text>
+                  </View>
+                ) : searchPlacesMutation.data?.items?.length ? (
+                  <FlatList
+                    data={searchPlacesMutation.data.items}
+                    renderItem={renderPlaceSearchResult}
+                    keyExtractor={(item, index) => `${item.title}-${index}`}
+                    nestedScrollEnabled={true}
+                    style={{ maxHeight: 180 }}
+                  />
+                ) : (
+                  <View style={styles.locationNoResults}>
+                    <Text style={styles.locationNoResultsText}>검색 결과가 없습니다</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* 현재 위치 버튼 */}
+            <Pressable
+              style={styles.currentLocationButton}
+              onPress={handleGetCurrentLocation}
+              disabled={isLoadingLocation}
+            >
+              {isLoadingLocation ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <>
+                  <Ionicons name="navigate" size={16} color="#3B82F6" />
+                  <Text style={styles.currentLocationButtonText}>현재 위치 사용</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* 선택된 장소 */}
+            {selectedLocation && (
+              <View style={styles.selectedLocationContainer}>
+                <View style={styles.selectedLocationInfo}>
+                  <Ionicons name="pin" size={16} color="#22C55E" />
+                  <View style={styles.selectedLocationText}>
+                    {selectedLocation.placeName && (
+                      <Text style={styles.selectedLocationName}>{selectedLocation.placeName}</Text>
+                    )}
+                    <Text style={styles.selectedLocationAddress} numberOfLines={1}>
+                      {selectedLocation.address || `${selectedLocation.latitude.toFixed(4)}, ${selectedLocation.longitude.toFixed(4)}`}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setSelectedLocation(null)}
+                    style={styles.removeLocationButton}
+                  >
+                    <Ionicons name="close" size={16} color="#9CA3AF" />
+                  </Pressable>
+                </View>
+
+                {/* 도착 알림 토글 */}
+                <Pressable
+                  style={[
+                    styles.arrivalNotificationToggle,
+                    enableArrivalNotification && styles.arrivalNotificationToggleActive,
+                  ]}
+                  onPress={() => setEnableArrivalNotification(!enableArrivalNotification)}
+                >
+                  <Ionicons
+                    name={enableArrivalNotification ? "notifications" : "notifications-outline"}
+                    size={16}
+                    color={enableArrivalNotification ? "#FFFFFF" : "#6B7280"}
+                  />
+                  <Text
+                    style={[
+                      styles.arrivalNotificationToggleText,
+                      enableArrivalNotification && styles.arrivalNotificationToggleTextActive,
+                    ]}
+                  >
+                    도착 알림 받기
+                  </Text>
+                </Pressable>
+
+                {/* 반경 선택 (도착 알림이 활성화된 경우만) */}
+                {enableArrivalNotification && (
+                  <View style={styles.radiusContainer}>
+                    <Text style={styles.radiusLabel}>도착 인식 범위</Text>
+                    <View style={styles.radiusOptions}>
+                      {RADIUS_OPTIONS.map((option) => (
+                        <Pressable
+                          key={option.value}
+                          style={[
+                            styles.radiusOption,
+                            selectedRadius === option.value && styles.radiusOptionSelected,
+                          ]}
+                          onPress={() => setSelectedRadius(option.value)}
+                        >
+                          <Text
+                            style={[
+                              styles.radiusOptionText,
+                              selectedRadius === option.value && styles.radiusOptionTextSelected,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* 체크리스트 */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="checkbox-outline" size={20} color="#007AFF" />
+              <Text style={styles.sectionTitle}>체크리스트</Text>
+              <Text style={styles.sectionOptional}>선택</Text>
+            </View>
+
+            {/* 체크리스트 항목들 */}
+            {checklistItems.map((item, index) => (
+              <View key={item.id} style={styles.checklistItem}>
+                <View style={styles.checklistItemCheckbox}>
+                  <Ionicons name="square-outline" size={18} color="#D1D5DB" />
+                </View>
+                <Text style={styles.checklistItemText}>{item.content}</Text>
+                <Pressable
+                  onPress={() => handleRemoveChecklistItem(item.id)}
+                  style={styles.checklistItemRemove}
+                >
+                  <Ionicons name="close" size={16} color="#9CA3AF" />
+                </Pressable>
+              </View>
+            ))}
+
+            {/* 새 항목 추가 */}
+            <View style={styles.addChecklistItem}>
+              <Ionicons name="add-circle-outline" size={18} color="#9CA3AF" />
+              <TextInput
+                style={styles.addChecklistInput}
+                value={newChecklistItem}
+                onChangeText={setNewChecklistItem}
+                placeholder="항목 추가..."
+                placeholderTextColor="#9CA3AF"
+                returnKeyType="done"
+                onSubmitEditing={handleAddChecklistItem}
+              />
+              {newChecklistItem.trim() && (
+                <Pressable
+                  onPress={handleAddChecklistItem}
+                  style={styles.addChecklistButton}
+                >
+                  <Text style={styles.addChecklistButtonText}>추가</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         </ScrollView>
 
@@ -1376,6 +1758,236 @@ const styles = StyleSheet.create({
   checkboxActive: {
     backgroundColor: "#007AFF",
     borderColor: "#007AFF",
+  },
+  // 장소 검색 스타일
+  sectionOptional: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginLeft: "auto",
+  },
+  locationSearchContainer: {
+    marginBottom: 8,
+  },
+  locationSearchInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  locationSearchIcon: {
+    marginRight: 8,
+  },
+  locationSearchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#374151",
+  },
+  locationClearButton: {
+    padding: 4,
+  },
+  locationSearchResults: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  locationSearchLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  locationSearchLoadingText: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginLeft: 8,
+  },
+  locationNoResults: {
+    padding: 16,
+    alignItems: "center",
+  },
+  locationNoResultsText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+  },
+  searchResultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  searchResultIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  searchResultAddress: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  currentLocationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFF6FF",
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  currentLocationButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3B82F6",
+    marginLeft: 6,
+  },
+  selectedLocationContainer: {
+    marginTop: 4,
+  },
+  selectedLocationInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    padding: 10,
+    borderRadius: 8,
+  },
+  selectedLocationText: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  selectedLocationName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  selectedLocationAddress: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  removeLocationButton: {
+    padding: 4,
+  },
+  arrivalNotificationToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    marginTop: 8,
+    gap: 6,
+  },
+  arrivalNotificationToggleActive: {
+    backgroundColor: "#3B82F6",
+  },
+  arrivalNotificationToggleText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  arrivalNotificationToggleTextActive: {
+    color: "#FFFFFF",
+  },
+  radiusContainer: {
+    marginTop: 10,
+  },
+  radiusLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6B7280",
+    marginBottom: 6,
+  },
+  radiusOptions: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  radiusOption: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+  },
+  radiusOptionSelected: {
+    backgroundColor: "#3B82F6",
+  },
+  radiusOptionText: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  radiusOptionTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  // 체크리스트 스타일
+  checklistItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  checklistItemCheckbox: {
+    marginRight: 10,
+  },
+  checklistItemText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#374151",
+  },
+  checklistItemRemove: {
+    padding: 4,
+  },
+  addChecklistItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+  },
+  addChecklistInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#374151",
+    marginLeft: 10,
+    paddingVertical: 0,
+  },
+  addChecklistButton: {
+    backgroundColor: "#007AFF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  addChecklistButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });
 
