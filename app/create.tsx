@@ -1,4 +1,5 @@
 import CreateScheduleView from "@/components/CreateScheduleView";
+import { apiService } from "@/services/api";
 import {
   useAppData,
   useAppStore,
@@ -37,19 +38,55 @@ export default function CreateScreen() {
 
   const handleSave = async (scheduleData: any, id?: string) => {
     try {
+      // locationReminder와 checklist 데이터 분리
+      const { locationReminder, checklist, ...coreScheduleData } = scheduleData;
+
+      let savedScheduleId: string;
+
       if (id) {
         // Update existing schedule
         await updateScheduleMutation.mutateAsync({
           scheduleId: id,
-          scheduleData,
+          scheduleData: coreScheduleData,
         });
+        savedScheduleId = id;
       } else {
         // Create new schedule
-        await createScheduleMutation.mutateAsync({
-          ...scheduleData,
+        const createdSchedule = await createScheduleMutation.mutateAsync({
+          ...coreScheduleData,
           workspace: activeWorkspaceId,
         });
+        savedScheduleId = createdSchedule.id;
       }
+
+      // LocationReminder 저장/삭제
+      if (locationReminder && locationReminder.isEnabled) {
+        await apiService.setLocationReminder(savedScheduleId, {
+          latitude: locationReminder.latitude,
+          longitude: locationReminder.longitude,
+          radius: locationReminder.radius,
+          address: locationReminder.address,
+          placeName: locationReminder.placeName,
+        });
+      } else if (id) {
+        // 수정 시 기존 위치 알림이 있었는데 삭제한 경우
+        try {
+          await apiService.deleteLocationReminder(savedScheduleId);
+        } catch (e) {
+          // 기존에 없었으면 무시
+        }
+      }
+
+      // Checklist 저장 (새로 추가된 항목들)
+      if (checklist && checklist.length > 0) {
+        for (const item of checklist) {
+          // 임시 ID(temp-)로 시작하는 항목은 새로 추가
+          if (item.id.startsWith("temp-")) {
+            await apiService.addChecklistItem(savedScheduleId, item.content);
+          }
+        }
+      }
+
       setScheduleToEdit(null);
       router.back();
     } catch (error) {
