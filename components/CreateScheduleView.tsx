@@ -1900,6 +1900,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   reminderPresetList: {
+    marginBottom: 20,
   },
   reminderPresetItem: {
     flexDirection: "row",
