@@ -1829,6 +1829,7 @@ const styles = StyleSheet.create({
   // 반복 BottomSheet 스타일
   repeatSheetList: {
     marginTop: 8,
+    marginBottom: 20,
   },
   repeatSheetItem: {
     flexDirection: "row",
