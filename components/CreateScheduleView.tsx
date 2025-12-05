@@ -196,6 +196,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const timeSheetRef = useRef<BottomSheet>(null);
   const reminderSheetRef = useRef<BottomSheet>(null);
   const customReminderSheetRef = useRef<BottomSheet>(null);
+  const repeatSheetRef = useRef<BottomSheet>(null);
   const locationSheetRef = useRef<BottomSheet>(null);
   const checklistSheetRef = useRef<BottomSheet>(null);
   const memoInputRef = useRef<TextInput>(null);
@@ -211,6 +212,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const timeSnapPoints = useMemo(() => ["40%"], []);
   const reminderSnapPoints = useMemo(() => ["45%"], []);
   const customReminderSnapPoints = useMemo(() => ["45%"], []);
+  const repeatSnapPoints = useMemo(() => ["40%"], []);
   const locationSnapPoints = useMemo(() => ["75%"], []);
   const checklistSnapPoints = useMemo(() => ["60%"], []);
 
@@ -851,133 +853,107 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
             </View>
           </Pressable>
 
-          {/* 반복 */}
-          <Pressable
-            style={styles.section}
-            onPress={() => isKeyboardVisible && Keyboard.dismiss()}
-          >
-            <View style={styles.sectionHeader}>
-              <Ionicons name="repeat" size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>반복</Text>
-            </View>
-            <View style={styles.repeatOptions}>
-              {repeatOptions.map((option) => (
-                <Pressable
-                  key={option.key}
-                  style={[
-                    styles.repeatChip,
-                    repeat === option.key && styles.repeatChipActive,
-                  ]}
-                  onPress={() => {
-                    if (isKeyboardVisible) {
-                      Keyboard.dismiss();
-                    } else {
-                      setRepeat(option.key);
-                    }
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.repeatChipText,
-                      repeat === option.key && styles.repeatChipTextActive,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </Pressable>
-
-          {/* 알림 */}
-          <Pressable
-            style={styles.section}
-            onPress={() => {
-              if (isKeyboardVisible) {
-                Keyboard.dismiss();
-              } else {
-                reminderSheetRef.current?.expand();
-              }
-            }}
-          >
-            <View style={styles.sectionHeader}>
-              <Ionicons name="notifications-outline" size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>알림</Text>
-              <Text style={styles.sectionBadge}>
-                {reminderMinutes === null
-                  ? "없음"
-                  : reminderMinutes === 0
-                  ? "시작"
-                  : reminderMinutes >= 60
-                  ? `${reminderMinutes / 60}시간 전`
-                  : `${reminderMinutes}분 전`}
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
-            </View>
-          </Pressable>
-
-          {/* 참가자 */}
-          <Pressable
-            style={styles.section}
-            onPress={() => {
-              if (isKeyboardVisible) {
-                Keyboard.dismiss();
-              } else {
-                bottomSheetRef.current?.expand();
-              }
-            }}
-          >
-            <View style={styles.sectionHeader}>
-              <Ionicons name="people" size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>참가자</Text>
-              <Text style={styles.sectionBadge}>{participantIds.length}명</Text>
-              <Ionicons name="chevron-forward" size={20} color="#D1D5DB" />
-            </View>
-            <View style={styles.participantAvatars}>
-              {participantIds.slice(0, 6).map((userId) => {
-                const user = users.find((u) => u.id === userId);
-                if (!user) return null;
-                return (
-                  <Image
-                    key={user.id}
-                    source={{ uri: user.avatarUrl }}
-                    style={styles.participantAvatar}
-                  />
-                );
-              })}
-              {participantIds.length > 6 && (
-                <View style={styles.participantMore}>
-                  <Text style={styles.participantMoreText}>
-                    +{participantIds.length - 6}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Pressable>
-
-          {/* 메모 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="document-text-outline" size={20} color="#007AFF" />
-              <Text style={styles.sectionTitle}>메모</Text>
-            </View>
-            <TextInput
-              ref={memoInputRef}
-              style={styles.memoInput}
-              value={memo}
-              onChangeText={setMemo}
-              placeholder="메모를 입력하세요 (선택)"
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              onFocus={() => {
-                setTimeout(() => {
-                  scrollViewRef.current?.scrollToEnd({ animated: true });
-                }, 300);
+          {/* 기본 설정 그룹 */}
+          <View style={styles.settingsGroup}>
+            {/* 반복 */}
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  Keyboard.dismiss();
+                } else {
+                  repeatSheetRef.current?.expand();
+                }
               }}
-            />
+            >
+              <View style={styles.settingLeft}>
+                <Ionicons name="repeat" size={20} color="#007AFF" />
+                <Text style={styles.settingTitle}>반복</Text>
+              </View>
+              <View style={styles.settingRight}>
+                <Text style={styles.settingValue}>
+                  {repeatOptions.find(o => o.key === repeat)?.label || "없음"}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+              </View>
+            </Pressable>
+
+            <View style={styles.settingDivider} />
+
+            {/* 알림 */}
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  Keyboard.dismiss();
+                } else {
+                  reminderSheetRef.current?.expand();
+                }
+              }}
+            >
+              <View style={styles.settingLeft}>
+                <Ionicons name="notifications-outline" size={20} color="#007AFF" />
+                <Text style={styles.settingTitle}>알림</Text>
+              </View>
+              <View style={styles.settingRight}>
+                <Text style={styles.settingValue}>
+                  {reminderMinutes === null
+                    ? "없음"
+                    : reminderMinutes === 0
+                    ? "일정 시작 시"
+                    : reminderMinutes >= 60
+                    ? `${reminderMinutes / 60}시간 전`
+                    : `${reminderMinutes}분 전`}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+              </View>
+            </Pressable>
+
+            <View style={styles.settingDivider} />
+
+            {/* 참가자 */}
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => {
+                if (isKeyboardVisible) {
+                  Keyboard.dismiss();
+                } else {
+                  bottomSheetRef.current?.expand();
+                }
+              }}
+            >
+              <View style={styles.settingLeft}>
+                <Ionicons name="people" size={20} color="#007AFF" />
+                <Text style={styles.settingTitle}>참가자</Text>
+              </View>
+              <View style={styles.settingRight}>
+                <View style={styles.participantAvatarsSmall}>
+                  {participantIds.slice(0, 3).map((userId) => {
+                    const user = users.find((u) => u.id === userId);
+                    if (!user) return null;
+                    return (
+                      <Image
+                        key={user.id}
+                        source={{ uri: user.avatarUrl }}
+                        style={styles.participantAvatarSmall}
+                      />
+                    );
+                  })}
+                  {participantIds.length > 3 && (
+                    <View style={styles.participantMoreSmall}>
+                      <Text style={styles.participantMoreSmallText}>
+                        +{participantIds.length - 3}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+              </View>
+            </Pressable>
           </View>
+
+          {/* 추가 옵션 라벨 */}
+          <Text style={styles.sectionLabel}>추가 옵션</Text>
 
           {/* 약속 장소 - 미리보기 */}
           {selectedLocation ? (
@@ -1062,7 +1038,74 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <Text style={styles.addOptionText}>체크리스트 추가</Text>
             </Pressable>
           )}
+
+          {/* 메모 */}
+          <View style={styles.memoSection}>
+            <View style={styles.memoHeader}>
+              <Ionicons name="document-text-outline" size={18} color="#9CA3AF" />
+              <Text style={styles.memoLabel}>메모</Text>
+            </View>
+            <TextInput
+              ref={memoInputRef}
+              style={styles.memoInput}
+              value={memo}
+              onChangeText={setMemo}
+              placeholder="메모를 입력하세요..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 300);
+              }}
+            />
+          </View>
         </ScrollView>
+
+        {/* 반복 설정 BottomSheet */}
+        <BottomSheet
+          ref={repeatSheetRef}
+          index={-1}
+          snapPoints={repeatSnapPoints}
+          enablePanDownToClose={true}
+          backdropComponent={renderBackdrop}
+          handleIndicatorStyle={styles.bottomSheetHandle}
+        >
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>반복</Text>
+            <View style={styles.repeatSheetList}>
+              {repeatOptions.map((option) => (
+                <Pressable
+                  key={option.key}
+                  style={styles.repeatSheetItem}
+                  onPress={() => {
+                    setRepeat(option.key);
+                    repeatSheetRef.current?.close();
+                  }}
+                >
+                  <Ionicons
+                    name={option.icon as any}
+                    size={22}
+                    color={repeat === option.key ? "#007AFF" : "#6B7280"}
+                  />
+                  <Text
+                    style={[
+                      styles.repeatSheetItemText,
+                      repeat === option.key && styles.repeatSheetItemTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  {repeat === option.key && (
+                    <Ionicons name="checkmark" size={22} color="#007AFF" />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </BottomSheetView>
+        </BottomSheet>
 
         {/* 참가자 선택 BottomSheet */}
         <BottomSheet
@@ -1694,6 +1737,119 @@ const styles = StyleSheet.create({
   toggleChipTextActive: {
     color: "#FFFFFF",
   },
+  // 새로운 설정 그룹 스타일
+  settingsGroup: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    marginBottom: 20,
+    overflow: "hidden",
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  settingLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  settingTitle: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  settingRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  settingValue: {
+    fontSize: 14,
+    color: "#007AFF",
+    fontWeight: "500",
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginLeft: 48,
+  },
+  participantAvatarsSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  participantAvatarSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginLeft: -6,
+    borderWidth: 2,
+    borderColor: "#F9FAFB",
+  },
+  participantMoreSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -6,
+    borderWidth: 2,
+    borderColor: "#F9FAFB",
+  },
+  participantMoreSmallText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  // 메모 섹션 스타일
+  memoSection: {
+    marginTop: 8,
+  },
+  memoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  memoLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#9CA3AF",
+  },
+  // 반복 BottomSheet 스타일
+  repeatSheetList: {
+    marginTop: 8,
+  },
+  repeatSheetItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    gap: 14,
+  },
+  repeatSheetItemText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  repeatSheetItemTextActive: {
+    color: "#007AFF",
+    fontWeight: "600",
+  },
+  // 기존 스타일 (호환성 유지)
   section: {
     backgroundColor: "#F9FAFB",
     borderRadius: 16,
