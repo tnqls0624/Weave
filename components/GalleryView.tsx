@@ -312,8 +312,6 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 20,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
   },
   section: {
     marginBottom: 24,
