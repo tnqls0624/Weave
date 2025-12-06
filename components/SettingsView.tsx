@@ -1689,8 +1689,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
-    // paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
   },
   loadingOverlay: {
     position: "absolute",
