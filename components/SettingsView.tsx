@@ -318,6 +318,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           allowsEditing: true,
           aspect: [1, 1],
           quality: 0.8,
+          exif: false,
         });
       } else {
         const mediaPermission =
@@ -332,6 +333,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           allowsEditing: true,
           aspect: [1, 1],
           quality: 0.8,
+          exif: false,
         });
       }
 

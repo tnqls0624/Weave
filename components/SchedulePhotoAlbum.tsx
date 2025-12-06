@@ -61,6 +61,8 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
         allowsMultipleSelection: true,
         selectionLimit: 10,
         quality: 0.8,
+        exif: false,
+        base64: false,
       });
 
       if (!result.canceled && result.assets.length > 0) {
