@@ -81,6 +81,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedScheduleForDetail, setSelectedScheduleForDetail] = useState<Schedule | null>(null);
   const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
+  const [localPhotoCounts, setLocalPhotoCounts] = useState<Record<string, number>>({});
 
   const openCommentsModal = (schedule: Schedule) => {
     setSelectedScheduleForComments(schedule);
@@ -130,9 +131,40 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   }, [selectedScheduleForComments?.id]);
 
   const closeDetailModal = () => {
+    // 모달 닫을 때 캐시에서 해당 스케줄의 photoCount만 업데이트
+    if (selectedScheduleForDetail && localPhotoCounts[selectedScheduleForDetail.id] !== undefined) {
+      const scheduleId = selectedScheduleForDetail.id;
+      const newCount = localPhotoCounts[scheduleId];
+
+      queryClient.setQueriesData(
+        { predicate: (query) => {
+          const key = query.queryKey;
+          return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
+        }},
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData)) return oldData;
+          return oldData.map((schedule: Schedule) =>
+            schedule.id === scheduleId
+              ? { ...schedule, photoCount: newCount }
+              : schedule
+          );
+        }
+      );
+    }
     setDetailModalVisible(false);
     setSelectedScheduleForDetail(null);
   };
+
+  const handlePhotoCountChange = useCallback((count: number) => {
+    if (!selectedScheduleForDetail) return;
+    setLocalPhotoCounts(prev => {
+      if (prev[selectedScheduleForDetail.id] === count) return prev;
+      return {
+        ...prev,
+        [selectedScheduleForDetail.id]: count
+      };
+    });
+  }, [selectedScheduleForDetail?.id]);
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -528,7 +560,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         >
                           <Ionicons name="images-outline" size={16} color="#6b7280" />
                           <Text style={styles.detailButtonText}>
-                            사진 {schedule.photoCount || 0}
+                            사진 {localPhotoCounts[schedule.id] ?? schedule.photoCount ?? 0}
                           </Text>
                         </Pressable>
                       </View>
@@ -634,6 +666,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               scheduleId={selectedScheduleForDetail.id}
               currentUserId={currentUser.id}
               isFullScreen={true}
+              onPhotoCountChange={handlePhotoCountChange}
             />
           )}
         </View>

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,12 +29,14 @@ interface SchedulePhotoAlbumProps {
   scheduleId: string;
   currentUserId: string;
   isFullScreen?: boolean;
+  onPhotoCountChange?: (count: number) => void;
 }
 
 const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
   scheduleId,
   currentUserId,
   isFullScreen = false,
+  onPhotoCountChange,
 }) => {
   const insets = useSafeAreaInsets();
   const [selectedPhoto, setSelectedPhoto] = useState<SchedulePhoto | null>(null);
@@ -45,6 +47,13 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
   const { data: photos = [], isLoading } = useSchedulePhotos(scheduleId);
   const uploadPhotoMutation = useUploadSchedulePhoto();
   const deletePhotoMutation = useDeleteSchedulePhoto();
+
+  // 사진 수 변경 시 부모에게 알림
+  useEffect(() => {
+    if (onPhotoCountChange) {
+      onPhotoCountChange(photos.length);
+    }
+  }, [photos.length, onPhotoCountChange]);
 
   // 여러 장 선택 가능
   const handlePickImages = async () => {
