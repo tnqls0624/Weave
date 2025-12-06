@@ -5,7 +5,7 @@ import BottomSheet, {
 } from "@gorhom/bottom-sheet";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
@@ -107,6 +107,17 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
     setSelectedScheduleForDetail(schedule);
     setDetailModalVisible(true);
   };
+
+  const handleCommentCountChange = useCallback((count: number) => {
+    if (!selectedScheduleForComments) return;
+    setLocalCommentCounts(prev => {
+      if (prev[selectedScheduleForComments.id] === count) return prev;
+      return {
+        ...prev,
+        [selectedScheduleForComments.id]: count
+      };
+    });
+  }, [selectedScheduleForComments?.id]);
 
   const closeDetailModal = () => {
     setDetailModalVisible(false);
@@ -596,12 +607,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               scheduleId={selectedScheduleForComments.id}
               currentUserId={currentUser.id}
               workspaceUsers={users}
-              onCommentCountChange={(count) => {
-                setLocalCommentCounts(prev => ({
-                  ...prev,
-                  [selectedScheduleForComments.id]: count
-                }));
-              }}
+              onCommentCountChange={handleCommentCountChange}
             />
           )}
         </View>
