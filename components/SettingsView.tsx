@@ -3,6 +3,7 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
+import { shareClient } from "@react-native-kakao/share";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
@@ -18,6 +19,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -30,8 +32,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import RenderHtml from "react-native-render-html";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiService } from "../services/api";
 import locationTrackingService from "../services/locationTrackingService";
 import {
@@ -81,7 +83,14 @@ const PrivacyPolicyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#fff",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
@@ -104,16 +113,36 @@ const PrivacyPolicyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ) : html ? (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom + 80 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: 40 + insets.bottom + 80,
+          }}
         >
           <RenderHtml
             contentWidth={width - 32}
             source={{ html }}
             tagsStyles={{
               body: { color: "#333", fontSize: 15, lineHeight: 24 },
-              h1: { fontSize: 22, fontWeight: "700", color: "#1a1a1a", marginBottom: 16 },
-              h2: { fontSize: 18, fontWeight: "600", color: "#1a1a1a", marginTop: 24, marginBottom: 12 },
-              h3: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 16, marginBottom: 8 },
+              h1: {
+                fontSize: 22,
+                fontWeight: "700",
+                color: "#1a1a1a",
+                marginBottom: 16,
+              },
+              h2: {
+                fontSize: 18,
+                fontWeight: "600",
+                color: "#1a1a1a",
+                marginTop: 24,
+                marginBottom: 12,
+              },
+              h3: {
+                fontSize: 16,
+                fontWeight: "600",
+                color: "#333",
+                marginTop: 16,
+                marginBottom: 8,
+              },
               p: { marginBottom: 12 },
               li: { marginBottom: 6 },
             }}
@@ -187,7 +216,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { settingsPage, setSettingsPage, isMapTabEnabled, setIsMapTabEnabled } = useAppStore();
+  const { settingsPage, setSettingsPage, isMapTabEnabled, setIsMapTabEnabled } =
+    useAppStore();
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     currentUser?.pushEnabled ?? true
   );
@@ -233,7 +263,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [isJoining, setIsJoining] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
-  const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
+  const [notificationCenterVisible, setNotificationCenterVisible] =
+    useState(false);
 
   const colorBottomSheetRef = useRef<BottomSheet>(null);
   const imagePickerBottomSheetRef = useRef<BottomSheet>(null);
@@ -436,15 +467,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 <View style={styles.calendarStats}>
                   <View style={styles.calendarStatItem}>
                     <Ionicons name="people" size={14} color="#6B7280" />
-                    <Text style={styles.calendarStatText}>멤버 {users.length}명</Text>
+                    <Text style={styles.calendarStatText}>
+                      멤버 {users.length}명
+                    </Text>
                   </View>
                   <View style={styles.calendarStatDivider} />
                   <View style={styles.calendarStatItem}>
                     <Ionicons name="document-text" size={14} color="#6B7280" />
                     {schedulesLoading ? (
-                      <ActivityIndicator size="small" color="#6B7280" style={{ marginLeft: 4 }} />
+                      <ActivityIndicator
+                        size="small"
+                        color="#6B7280"
+                        style={{ marginLeft: 4 }}
+                      />
                     ) : (
-                      <Text style={styles.calendarStatText}>일정 {scheduleCount}개</Text>
+                      <Text style={styles.calendarStatText}>
+                        일정 {scheduleCount}개
+                      </Text>
                     )}
                   </View>
                 </View>
@@ -478,15 +517,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.inviteCodeButton}
-                  onPress={async () => {
+                  onPress={() => {
                     if (currentUser?.inviteCode) {
-                      try {
-                        await Share.share({
-                          message: `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`,
-                        });
-                      } catch (error) {
-                        console.error("Share error:", error);
-                      }
+                      shareBottomSheetRef.current?.expand();
                     }
                   }}
                 >
@@ -501,7 +534,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 style={styles.calendarActionButton}
                 onPress={() => setSettingsPage("joinWorkspace")}
               >
-                <View style={[styles.calendarActionIcon, { backgroundColor: "#EEF2FF" }]}>
+                <View
+                  style={[
+                    styles.calendarActionIcon,
+                    { backgroundColor: "#EEF2FF" },
+                  ]}
+                >
                   <Ionicons name="enter-outline" size={20} color="#6366F1" />
                 </View>
                 <Text style={styles.calendarActionText}>참여하기</Text>
@@ -511,7 +549,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 style={styles.calendarActionButton}
                 onPress={() => setSettingsPage("workspaceManage")}
               >
-                <View style={[styles.calendarActionIcon, { backgroundColor: "#FEF3C7" }]}>
+                <View
+                  style={[
+                    styles.calendarActionIcon,
+                    { backgroundColor: "#FEF3C7" },
+                  ]}
+                >
                   <Ionicons name="settings-outline" size={20} color="#F59E0B" />
                 </View>
                 <Text style={styles.calendarActionText}>관리</Text>
@@ -524,7 +567,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             <View style={styles.emptyCalendarIcon}>
               <Ionicons name="calendar-outline" size={48} color="#D1D5DB" />
             </View>
-            <Text style={styles.emptyCalendarTitle}>참여 중인 캘린더가 없습니다</Text>
+            <Text style={styles.emptyCalendarTitle}>
+              참여 중인 캘린더가 없습니다
+            </Text>
             <Text style={styles.emptyCalendarDescription}>
               초대 코드를 입력하여 다른 사람의 캘린더에{"\n"}참여해보세요
             </Text>
@@ -533,7 +578,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
               onPress={() => setSettingsPage("joinWorkspace")}
             >
               <Ionicons name="enter-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.emptyCalendarButtonText}>캘린더 참여하기</Text>
+              <Text style={styles.emptyCalendarButtonText}>
+                캘린더 참여하기
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -594,7 +641,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Logout & Delete Account */}
       <View style={styles.card}>
-        <Pressable style={[styles.logoutButton, styles.settingsItemBorder]} onPress={onLogout}>
+        <Pressable
+          style={[styles.logoutButton, styles.settingsItemBorder]}
+          onPress={onLogout}
+        >
           <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
             <Ionicons name="log-out-outline" size={24} color="#EF4444" />
           </View>
@@ -623,17 +673,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                           onPress: async () => {
                             try {
                               await apiService.deleteAccount();
-                              Alert.alert("탈퇴 완료", "회원 탈퇴가 완료되었습니다.", [
-                                {
-                                  text: "확인",
-                                  onPress: () => {
-                                    onLogout?.();
+                              Alert.alert(
+                                "탈퇴 완료",
+                                "회원 탈퇴가 완료되었습니다.",
+                                [
+                                  {
+                                    text: "확인",
+                                    onPress: () => {
+                                      onLogout?.();
+                                    },
                                   },
-                                },
-                              ]);
+                                ]
+                              );
                             } catch (error) {
                               console.error("Failed to delete account:", error);
-                              Alert.alert("오류", "회원 탈퇴에 실패했습니다. 다시 시도해주세요.");
+                              Alert.alert(
+                                "오류",
+                                "회원 탈퇴에 실패했습니다. 다시 시도해주세요."
+                              );
                             }
                           },
                         },
@@ -654,7 +711,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     </>
   );
 
-  const renderSubPage = (title: string, children: React.ReactNode, noScroll?: boolean) => (
+  const renderSubPage = (
+    title: string,
+    children: React.ReactNode,
+    noScroll?: boolean
+  ) => (
     <View style={styles.profileEditContainer}>
       <View style={styles.profileHeader}>
         <TouchableOpacity onPress={() => setSettingsPage("main")}>
@@ -667,7 +728,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       {noScroll ? (
         <View style={{ flex: 1 }}>{children}</View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 64 + insets.bottom }}>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 64 + insets.bottom }}
+        >
           {children}
         </ScrollView>
       )}
@@ -928,11 +991,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                       console.log("📱 [Push Toggle] value:", value);
                       setNotificationsEnabled(value);
                       try {
-                        console.log("📱 [Push Toggle] Sending request:", { pushEnabled: value, fcmToken: currentUser?.fcmToken ? "exists" : "null" });
-                        const result = await updateNotificationsMutation.mutateAsync({
+                        console.log("📱 [Push Toggle] Sending request:", {
                           pushEnabled: value,
-                          fcmToken: currentUser?.fcmToken,
+                          fcmToken: currentUser?.fcmToken ? "exists" : "null",
                         });
+                        const result =
+                          await updateNotificationsMutation.mutateAsync({
+                            pushEnabled: value,
+                            fcmToken: currentUser?.fcmToken,
+                          });
                         console.log("📱 [Push Toggle] Response:", result);
                       } catch (error) {
                         console.error("Failed to update notifications:", error);
@@ -1037,15 +1104,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                                     setLocationSharingEnabled(true);
                                     setIsMapTabEnabled(true);
                                   } else {
-                                    await apiService.updateLocationSharing(false);
+                                    await apiService.updateLocationSharing(
+                                      false
+                                    );
                                     Alert.alert(
                                       "위치 권한 필요",
                                       "지도 기능을 사용하려면 백그라운드 위치 권한이 필요합니다."
                                     );
                                   }
                                 } catch (error) {
-                                  console.error("Failed to enable map tab:", error);
-                                  Alert.alert("오류", "지도 기능 활성화에 실패했습니다.");
+                                  console.error(
+                                    "Failed to enable map tab:",
+                                    error
+                                  );
+                                  Alert.alert(
+                                    "오류",
+                                    "지도 기능 활성화에 실패했습니다."
+                                  );
                                 }
                               },
                             },
@@ -1060,7 +1135,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                           setIsMapTabEnabled(false);
                         } catch (error) {
                           console.error("Failed to disable map tab:", error);
-                          Alert.alert("오류", "지도 기능 비활성화에 실패했습니다.");
+                          Alert.alert(
+                            "오류",
+                            "지도 기능 비활성화에 실패했습니다."
+                          );
                         }
                       }
                     }}
@@ -1134,7 +1212,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
     Alert.alert(
       "캘린더 나가기",
-      `"${activeWorkspace?.title || "캘린더"}"에서 나가시겠습니까?\n\n나가면 이 캘린더의 일정을 더 이상 볼 수 없습니다.`,
+      `"${
+        activeWorkspace?.title || "캘린더"
+      }"에서 나가시겠습니까?\n\n나가면 이 캘린더의 일정을 더 이상 볼 수 없습니다.`,
       [
         { text: "취소", style: "cancel" },
         {
@@ -1162,38 +1242,36 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const handleDeleteWorkspace = () => {
     Alert.alert(
       "캘린더 삭제",
-      `"${activeWorkspace?.title || "캘린더"}"를 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.\n모든 멤버가 캘린더에서 제거되고, 모든 일정이 삭제됩니다.`,
+      `"${
+        activeWorkspace?.title || "캘린더"
+      }"를 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.\n모든 멤버가 캘린더에서 제거되고, 모든 일정이 삭제됩니다.`,
       [
         { text: "취소", style: "cancel" },
         {
           text: "삭제",
           style: "destructive",
           onPress: () => {
-            Alert.alert(
-              "최종 확인",
-              "정말로 캘린더를 삭제하시겠습니까?",
-              [
-                { text: "취소", style: "cancel" },
-                {
-                  text: "삭제",
-                  style: "destructive",
-                  onPress: async () => {
-                    try {
-                      await deleteWorkspaceMutation.mutateAsync(workspaceId);
-                      Alert.alert("완료", "캘린더가 삭제되었습니다.", [
-                        {
-                          text: "확인",
-                          onPress: () => setSettingsPage("main"),
-                        },
-                      ]);
-                    } catch (error) {
-                      console.error("Failed to delete workspace:", error);
-                      Alert.alert("오류", "캘린더 삭제에 실패했습니다.");
-                    }
-                  },
+            Alert.alert("최종 확인", "정말로 캘린더를 삭제하시겠습니까?", [
+              { text: "취소", style: "cancel" },
+              {
+                text: "삭제",
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    await deleteWorkspaceMutation.mutateAsync(workspaceId);
+                    Alert.alert("완료", "캘린더가 삭제되었습니다.", [
+                      {
+                        text: "확인",
+                        onPress: () => setSettingsPage("main"),
+                      },
+                    ]);
+                  } catch (error) {
+                    console.error("Failed to delete workspace:", error);
+                    Alert.alert("오류", "캘린더 삭제에 실패했습니다.");
+                  }
                 },
-              ]
-            );
+              },
+            ]);
           },
         },
       ]
@@ -1201,26 +1279,22 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleKickMember = (userId: string, userName: string) => {
-    Alert.alert(
-      "멤버 추방",
-      `${userName}님을 캘린더에서 추방하시겠습니까?`,
-      [
-        { text: "취소", style: "cancel" },
-        {
-          text: "추방",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await kickMemberMutation.mutateAsync({ workspaceId, userId });
-              Alert.alert("완료", `${userName}님을 추방했습니다.`);
-            } catch (error) {
-              console.error("Failed to kick member:", error);
-              Alert.alert("오류", "멤버 추방에 실패했습니다.");
-            }
-          },
+    Alert.alert("멤버 추방", `${userName}님을 캘린더에서 추방하시겠습니까?`, [
+      { text: "취소", style: "cancel" },
+      {
+        text: "추방",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await kickMemberMutation.mutateAsync({ workspaceId, userId });
+            Alert.alert("완료", `${userName}님을 추방했습니다.`);
+          } catch (error) {
+            console.error("Failed to kick member:", error);
+            Alert.alert("오류", "멤버 추방에 실패했습니다.");
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleUpdateWorkspaceName = async () => {
@@ -1260,7 +1334,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom + 80 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: 40 + insets.bottom + 80,
+          }}
         >
           {/* 캘린더 정보 */}
           <View style={styles.workspaceInfoCard}>
@@ -1288,8 +1365,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   멤버 {workspaceUsers.length}명 · 일정 {scheduleCount}개
                 </Text>
               </View>
-              {isMaster && (
-                isEditingWorkspaceName ? (
+              {isMaster &&
+                (isEditingWorkspaceName ? (
                   <View style={styles.editNameButtons}>
                     <TouchableOpacity
                       style={styles.editNameCancelButton}
@@ -1322,8 +1399,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   >
                     <Ionicons name="pencil" size={18} color="#6366F1" />
                   </TouchableOpacity>
-                )
-              )}
+                ))}
             </View>
             {isMaster && !isEditingWorkspaceName && (
               <View style={styles.masterBadge}>
@@ -1378,7 +1454,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                         onPress={() => handleKickMember(user.id, user.name)}
                         disabled={kickMemberMutation.isPending}
                       >
-                        <Ionicons name="remove-circle-outline" size={20} color="#EF4444" />
+                        <Ionicons
+                          name="remove-circle-outline"
+                          size={20}
+                          color="#EF4444"
+                        />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1397,12 +1477,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 onPress={handleLeaveWorkspace}
                 disabled={leaveWorkspaceMutation.isPending}
               >
-                <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
+                <View
+                  style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}
+                >
                   <Ionicons name="exit-outline" size={24} color="#EF4444" />
                 </View>
                 <Text style={styles.dangerButtonText}>캘린더 나가기</Text>
                 {leaveWorkspaceMutation.isPending && (
-                  <ActivityIndicator size="small" color="#EF4444" style={{ marginLeft: "auto" }} />
+                  <ActivityIndicator
+                    size="small"
+                    color="#EF4444"
+                    style={{ marginLeft: "auto" }}
+                  />
                 )}
               </TouchableOpacity>
             )}
@@ -1413,12 +1499,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 onPress={handleDeleteWorkspace}
                 disabled={deleteWorkspaceMutation.isPending}
               >
-                <View style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}>
+                <View
+                  style={[styles.settingIcon, { backgroundColor: "#FEE2E2" }]}
+                >
                   <Ionicons name="trash-outline" size={24} color="#EF4444" />
                 </View>
                 <Text style={styles.dangerButtonText}>캘린더 삭제</Text>
                 {deleteWorkspaceMutation.isPending && (
-                  <ActivityIndicator size="small" color="#EF4444" style={{ marginLeft: "auto" }} />
+                  <ActivityIndicator
+                    size="small"
+                    color="#EF4444"
+                    style={{ marginLeft: "auto" }}
+                  />
                 )}
               </TouchableOpacity>
             )}
@@ -1454,9 +1546,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             <Ionicons name="people" size={64} color="#6366F1" />
           </View>
 
-          <Text style={styles.joinWorkspaceTitle}>
-            초대 코드로 참여하기
-          </Text>
+          <Text style={styles.joinWorkspaceTitle}>초대 코드로 참여하기</Text>
           <Text style={styles.joinWorkspaceDescription}>
             상대방에게 받은 초대 코드를 입력하면{"\n"}
             캘린더에 함께 참여할 수 있습니다.
@@ -1601,6 +1691,89 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             >
               <Ionicons name="images" size={24} color="#374151" />
               <Text style={styles.imagePickerOptionText}>갤러리에서 선택</Text>
+            </Pressable>
+          </View>
+        </BottomSheetView>
+      </BottomSheet>
+
+      {/* Share Bottom Sheet */}
+      <BottomSheet
+        ref={shareBottomSheetRef}
+        index={-1}
+        snapPoints={shareSnapPoints}
+        enablePanDownToClose={true}
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={styles.bottomSheetHandle}
+      >
+        <BottomSheetView style={styles.bottomSheetContent}>
+          <View style={styles.bottomSheetHeader}>
+            <Text style={styles.bottomSheetTitle}>초대 코드 공유</Text>
+          </View>
+          <View
+            style={[
+              styles.imagePickerOptions,
+              { paddingBottom: insets.bottom + 20 },
+            ]}
+          >
+            <Pressable
+              style={styles.imagePickerOption}
+              onPress={async () => {
+                shareBottomSheetRef.current?.close();
+                if (!currentUser?.inviteCode) return;
+
+                try {
+                  await shareClient.shareCustom({
+                    templateId: 118137, // 카카오 개발자 콘솔에서 생성한 템플릿 ID
+                    templateArgs: {
+                      invite_code: currentUser.inviteCode,
+                    },
+                  });
+                } catch (error: any) {
+                  console.error("Kakao share error:", error);
+                  // 카카오톡이 설치되지 않은 경우
+                  if (error?.message?.includes("KakaoTalk")) {
+                    Alert.alert(
+                      "카카오톡 필요",
+                      "카카오톡이 설치되어 있지 않습니다. 다른 방법으로 공유해주세요."
+                    );
+                  } else {
+                    // 템플릿이 없는 경우 기본 텍스트 공유
+                    try {
+                      await shareClient.shareText({
+                        text: `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`,
+                        buttons: [],
+                      });
+                    } catch (textError) {
+                      console.error("Kakao text share error:", textError);
+                      Alert.alert("공유 실패", "카카오톡 공유에 실패했습니다.");
+                    }
+                  }
+                }
+              }}
+            >
+              <Image
+                source={{ uri: "https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png" }}
+                style={{ width: 24, height: 24 }}
+              />
+              <Text style={styles.imagePickerOptionText}>카카오톡으로 공유</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.imagePickerOption, { borderBottomWidth: 0 }]}
+              onPress={async () => {
+                shareBottomSheetRef.current?.close();
+                if (!currentUser?.inviteCode) return;
+
+                try {
+                  await Share.share({
+                    message: `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`,
+                  });
+                } catch (error) {
+                  console.error("Share error:", error);
+                }
+              }}
+            >
+              <Ionicons name="share-social" size={24} color="#374151" />
+              <Text style={styles.imagePickerOptionText}>다른 앱으로 공유</Text>
             </Pressable>
           </View>
         </BottomSheetView>
