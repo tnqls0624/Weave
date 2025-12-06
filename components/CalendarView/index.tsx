@@ -47,6 +47,8 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   const previousSelectedDateRef = React.useRef<Date | null>(null);
   const isInternalDateChangeRef = React.useRef(false); // 내부에서 날짜 변경 여부
   const isInitialMountRef = React.useRef(true); // 초기 마운트 여부
+  // 스케줄별 댓글/사진 수 로컬 상태 (Drawer 닫혀도 유지)
+  const [localCounts, setLocalCounts] = useState<Record<string, { comment?: number; photo?: number }>>({});
 
   // 필터링된 사용자 ID (Set으로 저장하여 includes O(1)로 최적화)
   const filteredUserIds = useMemo(() => {
@@ -233,6 +235,8 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
           users={users}
           currentUser={activeUser}
           onStartEdit={onStartEdit}
+          localCounts={localCounts}
+          setLocalCounts={setLocalCounts}
         />
       )}
     </View>

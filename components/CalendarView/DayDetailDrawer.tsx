@@ -5,7 +5,7 @@ import BottomSheet, {
 } from "@gorhom/bottom-sheet";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, memo, useRef, useState } from "react";
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
@@ -59,6 +59,8 @@ interface DayDetailDrawerProps {
   currentUser: User;
   onClose: () => void;
   onStartEdit: (schedule: Schedule) => void;
+  localCounts: Record<string, { comment?: number; photo?: number }>;
+  setLocalCounts: React.Dispatch<React.SetStateAction<Record<string, { comment?: number; photo?: number }>>>;
 }
 
 const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
@@ -68,6 +70,8 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   currentUser,
   onClose,
   onStartEdit,
+  localCounts,
+  setLocalCounts,
 }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
@@ -80,8 +84,9 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const [selectedScheduleForComments, setSelectedScheduleForComments] = useState<Schedule | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedScheduleForDetail, setSelectedScheduleForDetail] = useState<Schedule | null>(null);
-  const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
-  const [localPhotoCounts, setLocalPhotoCounts] = useState<Record<string, number>>({});
+  // useRef로 카운트 저장 (모달 내부 변경 추적용)
+  const commentCountsRef = useRef<Record<string, number>>({});
+  const photoCountsRef = useRef<Record<string, number>>({});
 
   const openCommentsModal = (schedule: Schedule) => {
     setSelectedScheduleForComments(schedule);
@@ -89,26 +94,33 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   };
 
   const closeCommentsModal = () => {
-    // 모달 닫을 때 캐시에서 해당 스케줄의 commentCount만 업데이트
-    if (selectedScheduleForComments && localCommentCounts[selectedScheduleForComments.id] !== undefined) {
+    if (selectedScheduleForComments && commentCountsRef.current[selectedScheduleForComments.id] !== undefined) {
       const scheduleId = selectedScheduleForComments.id;
-      const newCount = localCommentCounts[scheduleId];
+      const newCount = commentCountsRef.current[scheduleId];
 
-      // 워크스페이스 스케줄 캐시 업데이트
-      queryClient.setQueriesData(
-        { predicate: (query) => {
-          const key = query.queryKey;
-          return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
-        }},
-        (oldData: any) => {
-          if (!oldData || !Array.isArray(oldData)) return oldData;
-          return oldData.map((schedule: Schedule) =>
-            schedule.id === scheduleId
-              ? { ...schedule, commentCount: newCount }
-              : schedule
-          );
-        }
-      );
+      // 로컬 상태 업데이트 (즉시 UI 반영)
+      setLocalCounts(prev => ({
+        ...prev,
+        [scheduleId]: { ...prev[scheduleId], comment: newCount }
+      }));
+
+      // 캐시 업데이트 (다음 프레임에 실행하여 UI 블로킹 방지)
+      requestAnimationFrame(() => {
+        queryClient.setQueriesData(
+          { predicate: (query) => {
+            const key = query.queryKey;
+            return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
+          }},
+          (oldData: any) => {
+            if (!oldData || !Array.isArray(oldData)) return oldData;
+            return oldData.map((schedule: Schedule) =>
+              schedule.id === scheduleId
+                ? { ...schedule, commentCount: newCount }
+                : schedule
+            );
+          }
+        );
+      });
     }
     setCommentsModalVisible(false);
     setSelectedScheduleForComments(null);
@@ -121,35 +133,37 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
   const handleCommentCountChange = useCallback((count: number) => {
     if (!selectedScheduleForComments) return;
-    setLocalCommentCounts(prev => {
-      if (prev[selectedScheduleForComments.id] === count) return prev;
-      return {
-        ...prev,
-        [selectedScheduleForComments.id]: count
-      };
-    });
+    commentCountsRef.current[selectedScheduleForComments.id] = count;
   }, [selectedScheduleForComments?.id]);
 
   const closeDetailModal = () => {
-    // 모달 닫을 때 캐시에서 해당 스케줄의 photoCount만 업데이트
-    if (selectedScheduleForDetail && localPhotoCounts[selectedScheduleForDetail.id] !== undefined) {
+    if (selectedScheduleForDetail && photoCountsRef.current[selectedScheduleForDetail.id] !== undefined) {
       const scheduleId = selectedScheduleForDetail.id;
-      const newCount = localPhotoCounts[scheduleId];
+      const newCount = photoCountsRef.current[scheduleId];
 
-      queryClient.setQueriesData(
-        { predicate: (query) => {
-          const key = query.queryKey;
-          return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
-        }},
-        (oldData: any) => {
-          if (!oldData || !Array.isArray(oldData)) return oldData;
-          return oldData.map((schedule: Schedule) =>
-            schedule.id === scheduleId
-              ? { ...schedule, photoCount: newCount }
-              : schedule
-          );
-        }
-      );
+      // 로컬 상태 업데이트 (즉시 UI 반영)
+      setLocalCounts(prev => ({
+        ...prev,
+        [scheduleId]: { ...prev[scheduleId], photo: newCount }
+      }));
+
+      // 캐시 업데이트 (다음 프레임에 실행하여 UI 블로킹 방지)
+      requestAnimationFrame(() => {
+        queryClient.setQueriesData(
+          { predicate: (query) => {
+            const key = query.queryKey;
+            return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
+          }},
+          (oldData: any) => {
+            if (!oldData || !Array.isArray(oldData)) return oldData;
+            return oldData.map((schedule: Schedule) =>
+              schedule.id === scheduleId
+                ? { ...schedule, photoCount: newCount }
+                : schedule
+            );
+          }
+        );
+      });
     }
     setDetailModalVisible(false);
     setSelectedScheduleForDetail(null);
@@ -157,13 +171,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
   const handlePhotoCountChange = useCallback((count: number) => {
     if (!selectedScheduleForDetail) return;
-    setLocalPhotoCounts(prev => {
-      if (prev[selectedScheduleForDetail.id] === count) return prev;
-      return {
-        ...prev,
-        [selectedScheduleForDetail.id]: count
-      };
-    });
+    photoCountsRef.current[selectedScheduleForDetail.id] = count;
   }, [selectedScheduleForDetail?.id]);
 
   const renderBackdrop = useCallback(
@@ -551,7 +559,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         >
                           <Ionicons name="chatbubble-outline" size={16} color="#6b7280" />
                           <Text style={styles.commentsButtonText}>
-                            댓글 {localCommentCounts[schedule.id] ?? schedule.commentCount ?? 0}
+                            댓글 {localCounts[schedule.id]?.comment ?? schedule.commentCount ?? 0}
                           </Text>
                         </Pressable>
                         <Pressable
@@ -560,7 +568,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         >
                           <Ionicons name="images-outline" size={16} color="#6b7280" />
                           <Text style={styles.detailButtonText}>
-                            사진 {localPhotoCounts[schedule.id] ?? schedule.photoCount ?? 0}
+                            사진 {localCounts[schedule.id]?.photo ?? schedule.photoCount ?? 0}
                           </Text>
                         </Pressable>
                       </View>
