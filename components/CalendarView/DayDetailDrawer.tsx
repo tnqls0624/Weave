@@ -10,7 +10,8 @@ import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } fr
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
-import { useDeleteSchedule } from "../../services/queries";
+import { useDeleteSchedule, queryKeys } from "../../services/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Schedule, User } from "../../types";
 import ScheduleComments from "../ScheduleComments";
 import SchedulePhotoAlbum from "../SchedulePhotoAlbum";
@@ -70,6 +71,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const deleteScheduleMutation = useDeleteSchedule();
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(
     null
@@ -87,6 +89,17 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const closeCommentsModal = () => {
     setCommentsModalVisible(false);
     setSelectedScheduleForComments(null);
+    // 댓글 모달 닫을 때 스케줄 목록 새로고침 (commentCount 반영)
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key[0] === "workspaces" &&
+          (key[2] === "schedules" || key[2] === "feed")
+        );
+      },
+    });
   };
 
   const openDetailModal = (schedule: Schedule) => {
@@ -97,6 +110,17 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const closeDetailModal = () => {
     setDetailModalVisible(false);
     setSelectedScheduleForDetail(null);
+    // 사진 모달 닫을 때 스케줄 목록 새로고침 (photoCount 반영)
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey;
+        return (
+          Array.isArray(key) &&
+          key[0] === "workspaces" &&
+          (key[2] === "schedules" || key[2] === "feed")
+        );
+      },
+    });
   };
 
   const renderBackdrop = useCallback(
