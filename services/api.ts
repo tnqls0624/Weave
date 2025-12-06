@@ -765,6 +765,8 @@ class ApiService {
       isAllDay: serverSchedule.is_all_day ?? serverSchedule.isAllDay,
       reminderMinutes: serverSchedule.reminder_minutes ?? serverSchedule.reminderMinutes,
       isImportant: serverSchedule.is_important ?? serverSchedule.isImportant,
+      commentCount: serverSchedule.comment_count ?? serverSchedule.commentCount ?? 0,
+      photoCount: serverSchedule.photo_count ?? serverSchedule.photoCount ?? 0,
       locationReminder,
       checklist,
     };
