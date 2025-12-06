@@ -57,7 +57,7 @@ export default function GalleryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#ffffff",
   },
   centered: {
     justifyContent: "center",
