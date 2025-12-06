@@ -293,6 +293,17 @@ export const useCreateScheduleComment = () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.schedule(variables.scheduleId),
       });
+      // 워크스페이스 스케줄 목록 캐시도 무효화 (commentCount 반영)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key[0] === "workspaces" &&
+            (key[2] === "schedules" || key[2] === "feed")
+          );
+        },
+      });
     },
   });
 };
@@ -335,6 +346,17 @@ export const useDeleteScheduleComment = () => {
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.schedule(variables.scheduleId),
+      });
+      // 워크스페이스 스케줄 목록 캐시도 무효화 (commentCount 반영)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key[0] === "workspaces" &&
+            (key[2] === "schedules" || key[2] === "feed")
+          );
+        },
       });
     },
   });
@@ -693,6 +715,17 @@ export const useUploadSchedulePhoto = () => {
       apiService.uploadSchedulePhoto(scheduleId, imageUri, caption),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["schedulePhotos", variables.scheduleId] });
+      // 워크스페이스 스케줄 목록 캐시도 무효화 (photoCount 반영)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key[0] === "workspaces" &&
+            (key[2] === "schedules" || key[2] === "feed")
+          );
+        },
+      });
     },
   });
 };
@@ -705,6 +738,17 @@ export const useDeleteSchedulePhoto = () => {
       apiService.deleteSchedulePhoto(scheduleId, photoId),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["schedulePhotos", variables.scheduleId] });
+      // 워크스페이스 스케줄 목록 캐시도 무효화 (photoCount 반영)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            Array.isArray(key) &&
+            key[0] === "workspaces" &&
+            (key[2] === "schedules" || key[2] === "feed")
+          );
+        },
+      });
     },
   });
 };
