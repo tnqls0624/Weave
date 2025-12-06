@@ -196,6 +196,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   );
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  // currentUser가 변경되면 로컬 state도 동기화
+  useEffect(() => {
+    if (currentUser?.pushEnabled !== undefined) {
+      setNotificationsEnabled(currentUser.pushEnabled);
+    }
+  }, [currentUser?.pushEnabled]);
+
+  useEffect(() => {
+    if (currentUser?.locationEnabled !== undefined) {
+      setLocationSharingEnabled(currentUser.locationEnabled);
+    }
+  }, [currentUser?.locationEnabled]);
+
   const updateParticipantColorsMutation = useUpdateParticipantColors();
   const isUpdatingColors = updateParticipantColorsMutation.isPending;
 
@@ -910,12 +923,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   <Switch
                     value={notificationsEnabled}
                     onValueChange={async (value) => {
+                      console.log("📱 [Push Toggle] value:", value);
                       setNotificationsEnabled(value);
                       try {
-                        await updateNotificationsMutation.mutateAsync({
+                        console.log("📱 [Push Toggle] Sending request:", { pushEnabled: value, fcmToken: currentUser?.fcmToken ? "exists" : "null" });
+                        const result = await updateNotificationsMutation.mutateAsync({
                           pushEnabled: value,
                           fcmToken: currentUser?.fcmToken,
                         });
+                        console.log("📱 [Push Toggle] Response:", result);
                       } catch (error) {
                         console.error("Failed to update notifications:", error);
                         setNotificationsEnabled(!value);
@@ -1672,7 +1688,7 @@ const SettingsItem: React.FC<{
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     // paddingHorizontal: 16,
     paddingTop: 16,
   },

@@ -304,7 +304,7 @@ const GalleryView: React.FC<GalleryViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#ffffff",
   },
   mainTitle: {
     fontSize: 28,
