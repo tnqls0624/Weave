@@ -48,12 +48,12 @@ const SchedulePhotoAlbum: React.FC<SchedulePhotoAlbumProps> = ({
   const uploadPhotoMutation = useUploadSchedulePhoto();
   const deletePhotoMutation = useDeleteSchedulePhoto();
 
-  // 사진 수 변경 시 부모에게 알림
+  // 사진 수 변경 시 부모에게 알림 (로딩 중에는 호출하지 않음)
   useEffect(() => {
-    if (onPhotoCountChange) {
+    if (onPhotoCountChange && !isLoading) {
       onPhotoCountChange(photos.length);
     }
-  }, [photos.length, onPhotoCountChange]);
+  }, [photos.length, onPhotoCountChange, isLoading]);
 
   // 여러 장 선택 가능
   const handlePickImages = async () => {

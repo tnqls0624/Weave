@@ -59,17 +59,17 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
   const deleteCommentMutation = useDeleteScheduleComment();
   const toggleReactionMutation = useToggleCommentReaction();
 
-  // 댓글 수 변경 시 부모에게 알림
+  // 댓글 수 변경 시 부모에게 알림 (로딩 중에는 호출하지 않음)
   const totalCount = comments.reduce(
     (acc, comment) => acc + 1 + (comment.replies?.length || 0),
     0
   );
 
   useEffect(() => {
-    if (onCommentCountChange) {
+    if (onCommentCountChange && !isLoading) {
       onCommentCountChange(totalCount);
     }
-  }, [totalCount, onCommentCountChange]);
+  }, [totalCount, onCommentCountChange, isLoading]);
 
   const handleSubmit = async () => {
     if (!newComment.trim()) return;
