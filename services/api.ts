@@ -988,6 +988,14 @@ class ApiService {
     });
   }
 
+  // 워크스페이스 갤러리 조회 (모든 스케줄 사진)
+  async getWorkspaceGallery(workspaceId: string): Promise<GalleryPhoto[]> {
+    return this.request<GalleryPhoto[]>({
+      url: `/api/workspace/${workspaceId}/gallery`,
+      method: "GET",
+    });
+  }
+
   // ==================== Location Reminder API ====================
 
   // 위치 알림 설정 조회
@@ -1058,6 +1066,20 @@ class ApiService {
       params: { query, display },
     });
   }
+}
+
+// 갤러리 사진 타입
+export interface GalleryPhoto {
+  id: string;
+  url: string;
+  thumbnailUrl?: string;
+  scheduleId: string;
+  scheduleTitle?: string;
+  scheduleDate?: string;
+  uploadedBy: string;
+  uploadedByName?: string;
+  uploadedAt: string;
+  caption?: string;
 }
 
 // 장소 검색 결과 타입

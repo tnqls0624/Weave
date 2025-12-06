@@ -58,6 +58,7 @@ export default function TabLayout() {
         >
           <Tabs.Screen name="feed" />
           <Tabs.Screen name="calendar" />
+          <Tabs.Screen name="gallery" />
           <Tabs.Screen name="map" />
           <Tabs.Screen name="settings" />
         </Tabs>

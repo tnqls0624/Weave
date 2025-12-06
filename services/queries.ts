@@ -15,6 +15,7 @@ export const queryKeys = {
   workspaceSchedules: (id: string, params?: any) =>
     ["workspaces", id, "schedules", params] as const,
   workspaceScheduleFeed: (id: string) => ["workspaces", id, "feed"] as const,
+  workspaceGallery: (id: string) => ["workspaces", id, "gallery"] as const,
 
   // Schedule (Schedule)
   schedules: ["schedules"] as const,
@@ -738,5 +739,21 @@ export const useSearchPlaces = () => {
   return useMutation({
     mutationFn: ({ query, display = 5 }: { query: string; display?: number }) =>
       apiService.searchPlaces(query, display),
+  });
+};
+
+// ==================== Workspace Gallery ====================
+
+export const useWorkspaceGallery = (
+  workspaceId: string,
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: queryKeys.workspaceGallery(workspaceId),
+    queryFn: () => apiService.getWorkspaceGallery(workspaceId),
+    enabled: options?.enabled !== undefined ? options.enabled : !!workspaceId,
+    staleTime: 5 * 60 * 1000, // 5분
+    gcTime: 30 * 60 * 1000, // 30분
+    refetchOnWindowFocus: false,
   });
 };

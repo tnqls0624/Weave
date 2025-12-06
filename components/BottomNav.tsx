@@ -18,6 +18,7 @@ const BottomNav: React.FC = () => {
     const items = [
       { route: "feed", icon: "list", label: "피드" },
       { route: "calendar", icon: "event", label: "캘린더" },
+      { route: "gallery", icon: "photo-library", label: "갤러리" },
     ];
 
     if (isMapTabEnabled) {
