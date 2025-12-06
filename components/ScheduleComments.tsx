@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
   },
   reactionPickerAbsolute: {
     position: "absolute",
-    top: "100%",
+    top: 24,
     left: -20,
     zIndex: 999,
   },
