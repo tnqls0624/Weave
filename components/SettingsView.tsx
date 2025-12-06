@@ -268,8 +268,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   const colorBottomSheetRef = useRef<BottomSheet>(null);
   const imagePickerBottomSheetRef = useRef<BottomSheet>(null);
+  const shareBottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ["50%"], []);
   const imagePickerSnapPoints = useMemo(() => ["35%"], []);
+  const shareSnapPoints = useMemo(() => ["30%"], []);
 
   const availableColors = [
     { name: "emerald", koreanName: "에메랄드 그린" },
