@@ -8,6 +8,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -120,11 +121,11 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
   };
 
   const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
+    <Pressable style={styles.emptyContainer} onPress={Keyboard.dismiss}>
       <Ionicons name="chatbubble-outline" size={48} color="#D1D5DB" />
       <Text style={styles.emptyText}>아직 댓글이 없습니다</Text>
       <Text style={styles.emptySubtext}>첫 번째 댓글을 남겨보세요!</Text>
-    </View>
+    </Pressable>
   );
 
   return (
@@ -134,11 +135,11 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
       keyboardVerticalOffset={100}
     >
       {/* 댓글 헤더 */}
-      <View style={styles.header}>
+      <Pressable style={styles.header} onPress={Keyboard.dismiss}>
         <Ionicons name="chatbubbles" size={20} color="#374151" />
         <Text style={styles.headerTitle}>댓글</Text>
         <Text style={styles.commentCount}>{comments.length}</Text>
-      </View>
+      </Pressable>
 
       {/* 댓글 목록 */}
       {isLoading ? (
@@ -155,6 +156,8 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
             comments.length === 0 ? styles.emptyListContainer : styles.listContent
           }
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
         />
       )}
 

@@ -1,22 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
+import KoreanLunarCalendar from "korean-lunar-calendar";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from "react-native";
-import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
 import type { Schedule, User } from "../../types";
 
 // 음력을 양력으로 변환하는 헬퍼 함수
-const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
+const lunarToSolar = (
+  year: number,
+  month: number,
+  day: number
+): { year: number; month: number; day: number } | null => {
   try {
     const calendar = new KoreanLunarCalendar();
     calendar.setLunarDate(year, month, day, false); // false = 평달 (윤달 아님)
@@ -28,10 +32,16 @@ const lunarToSolar = (year: number, month: number, day: number): { year: number;
 };
 
 // 특정 연도의 음력 날짜를 양력으로 변환
-const getLunarDateInYear = (lunarMonth: number, lunarDay: number, targetYear: number): string | null => {
+const getLunarDateInYear = (
+  lunarMonth: number,
+  lunarDay: number,
+  targetYear: number
+): string | null => {
   const solar = lunarToSolar(targetYear, lunarMonth, lunarDay);
   if (!solar) return null;
-  return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(solar.day).padStart(2, "0")}`;
+  return `${solar.year}-${String(solar.month).padStart(2, "0")}-${String(
+    solar.day
+  ).padStart(2, "0")}`;
 };
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -217,7 +227,11 @@ const DayCell = React.memo<DayCellProps>(
         onPress={onPress}
         style={[
           styles.dayCell,
-          { height: dayCellHeight, minHeight: dayCellHeight, width: dayCellWidth },
+          {
+            height: dayCellHeight,
+            minHeight: dayCellHeight,
+            width: dayCellWidth,
+          },
           isSelected && styles.selectedDayCell,
         ]}
       >
@@ -359,173 +373,185 @@ interface MonthGridProps {
   eventsByDateCache: Map<string, Schedule[]>;
 }
 
-const MonthGrid = React.memo<MonthGridProps>(({
-  year,
-  month,
-  selectedDate,
-  screenWidth,
-  calendarHeight,
-  onSelectDay,
-  onDoubleTap,
-  getEventColor,
-  getEventForDay,
-  eventLaneMap,
-  eventsDateCache,
-  eventsByDateCache,
-}) => {
-  const dayCellWidth = screenWidth / 7;
+const MonthGrid = React.memo<MonthGridProps>(
+  ({
+    year,
+    month,
+    selectedDate,
+    screenWidth,
+    calendarHeight,
+    onSelectDay,
+    onDoubleTap,
+    getEventColor,
+    getEventForDay,
+    eventLaneMap,
+    eventsDateCache,
+    eventsByDateCache,
+  }) => {
+    const dayCellWidth = screenWidth / 7;
 
-  // 해당 월의 첫째 날
-  const firstDay = new Date(year, month, 1);
-  const firstDayOfWeek = firstDay.getDay();
+    // 해당 월의 첫째 날
+    const firstDay = new Date(year, month, 1);
+    const firstDayOfWeek = firstDay.getDay();
 
-  // 해당 월의 마지막 날
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
+    // 해당 월의 마지막 날
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
 
-  // 이전 달의 마지막 날
-  const prevMonthLastDay = new Date(year, month, 0);
-  const prevMonthDays = prevMonthLastDay.getDate();
+    // 이전 달의 마지막 날
+    const prevMonthLastDay = new Date(year, month, 0);
+    const prevMonthDays = prevMonthLastDay.getDate();
 
-  // 필요한 주 수 계산
-  const totalCells = firstDayOfWeek + daysInMonth;
-  const numberOfWeeks = Math.ceil(totalCells / 7);
+    // 필요한 주 수 계산
+    const totalCells = firstDayOfWeek + daysInMonth;
+    const numberOfWeeks = Math.ceil(totalCells / 7);
 
-  const dayCellHeight = calendarHeight / numberOfWeeks;
+    const dayCellHeight = calendarHeight / numberOfWeeks;
 
-  const maxVisibleEventRows = useMemo(() => {
-    if (numberOfWeeks >= 6) return 2;
-    if (numberOfWeeks === 5) return 3;
-    return 4;
-  }, [numberOfWeeks]);
+    const maxVisibleEventRows = useMemo(() => {
+      if (numberOfWeeks >= 6) return 2;
+      if (numberOfWeeks === 5) return 3;
+      return 4;
+    }, [numberOfWeeks]);
 
-  const selectedDateString = selectedDate?.toDateString() ?? null;
-  const todayString = new Date().toDateString();
+    const selectedDateString = selectedDate?.toDateString() ?? null;
+    const todayString = new Date().toDateString();
 
-  // 날짜 배열 생성
-  const days = useMemo(() => {
-    const result: Array<{
-      date: Date;
-      dateString: string;
-      isCurrentMonth: boolean;
-    }> = [];
+    // 날짜 배열 생성
+    const days = useMemo(() => {
+      const result: {
+        date: Date;
+        dateString: string;
+        isCurrentMonth: boolean;
+      }[] = [];
 
-    // 이전 달 날짜들 (첫 주 채우기)
-    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-      const date = new Date(year, month - 1, prevMonthDays - i);
-      result.push({
-        date,
-        dateString: dayjs(date).format("YYYY-MM-DD"),
-        isCurrentMonth: false,
-      });
-    }
-
-    // 현재 달 날짜들
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      result.push({
-        date,
-        dateString: dayjs(date).format("YYYY-MM-DD"),
-        isCurrentMonth: true,
-      });
-    }
-
-    // 다음 달 날짜들 (마지막 주 채우기)
-    const remainingCells = numberOfWeeks * 7 - result.length;
-    for (let day = 1; day <= remainingCells; day++) {
-      const date = new Date(year, month + 1, day);
-      result.push({
-        date,
-        dateString: dayjs(date).format("YYYY-MM-DD"),
-        isCurrentMonth: false,
-      });
-    }
-
-    return result;
-  }, [year, month, firstDayOfWeek, daysInMonth, numberOfWeeks, prevMonthDays]);
-
-  // 주 단위로 그룹화
-  const weeks = useMemo(() => {
-    const result: typeof days[] = [];
-    for (let i = 0; i < days.length; i += 7) {
-      result.push(days.slice(i, i + 7));
-    }
-    return result;
-  }, [days]);
-
-  const getDayEvents = useCallback(
-    (dateStr: string): Schedule[] => {
-      return eventsByDateCache.get(dateStr) || [];
-    },
-    [eventsByDateCache]
-  );
-
-  const handlePress = useCallback(
-    (date: Date, dateStr: string) => {
-      const now = Date.now();
-      const timeSinceLastTap = now - lastTapTime;
-      const isSameDate = lastTapDateString === dateStr;
-      const isDoubleTap = timeSinceLastTap < 400 && isSameDate;
-
-      console.log('TAP:', { day: date.getDate(), timeSinceLastTap, isDoubleTap, isSameDate });
-
-      // 모듈 레벨 변수 업데이트
-      lastTapTime = now;
-      lastTapDateString = dateStr;
-
-      if (isDoubleTap) {
-        lastTapTime = 0;
-        lastTapDateString = "";
-        onDoubleTap(date);
-      } else {
-        onSelectDay(date);
+      // 이전 달 날짜들 (첫 주 채우기)
+      for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+        const date = new Date(year, month - 1, prevMonthDays - i);
+        result.push({
+          date,
+          dateString: dayjs(date).format("YYYY-MM-DD"),
+          isCurrentMonth: false,
+        });
       }
-    },
-    [onSelectDay, onDoubleTap]
-  );
 
-  return (
-    <View style={[styles.monthGrid, { width: screenWidth, height: calendarHeight }]}>
-      {weeks.map((week, weekIndex) => (
-        <View key={weekIndex} style={styles.weekRow}>
-          {week.map((dayData) => {
-            const { date, dateString, isCurrentMonth } = dayData;
-            const dayOfWeek = date.getDay();
-            const dayEvents = getDayEvents(dateString);
-            const holiday = isHoliday(dateString);
-            const isHolidayDate = !!holiday;
-            const holidayName = holiday?.name;
-            const isToday = date.toDateString() === todayString;
-            const isSelected = date.toDateString() === selectedDateString;
+      // 현재 달 날짜들
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        result.push({
+          date,
+          dateString: dayjs(date).format("YYYY-MM-DD"),
+          isCurrentMonth: true,
+        });
+      }
 
-            return (
-              <DayCell
-                key={dateString}
-                date={date}
-                dateString={dateString}
-                isCurrentMonth={isCurrentMonth}
-                isToday={isToday}
-                isSelected={isSelected}
-                isHolidayDate={isHolidayDate}
-                holidayName={holidayName}
-                dayOfWeek={dayOfWeek}
-                dayEvents={dayEvents}
-                dayCellHeight={dayCellHeight}
-                dayCellWidth={dayCellWidth}
-                maxVisibleRows={maxVisibleEventRows}
-                getEventColor={getEventColor}
-                getEventForDay={getEventForDay}
-                eventLaneMap={eventLaneMap}
-                eventsDateCache={eventsDateCache}
-                onPress={() => handlePress(date, dateString)}
-              />
-            );
-          })}
-        </View>
-      ))}
-    </View>
-  );
-});
+      // 다음 달 날짜들 (마지막 주 채우기)
+      const remainingCells = numberOfWeeks * 7 - result.length;
+      for (let day = 1; day <= remainingCells; day++) {
+        const date = new Date(year, month + 1, day);
+        result.push({
+          date,
+          dateString: dayjs(date).format("YYYY-MM-DD"),
+          isCurrentMonth: false,
+        });
+      }
+
+      return result;
+    }, [
+      year,
+      month,
+      firstDayOfWeek,
+      daysInMonth,
+      numberOfWeeks,
+      prevMonthDays,
+    ]);
+
+    // 주 단위로 그룹화
+    const weeks = useMemo(() => {
+      const result: (typeof days)[] = [];
+      for (let i = 0; i < days.length; i += 7) {
+        result.push(days.slice(i, i + 7));
+      }
+      return result;
+    }, [days]);
+
+    const getDayEvents = useCallback(
+      (dateStr: string): Schedule[] => {
+        return eventsByDateCache.get(dateStr) || [];
+      },
+      [eventsByDateCache]
+    );
+
+    const handlePress = useCallback(
+      (date: Date, dateStr: string) => {
+        const now = Date.now();
+        const timeSinceLastTap = now - lastTapTime;
+        const isSameDate = lastTapDateString === dateStr;
+        const isDoubleTap = timeSinceLastTap < 400 && isSameDate;
+
+        // 모듈 레벨 변수 업데이트
+        lastTapTime = now;
+        lastTapDateString = dateStr;
+
+        if (isDoubleTap) {
+          lastTapTime = 0;
+          lastTapDateString = "";
+          onDoubleTap(date);
+        } else {
+          onSelectDay(date);
+        }
+      },
+      [onSelectDay, onDoubleTap]
+    );
+
+    return (
+      <View
+        style={[
+          styles.monthGrid,
+          { width: screenWidth, height: calendarHeight },
+        ]}
+      >
+        {weeks.map((week, weekIndex) => (
+          <View key={weekIndex} style={styles.weekRow}>
+            {week.map((dayData) => {
+              const { date, dateString, isCurrentMonth } = dayData;
+              const dayOfWeek = date.getDay();
+              const dayEvents = getDayEvents(dateString);
+              const holiday = isHoliday(dateString);
+              const isHolidayDate = !!holiday;
+              const holidayName = holiday?.name;
+              const isToday = date.toDateString() === todayString;
+              const isSelected = date.toDateString() === selectedDateString;
+
+              return (
+                <DayCell
+                  key={dateString}
+                  date={date}
+                  dateString={dateString}
+                  isCurrentMonth={isCurrentMonth}
+                  isToday={isToday}
+                  isSelected={isSelected}
+                  isHolidayDate={isHolidayDate}
+                  holidayName={holidayName}
+                  dayOfWeek={dayOfWeek}
+                  dayEvents={dayEvents}
+                  dayCellHeight={dayCellHeight}
+                  dayCellWidth={dayCellWidth}
+                  maxVisibleRows={maxVisibleEventRows}
+                  getEventColor={getEventColor}
+                  getEventForDay={getEventForDay}
+                  eventLaneMap={eventLaneMap}
+                  eventsDateCache={eventsDateCache}
+                  onPress={() => handlePress(date, dateString)}
+                />
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
+  }
+);
 
 MonthGrid.displayName = "MonthGrid";
 
@@ -547,7 +573,10 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
   const currentIndexRef = useRef(120); // 중앙 인덱스 (120개월 전후)
 
   // 월 데이터의 기준 날짜 저장 (초기 렌더링 시점의 currentDate)
-  const baseMonthRef = useRef({ year: currentDate.getFullYear(), month: currentDate.getMonth() });
+  const baseMonthRef = useRef({
+    year: currentDate.getFullYear(),
+    month: currentDate.getMonth(),
+  });
 
   const calendarHeight = useMemo(() => {
     const dayNamesHeight = 240;
@@ -612,7 +641,8 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
     const ranges: ScheduleWithRange[] = [];
 
     schedules.forEach((schedule: Schedule) => {
-      const startDateString = schedule.startDate || dayjs().format("YYYY-MM-DD");
+      const startDateString =
+        schedule.startDate || dayjs().format("YYYY-MM-DD");
       const originalStart = dayjs(startDateString);
       const endDateString = schedule.endDate || startDateString;
       const duration = dayjs(endDateString).diff(originalStart, "day");
@@ -627,8 +657,16 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         const lunarDay = originalStart.date();
 
         // visibleRange의 각 연도에 대해 음력을 양력으로 변환
-        for (let year = visibleRange.startYear; year <= visibleRange.endYear; year++) {
-          const solarDateString = getLunarDateInYear(lunarMonth, lunarDay, year);
+        for (
+          let year = visibleRange.startYear;
+          year <= visibleRange.endYear;
+          year++
+        ) {
+          const solarDateString = getLunarDateInYear(
+            lunarMonth,
+            lunarDay,
+            year
+          );
           if (!solarDateString) continue;
 
           const solarStart = dayjs(solarDateString);
@@ -640,7 +678,10 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
           instanceEnd.setHours(0, 0, 0, 0);
 
           // visibleRange 내에 있는 인스턴스만 추가
-          if (instanceEnd.getTime() >= visibleRange.startTime && instanceStart.getTime() <= visibleRange.endTime) {
+          if (
+            instanceEnd.getTime() >= visibleRange.startTime &&
+            instanceStart.getTime() <= visibleRange.endTime
+          ) {
             const instanceId = `${schedule.id}_lunar_${year}`;
             ranges.push({
               schedule: {
@@ -663,7 +704,11 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         const lunarDay = originalStart.date();
         const lunarYear = originalStart.year();
 
-        const solarDateString = getLunarDateInYear(lunarMonth, lunarDay, lunarYear);
+        const solarDateString = getLunarDateInYear(
+          lunarMonth,
+          lunarDay,
+          lunarYear
+        );
         if (solarDateString) {
           const solarStart = dayjs(solarDateString);
           const solarEnd = solarStart.add(duration, "day");
@@ -742,9 +787,14 @@ const CalendarGridComponent: React.FC<CalendarGridProps> = ({
         instanceEnd.setHours(0, 0, 0, 0);
 
         // visibleRange 내에 있는 인스턴스만 추가
-        if (instanceEnd.getTime() >= visibleRange.startTime && instanceStart.getTime() <= visibleRange.endTime) {
+        if (
+          instanceEnd.getTime() >= visibleRange.startTime &&
+          instanceStart.getTime() <= visibleRange.endTime
+        ) {
           // 반복 인스턴스는 고유 ID 생성 (원본ID_날짜)
-          const instanceId = `${schedule.id}_${currentDate.format("YYYY-MM-DD")}`;
+          const instanceId = `${schedule.id}_${currentDate.format(
+            "YYYY-MM-DD"
+          )}`;
           ranges.push({
             schedule: {
               ...schedule,

@@ -23,17 +23,23 @@ class LocationWebSocketService {
 
   // STOMP 연결 (순수 WebSocket + STOMP, SockJS 미사용)
   async connect(retryCount: number = 0): Promise<StompClient> {
-    const MAX_RETRIES = 3;
-
     // 이미 연결되어 있으면 즉시 반환
     if (this.stompClient && this.stompClient.connected) {
       return this.stompClient;
     }
 
-    // 연결 중인 프로미스가 있으면 재사용
+    // 연결 중인 프로미스가 있으면 재사용 (최대 5초 대기)
     if (this.connectionPromise) {
-      console.log("⏳ Reusing existing connection promise...");
-      return this.connectionPromise;
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Connection timeout")), 5000)
+        );
+        return await Promise.race([this.connectionPromise, timeoutPromise]);
+      } catch (error) {
+        // 타임아웃이거나 연결 실패 시 프로미스 초기화
+        this.connectionPromise = null;
+        throw error;
+      }
     }
 
     // 새로운 연결 시작
@@ -254,50 +260,45 @@ class LocationWebSocketService {
 
   // 위치 업데이트 전송 (Fire-and-Forget)
   // 서버의 LocationRequestDto와 일치: { latitude: Double, longitude: Double }
+  private isUpdatingLocation = false;
+
   async updateLocation(
     workspaceId: string,
     latitude: number,
     longitude: number
   ) {
-    // 연결 재시도 로직 (빠른 실패 모드 - 위치 업데이트는 실시간성이 중요)
-    let connectionAttempts = 0;
-    const maxConnectionAttempts = 2; // 위치 업데이트는 빠르게 처리
-
-    while (
-      (!this.stompClient || !this.stompClient.connected) &&
-      connectionAttempts < maxConnectionAttempts
-    ) {
-      try {
-        console.log(
-          `🔄 Attempting quick connection for location update... (Attempt ${
-            connectionAttempts + 1
-          }/${maxConnectionAttempts})`
-        );
-        await this.connect();
-
-        // 최소 대기 시간
-        await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms로 단축
-
-        if (this.stompClient && this.stompClient.connected) {
-          break;
-        }
-      } catch (error) {
-        console.warn(
-          `⚠️ Quick connection attempt ${connectionAttempts + 1} failed:`,
-          error
-        );
-        connectionAttempts++;
-
-        if (connectionAttempts < maxConnectionAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 100)); // 100ms로 단축
-        }
-      }
-    }
-
-    if (!this.stompClient || !this.stompClient.connected) {
+    // 이미 위치 업데이트 중이면 스킵 (무한 루프 방지)
+    if (this.isUpdatingLocation) {
       return;
     }
 
+    // 이미 연결되어 있으면 바로 전송
+    if (this.stompClient && this.stompClient.connected) {
+      this.sendLocationData(workspaceId, latitude, longitude);
+      return;
+    }
+
+    // 연결 시도 (한 번만)
+    this.isUpdatingLocation = true;
+    try {
+      await this.connect();
+
+      if (this.stompClient && this.stompClient.connected) {
+        this.sendLocationData(workspaceId, latitude, longitude);
+      }
+    } catch (error) {
+      // 연결 실패 시 조용히 실패 (위치 업데이트는 다음에 다시 시도됨)
+      console.warn("⚠️ Location update skipped - connection failed");
+    } finally {
+      this.isUpdatingLocation = false;
+    }
+  }
+
+  private sendLocationData(
+    workspaceId: string,
+    latitude: number,
+    longitude: number
+  ) {
     // 서버 DTO 형식에 맞게 Double로 변환
     const locationData = {
       latitude: Number(latitude),
@@ -307,19 +308,11 @@ class LocationWebSocketService {
     // 유효성 검증
     if (
       isNaN(locationData.latitude) ||
-      isNaN(locationData.longitude) ||
-      locationData.latitude === null ||
-      locationData.longitude === null
+      isNaN(locationData.longitude)
     ) {
-      throw new Error(
-        "Invalid location data: latitude and longitude must be valid numbers"
-      );
+      console.warn("⚠️ Invalid location data, skipping update");
+      return;
     }
-
-    console.log(`📤 Updating location for workspace ${workspaceId}:`, {
-      latitude: locationData.latitude,
-      longitude: locationData.longitude,
-    });
 
     this.sendStompMessage(
       `/app/workspace/${workspaceId}/location`,
