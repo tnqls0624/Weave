@@ -4,12 +4,11 @@ import { useAppStore } from "@/stores";
 import dayjs from "dayjs";
 import { useRouter } from "expo-router";
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ActivityIndicator, StyleSheet, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function GalleryScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { activeWorkspaceId, setCalendarDate, setDetailDrawerDate } =
     useAppStore();
 
@@ -34,42 +33,24 @@ export default function GalleryScreen() {
 
   if (isLoading) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <Text>갤러리를 불러오는 중 오류가 발생했습니다</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <GalleryView photos={photos} onSchedulePress={handleSchedulePress} />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -77,5 +58,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9fafb",
+  },
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

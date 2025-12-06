@@ -4,11 +4,10 @@ import { useAppData, useAppStore, useUpdateUser } from "@/stores";
 import { User } from "@/types";
 import { useRouter } from "expo-router";
 import React from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert, StyleSheet, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { users, currentUser, activeWorkspace, isLoading, error } = useAppData();
   const { clearAuth, activeWorkspaceId } = useAppStore();
@@ -56,23 +55,14 @@ export default function SettingsScreen() {
 
   if (error) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <Text>Error loading settings: {error.message}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <SettingsView
         users={users as unknown as User[]}
         currentUser={currentUser}
@@ -83,13 +73,17 @@ export default function SettingsScreen() {
         onUpdateUser={handleUpdateUser}
         onLogout={handleLogout}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f9fafb",
+  },
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

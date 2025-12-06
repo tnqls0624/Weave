@@ -6,11 +6,10 @@ import dayjs from "dayjs";
 import { useRouter } from "expo-router";
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function FeedScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { setCalendarDate, setDetailDrawerDate, activeWorkspaceId } =
     useAppStore();
   const { users, currentUser, isLoading: appDataLoading, error } = useAppData();
@@ -29,47 +28,29 @@ export default function FeedScreen() {
 
   if (appDataLoading || feedLoading) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <Text>피드를 불러오는 중 오류가 발생했습니다: {error.message}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <FeedView
         schedules={feedSchedules}
         users={users as unknown as User[]}
         currentUser={currentUser}
         onEventSelect={handleEventSelect}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -77,5 +58,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9fafb",
+  },
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

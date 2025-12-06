@@ -7,12 +7,12 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function CalendarScreen() {
   const router = useRouter();
@@ -106,40 +106,22 @@ export default function CalendarScreen() {
 
   if (isLoading) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            paddingTop: insets.top,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
+      <SafeAreaView style={[styles.container, styles.centered]} edges={["top"]}>
         <Text>Error loading calendar: {error.message}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <CalendarView
         schedules={schedules || []}
         users={users || []}
@@ -155,14 +137,14 @@ export default function CalendarScreen() {
       />
 
       {/* Floating Action Button */}
-      <Pressable
+      <TouchableOpacity
         style={[styles.fab, { bottom: 80 + insets.bottom }]}
         onPress={() => router.push("/create")}
-        android_ripple={{ color: "rgba(255, 255, 255, 0.3)" }}
+        activeOpacity={0.7}
       >
         <MaterialIcons name="add" size={28} color="#fff" />
-      </Pressable>
-    </View>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
@@ -170,6 +152,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
+  },
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   fab: {
     position: "absolute",
