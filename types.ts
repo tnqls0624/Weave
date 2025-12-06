@@ -49,6 +49,7 @@ export interface Schedule {
   reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)
   isImportant?: boolean; // 중요 일정 여부 (D-day 알림용)
   commentCount?: number; // 댓글 수
+  photoCount?: number; // 사진 수
   checklist?: ChecklistItem[]; // 체크리스트
   photos?: SchedulePhoto[]; // 사진 앨범
   locationReminder?: LocationReminder; // 위치 기반 알림
@@ -62,8 +63,49 @@ export interface ScheduleComment {
   userName: string;
   userAvatarUrl?: string;
   content: string;
+  parentId?: string; // 답글인 경우 부모 댓글 ID
+  mentions?: MentionedUser[]; // 멘션된 사용자 목록
+  isEdited?: boolean; // 수정 여부
+  reactions?: CommentReaction[]; // 댓글 리액션
+  replies?: ScheduleComment[]; // 답글 목록
   createdAt: string; // ISO date string
   updatedAt?: string;
+}
+
+// 멘션된 사용자
+export interface MentionedUser {
+  userId: string;
+  userName: string;
+}
+
+// 리액션 타입
+export type ReactionEmoji = "👍" | "❤️" | "🎉" | "👀" | "🙏" | "😢";
+
+// 리액션
+export interface Reaction {
+  emoji: ReactionEmoji;
+  count: number;
+  isReactedByMe: boolean;
+  users?: ReactedUser[];
+}
+
+// 리액션한 사용자
+export interface ReactedUser {
+  userId: string;
+  userName: string;
+  avatarUrl?: string;
+}
+
+// 댓글 리액션
+export interface CommentReaction {
+  emoji: string;
+  count: number;
+  isReactedByMe: boolean;
+}
+
+// 일정 리액션 요약
+export interface ReactionSummary {
+  reactions: Reaction[];
 }
 
 // 체크리스트 아이템

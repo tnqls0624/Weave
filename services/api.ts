@@ -808,34 +808,42 @@ class ApiService {
 
   // ==================== Schedule Comments API ====================
 
-  // 일정 댓글 목록 조회
+  // 일정 댓글 목록 조회 (답글 포함)
   async getScheduleComments(scheduleId: string): Promise<any[]> {
     const comments = await this.request<any[]>({
       url: `/api/schedule/${scheduleId}/comments`,
       method: "GET",
     });
     // 백엔드 필드명을 프론트엔드 타입에 맞게 변환
-    return comments.map((comment) => ({
+    const mapComment = (comment: any): any => ({
       id: comment.id,
       scheduleId: comment.scheduleId,
       userId: comment.authorId,
       userName: comment.authorName,
       userAvatarUrl: comment.authorAvatarUrl,
       content: comment.content,
+      parentId: comment.parentId,
+      mentions: comment.mentions || [],
+      isEdited: comment.isEdited || false,
+      reactions: comment.reactions || [],
+      replies: (comment.replies || []).map(mapComment),
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
-    }));
+    });
+    return comments.map(mapComment);
   }
 
   // 일정 댓글 작성
   async createScheduleComment(
     scheduleId: string,
-    content: string
+    content: string,
+    parentId?: string,
+    mentions?: string[]
   ): Promise<any> {
     return this.request<any>({
       url: `/api/schedule/${scheduleId}/comments`,
       method: "POST",
-      data: { content },
+      data: { content, parentId, mentions },
     });
   }
 
@@ -860,6 +868,25 @@ class ApiService {
     return this.request<void>({
       url: `/api/schedule/${scheduleId}/comments/${commentId}`,
       method: "DELETE",
+    });
+  }
+
+  // ==================== Comment Reactions API ====================
+
+  // 댓글 리액션 조회
+  async getCommentReactions(commentId: string): Promise<any[]> {
+    return this.request<any[]>({
+      url: `/api/comments/${commentId}/reactions`,
+      method: "GET",
+    });
+  }
+
+  // 댓글 리액션 토글 (추가/제거)
+  async toggleCommentReaction(commentId: string, emoji: string): Promise<number> {
+    return this.request<number>({
+      url: `/api/comments/${commentId}/reactions`,
+      method: "POST",
+      data: { emoji },
     });
   }
 

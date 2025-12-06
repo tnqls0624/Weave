@@ -18,7 +18,7 @@ import type { GalleryPhoto } from "../services/api";
 
 dayjs.locale("ko");
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NUM_COLUMNS = 3;
 const GAP = 2;
 const ITEM_SIZE = (SCREEN_WIDTH - GAP * (NUM_COLUMNS + 1)) / NUM_COLUMNS;
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   },
   fullImage: {
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.6,
   },
   photoInfo: {
     padding: 16,

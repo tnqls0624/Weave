@@ -492,7 +492,9 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                           onPress={() => openDetailModal(schedule)}
                         >
                           <Ionicons name="images-outline" size={16} color="#6b7280" />
-                          <Text style={styles.detailButtonText}>사진</Text>
+                          <Text style={styles.detailButtonText}>
+                            사진 {schedule.photoCount || 0}
+                          </Text>
                         </Pressable>
                       </View>
 
@@ -568,6 +570,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
             <ScheduleComments
               scheduleId={selectedScheduleForComments.id}
               currentUserId={currentUser.id}
+              workspaceUsers={users}
             />
           )}
         </View>

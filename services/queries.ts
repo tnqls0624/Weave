@@ -276,10 +276,14 @@ export const useCreateScheduleComment = () => {
     mutationFn: ({
       scheduleId,
       content,
+      parentId,
+      mentions,
     }: {
       scheduleId: string;
       content: string;
-    }) => apiService.createScheduleComment(scheduleId, content),
+      parentId?: string;
+      mentions?: string[];
+    }) => apiService.createScheduleComment(scheduleId, content, parentId, mentions),
     onSuccess: (_, variables) => {
       // 댓글 목록 캐시 무효화
       queryClient.invalidateQueries({
@@ -331,6 +335,29 @@ export const useDeleteScheduleComment = () => {
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.schedule(variables.scheduleId),
+      });
+    },
+  });
+};
+
+// ==================== Comment Reactions ====================
+export const useToggleCommentReaction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      commentId,
+      emoji,
+    }: {
+      scheduleId: string;
+      commentId: string;
+      emoji: string;
+    }) => apiService.toggleCommentReaction(commentId, emoji),
+    onSuccess: (_, variables) => {
+      // 댓글 목록 캐시 무효화 (리액션 정보 포함)
+      queryClient.invalidateQueries({
+        queryKey: ["schedules", variables.scheduleId, "comments"],
       });
     },
   });
