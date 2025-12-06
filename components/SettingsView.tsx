@@ -1723,40 +1723,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 shareBottomSheetRef.current?.close();
                 if (!currentUser?.inviteCode) return;
 
+                const message = `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`;
+
                 try {
-                  await shareClient.shareCustom({
-                    templateId: 118137, // 카카오 개발자 콘솔에서 생성한 템플릿 ID
-                    templateArgs: {
-                      invite_code: currentUser.inviteCode,
-                    },
-                  });
+                  // 카카오톡 SDK 사용 시도
+                  if (shareClient?.shareText) {
+                    await shareClient.shareText({
+                      text: message,
+                      buttons: [],
+                    });
+                  } else {
+                    // SDK가 없으면 카카오톡 URL scheme으로 시도
+                    const kakaoUrl = `kakaolink://send?text=${encodeURIComponent(message)}`;
+                    const canOpen = await Linking.canOpenURL(kakaoUrl);
+
+                    if (canOpen) {
+                      await Linking.openURL(kakaoUrl);
+                    } else {
+                      // 카카오톡이 없으면 일반 공유로 fallback
+                      await Share.share({ message });
+                    }
+                  }
                 } catch (error: any) {
                   console.error("Kakao share error:", error);
-                  // 카카오톡이 설치되지 않은 경우
-                  if (error?.message?.includes("KakaoTalk")) {
-                    Alert.alert(
-                      "카카오톡 필요",
-                      "카카오톡이 설치되어 있지 않습니다. 다른 방법으로 공유해주세요."
-                    );
-                  } else {
-                    // 템플릿이 없는 경우 기본 텍스트 공유
-                    try {
-                      await shareClient.shareText({
-                        text: `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`,
-                        buttons: [],
-                      });
-                    } catch (textError) {
-                      console.error("Kakao text share error:", textError);
-                      Alert.alert("공유 실패", "카카오톡 공유에 실패했습니다.");
-                    }
+                  // 에러 시 일반 공유로 fallback
+                  try {
+                    await Share.share({ message });
+                  } catch (shareError) {
+                    Alert.alert("공유 실패", "공유에 실패했습니다.");
                   }
                 }
               }}
             >
-              <Image
-                source={{ uri: "https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png" }}
-                style={{ width: 24, height: 24 }}
-              />
+              <Ionicons name="chatbubble-ellipses" size={24} color="#FEE500" />
               <Text style={styles.imagePickerOptionText}>카카오톡으로 공유</Text>
             </Pressable>
             <Pressable
