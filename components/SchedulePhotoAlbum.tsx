@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   emptyAddButton: {
     alignItems: "center",
     paddingVertical: 24,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   addPhotoButton: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,

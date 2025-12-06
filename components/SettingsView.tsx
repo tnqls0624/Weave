@@ -1823,7 +1823,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -1877,7 +1877,7 @@ const styles = StyleSheet.create({
   },
   profileEditContainer: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
   },
   profileHeader: {
     flexDirection: "row",
@@ -2160,7 +2160,7 @@ const styles = StyleSheet.create({
   // New Subpage Styles
   subPageContainer: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
   },
   subPageHeader: {
     flexDirection: "row",
@@ -2271,7 +2271,7 @@ const styles = StyleSheet.create({
   // Settings SubPage Styles (Consistent with Main Settings)
   settingsSubPage: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
   },
   subPageHeaderBar: {
     flexDirection: "row",
@@ -2628,7 +2628,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -2781,7 +2781,7 @@ const styles = StyleSheet.create({
   inviteCodeSection: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 12,
     marginTop: 16,
@@ -2827,7 +2827,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     paddingVertical: 12,
     gap: 8,

@@ -278,7 +278,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
   },
   header: {
     flexDirection: "row",

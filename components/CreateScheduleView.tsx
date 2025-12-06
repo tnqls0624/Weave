@@ -3,15 +3,16 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
+import { Picker } from "@react-native-picker/picker";
 import dayjs from "dayjs";
 import * as Location from "expo-location";
+import KoreanLunarCalendar from "korean-lunar-calendar";
 import React, {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useLayoutEffect,
 } from "react";
 import {
   ActivityIndicator,
@@ -29,14 +30,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import KoreanLunarCalendar from "korean-lunar-calendar";
-import { RepeatOption, Schedule, User, ChecklistItem } from "../types";
-import DateTimePicker from "./DateTimePicker";
-import ScheduleConflictService, { ConflictInfo } from "../services/scheduleConflictService";
-import { useSearchPlaces } from "../services/queries";
 import { PlaceItem } from "../services/api";
+import { useSearchPlaces } from "../services/queries";
+import ScheduleConflictService, {
+  ConflictInfo,
+} from "../services/scheduleConflictService";
+import { RepeatOption, Schedule, User } from "../types";
+import DateTimePicker from "./DateTimePicker";
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -48,7 +49,11 @@ const RADIUS_OPTIONS = [
 ];
 
 // 음력을 양력으로 변환
-const lunarToSolar = (year: number, month: number, day: number): { year: number; month: number; day: number } | null => {
+const lunarToSolar = (
+  year: number,
+  month: number,
+  day: number
+): { year: number; month: number; day: number } | null => {
   try {
     const calendar = new KoreanLunarCalendar();
     calendar.setLunarDate(year, month, day, false);
@@ -58,7 +63,6 @@ const lunarToSolar = (year: number, month: number, day: number): { year: number;
     return null;
   }
 };
-
 
 interface CreateScheduleViewProps {
   onSave: (
@@ -117,7 +121,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
 
   // 장소 검색 및 위치 알림 관련 상태
   const [locationSearchQuery, setLocationSearchQuery] = useState("");
-  const [showLocationSearchResults, setShowLocationSearchResults] = useState(false);
+  const [showLocationSearchResults, setShowLocationSearchResults] =
+    useState(false);
   const [selectedLocation, setSelectedLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -125,11 +130,14 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     placeName?: string;
   } | null>(null);
   const [selectedRadius, setSelectedRadius] = useState(300);
-  const [enableArrivalNotification, setEnableArrivalNotification] = useState(false);
+  const [enableArrivalNotification, setEnableArrivalNotification] =
+    useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   // 체크리스트 관련 상태
-  const [checklistItems, setChecklistItems] = useState<Array<{ id: string; content: string; isCompleted: boolean }>>([]);
+  const [checklistItems, setChecklistItems] = useState<
+    { id: string; content: string; isCompleted: boolean }[]
+  >([]);
   const [newChecklistItem, setNewChecklistItem] = useState("");
 
   // 장소 검색 mutation
@@ -158,14 +166,28 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     );
 
     setConflictInfo(conflict.hasConflict ? conflict : null);
-  }, [startDate, endDate, startTime, endTime, isAllDay, participantIds, existingSchedules, scheduleToEdit?.id]);
+  }, [
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    isAllDay,
+    participantIds,
+    existingSchedules,
+    scheduleToEdit?.id,
+  ]);
 
   // 키보드 상태 감지
   useEffect(() => {
-    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
       setIsKeyboardVisible(true);
     });
-    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
       setIsKeyboardVisible(false);
     });
 
@@ -199,12 +221,15 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const repeatSheetRef = useRef<BottomSheet>(null);
   const locationSheetRef = useRef<BottomSheet>(null);
   const checklistSheetRef = useRef<BottomSheet>(null);
+  const checklistInputRef = useRef<TextInput>(null);
   const memoInputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // 임의 알림 설정 state
   const [customReminderValue, setCustomReminderValue] = useState(30);
-  const [customReminderUnit, setCustomReminderUnit] = useState<"minutes" | "hours">("minutes");
+  const [customReminderUnit, setCustomReminderUnit] = useState<
+    "minutes" | "hours"
+  >("minutes");
 
   // BottomSheet snap points
   const snapPoints = useMemo(() => ["50%"], []);
@@ -213,19 +238,21 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
   const reminderSnapPoints = useMemo(() => ["45%"], []);
   const customReminderSnapPoints = useMemo(() => ["45%"], []);
   const repeatSnapPoints = useMemo(() => ["45%"], []);
-  const locationSnapPoints = useMemo(() => ["75%"], []);
-  const checklistSnapPoints = useMemo(() => ["60%"], []);
+  const locationSnapPoints = useMemo(() => ["52%"], []);
+  const checklistSnapPoints = useMemo(() => ["85%"], []);
 
-  // BottomSheet backdrop
+  // BottomSheet backdrop - 키보드가 열려있으면 키보드만 닫기, 아니면 BottomSheet 닫기
   const renderBackdrop = useCallback(
     (props: any) => (
       <BottomSheetBackdrop
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
+        pressBehavior={isKeyboardVisible ? "none" : "close"}
+        onPress={isKeyboardVisible ? () => Keyboard.dismiss() : undefined}
       />
     ),
-    []
+    [isKeyboardVisible]
   );
 
   useEffect(() => {
@@ -344,15 +371,16 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
             }
           : undefined,
         // 체크리스트 데이터
-        checklist: checklistItems.length > 0
-          ? checklistItems.map((item) => ({
-              id: item.id,
-              content: item.content,
-              isCompleted: item.isCompleted,
-              createdBy: currentUser.id,
-              createdAt: new Date().toISOString(),
-            }))
-          : undefined,
+        checklist:
+          checklistItems.length > 0
+            ? checklistItems.map((item) => ({
+                id: item.id,
+                content: item.content,
+                isCompleted: item.isCompleted,
+                createdBy: currentUser.id,
+                createdAt: new Date().toISOString(),
+              }))
+            : undefined,
       };
       await onSave(scheduleData, scheduleToEdit?.id);
     } finally {
@@ -407,7 +435,11 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
 
   const openDatePicker = (field: "start" | "end") => {
     setActiveField(field);
-    setDisplayDate(new Date((field === "start" ? startDate : (endDate || startDate)) + "T00:00:00"));
+    setDisplayDate(
+      new Date(
+        (field === "start" ? startDate : endDate || startDate) + "T00:00:00"
+      )
+    );
     calendarSheetRef.current?.expand();
   };
 
@@ -429,7 +461,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     const totalCells = firstDayOfWeek + daysInMonth;
     const numberOfWeeks = Math.ceil(totalCells / 7);
 
-    const days: Array<{ date: Date; dateString: string; isCurrentMonth: boolean }> = [];
+    const days: { date: Date; dateString: string; isCurrentMonth: boolean }[] =
+      [];
 
     for (let i = firstDayOfWeek - 1; i >= 0; i--) {
       const date = new Date(year, month - 1, prevMonthLastDay - i);
@@ -459,7 +492,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       });
     }
 
-    const weeks: typeof days[] = [];
+    const weeks: (typeof days)[] = [];
     for (let i = 0; i < days.length; i += 7) {
       weeks.push(days.slice(i, i + 7));
     }
@@ -574,7 +607,9 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
       });
 
       const addressString = address
-        ? `${address.city || ""} ${address.district || ""} ${address.street || ""}`.trim()
+        ? `${address.city || ""} ${address.district || ""} ${
+            address.street || ""
+          }`.trim()
         : undefined;
 
       setSelectedLocation({
@@ -649,7 +684,6 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
     { key: "yearly", label: "매년", icon: "gift-outline" },
   ];
 
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -708,12 +742,16 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <Ionicons name="warning" size={20} color="#F59E0B" />
               <View style={styles.conflictTextContainer}>
                 <Text style={styles.conflictTitle}>일정이 겹칩니다</Text>
-                <Text style={styles.conflictMessage}>{conflictInfo.message}</Text>
-                {conflictInfo.conflictingSchedules.slice(0, 2).map((schedule) => (
-                  <Text key={schedule.id} style={styles.conflictSchedule}>
-                    • {schedule.title} ({schedule.startTime || "종일"})
-                  </Text>
-                ))}
+                <Text style={styles.conflictMessage}>
+                  {conflictInfo.message}
+                </Text>
+                {conflictInfo.conflictingSchedules
+                  .slice(0, 2)
+                  .map((schedule) => (
+                    <Text key={schedule.id} style={styles.conflictSchedule}>
+                      • {schedule.title} ({schedule.startTime || "종일"})
+                    </Text>
+                  ))}
                 {conflictInfo.conflictingSchedules.length > 2 && (
                   <Text style={styles.conflictMore}>
                     +{conflictInfo.conflictingSchedules.length - 2}개 더
@@ -739,10 +777,14 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 }
               }}
             >
-              <View style={[styles.dateTimeDot, { backgroundColor: "#10B981" }]} />
+              <View
+                style={[styles.dateTimeDot, { backgroundColor: "#10B981" }]}
+              />
               <View style={styles.dateTimeContent}>
                 <Text style={styles.dateTimeLabel}>시작</Text>
-                <Text style={styles.dateTimeValue}>{formatDateDisplay(startDate)}</Text>
+                <Text style={styles.dateTimeValue}>
+                  {formatDateDisplay(startDate)}
+                </Text>
               </View>
               {!isAllDay && (
                 <Pressable
@@ -774,10 +816,14 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 }
               }}
             >
-              <View style={[styles.dateTimeDot, { backgroundColor: "#EF4444" }]} />
+              <View
+                style={[styles.dateTimeDot, { backgroundColor: "#EF4444" }]}
+              />
               <View style={styles.dateTimeContent}>
                 <Text style={styles.dateTimeLabel}>종료</Text>
-                <Text style={styles.dateTimeValue}>{formatDateDisplay(endDate || startDate)}</Text>
+                <Text style={styles.dateTimeValue}>
+                  {formatDateDisplay(endDate || startDate)}
+                </Text>
               </View>
               {!isAllDay && (
                 <Pressable
@@ -815,7 +861,12 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                   size={16}
                   color={isAllDay ? "#FFFFFF" : "#6B7280"}
                 />
-                <Text style={[styles.toggleChipText, isAllDay && styles.toggleChipTextActive]}>
+                <Text
+                  style={[
+                    styles.toggleChipText,
+                    isAllDay && styles.toggleChipTextActive,
+                  ]}
+                >
                   종일
                 </Text>
               </Pressable>
@@ -837,13 +888,21 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                   size={16}
                   color={isLunar ? "#FFFFFF" : "#6B7280"}
                 />
-                <Text style={[styles.toggleChipText, isLunar && styles.toggleChipTextActive]}>
+                <Text
+                  style={[
+                    styles.toggleChipText,
+                    isLunar && styles.toggleChipTextActive,
+                  ]}
+                >
                   음력
                 </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.toggleChip, isImportant && styles.toggleChipImportant]}
+                style={[
+                  styles.toggleChip,
+                  isImportant && styles.toggleChipImportant,
+                ]}
                 onPress={() => {
                   if (isKeyboardVisible) {
                     Keyboard.dismiss();
@@ -857,7 +916,12 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                   size={16}
                   color={isImportant ? "#FFFFFF" : "#6B7280"}
                 />
-                <Text style={[styles.toggleChipText, isImportant && styles.toggleChipTextActive]}>
+                <Text
+                  style={[
+                    styles.toggleChipText,
+                    isImportant && styles.toggleChipTextActive,
+                  ]}
+                >
                   중요
                 </Text>
               </Pressable>
@@ -883,7 +947,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               </View>
               <View style={styles.settingRight}>
                 <Text style={styles.settingValue}>
-                  {repeatOptions.find(o => o.key === repeat)?.label || "없음"}
+                  {repeatOptions.find((o) => o.key === repeat)?.label || "없음"}
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
               </View>
@@ -903,7 +967,11 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               }}
             >
               <View style={styles.settingLeft}>
-                <Ionicons name="notifications-outline" size={20} color="#007AFF" />
+                <Ionicons
+                  name="notifications-outline"
+                  size={20}
+                  color="#007AFF"
+                />
                 <Text style={styles.settingTitle}>알림</Text>
               </View>
               <View style={styles.settingRight}>
@@ -1016,16 +1084,26 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 onPress={() => checklistSheetRef.current?.expand()}
               >
                 <Ionicons
-                  name={checklistItems.every(item => item.isCompleted) ? "checkbox" : "checkbox-outline"}
+                  name={
+                    checklistItems.every((item) => item.isCompleted)
+                      ? "checkbox"
+                      : "checkbox-outline"
+                  }
                   size={18}
-                  color={checklistItems.every(item => item.isCompleted) ? "#22C55E" : "#007AFF"}
+                  color={
+                    checklistItems.every((item) => item.isCompleted)
+                      ? "#22C55E"
+                      : "#007AFF"
+                  }
                 />
                 <View style={styles.previewTextContainer}>
                   <Text style={styles.previewTitle}>
-                    체크리스트 {checklistItems.filter(item => item.isCompleted).length}/{checklistItems.length} 완료
+                    체크리스트{" "}
+                    {checklistItems.filter((item) => item.isCompleted).length}/
+                    {checklistItems.length} 완료
                   </Text>
                   <Text style={styles.previewSubtitle} numberOfLines={1}>
-                    {checklistItems.map(item => item.content).join(", ")}
+                    {checklistItems.map((item) => item.content).join(", ")}
                   </Text>
                 </View>
               </Pressable>
@@ -1057,7 +1135,11 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           {/* 메모 */}
           <View style={styles.memoSection}>
             <View style={styles.memoHeader}>
-              <Ionicons name="document-text-outline" size={18} color="#9CA3AF" />
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color="#9CA3AF"
+              />
               <Text style={styles.memoLabel}>메모</Text>
             </View>
             <TextInput
@@ -1139,7 +1221,9 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 style={styles.participantItem}
                 onPress={() => {
                   if (participantIds.includes(currentUser.id)) {
-                    setParticipantIds(participantIds.filter((id) => id !== currentUser.id));
+                    setParticipantIds(
+                      participantIds.filter((id) => id !== currentUser.id)
+                    );
                   } else {
                     setParticipantIds([...participantIds, currentUser.id]);
                   }
@@ -1153,7 +1237,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 <View
                   style={[
                     styles.checkbox,
-                    participantIds.includes(currentUser.id) && styles.checkboxActive,
+                    participantIds.includes(currentUser.id) &&
+                      styles.checkboxActive,
                   ]}
                 >
                   {participantIds.includes(currentUser.id) && (
@@ -1171,7 +1256,9 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                     style={styles.participantItem}
                     onPress={() => {
                       if (participantIds.includes(user.id)) {
-                        setParticipantIds(participantIds.filter((id) => id !== user.id));
+                        setParticipantIds(
+                          participantIds.filter((id) => id !== user.id)
+                        );
                       } else {
                         setParticipantIds([...participantIds, user.id]);
                       }
@@ -1185,7 +1272,8 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                     <View
                       style={[
                         styles.checkbox,
-                        participantIds.includes(user.id) && styles.checkboxActive,
+                        participantIds.includes(user.id) &&
+                          styles.checkboxActive,
                       ]}
                     >
                       {participantIds.includes(user.id) && (
@@ -1346,9 +1434,10 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
             <TouchableOpacity
               style={styles.customReminderConfirmButton}
               onPress={() => {
-                const minutes = customReminderUnit === "hours"
-                  ? customReminderValue * 60
-                  : customReminderValue;
+                const minutes =
+                  customReminderUnit === "hours"
+                    ? customReminderValue * 60
+                    : customReminderValue;
                 setReminderMinutes(minutes);
                 customReminderSheetRef.current?.close();
               }}
@@ -1367,148 +1456,182 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           backdropComponent={renderBackdrop}
           handleIndicatorStyle={styles.bottomSheetHandle}
         >
-          <BottomSheetView style={styles.bottomSheetContent}>
-            <Text style={styles.bottomSheetTitle}>약속 장소</Text>
+          <Pressable
+            style={styles.locationSheetContainer}
+            onPress={Keyboard.dismiss}
+          >
+            <View style={styles.locationSheetContent}>
+              <Text style={styles.bottomSheetTitle}>약속 장소</Text>
 
-            {/* 장소 검색 입력 */}
-            <View style={styles.locationSearchContainer}>
-              <View style={styles.locationSearchInputWrapper}>
-                <Ionicons name="search" size={16} color="#9CA3AF" style={styles.locationSearchIcon} />
-                <TextInput
-                  style={styles.locationSearchInput}
-                  value={locationSearchQuery}
-                  onChangeText={setLocationSearchQuery}
-                  placeholder="장소 검색 (예: 강남역, 스타벅스)"
-                  placeholderTextColor="#9CA3AF"
-                  returnKeyType="search"
-                />
-                {locationSearchQuery.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      setLocationSearchQuery("");
-                      setShowLocationSearchResults(false);
-                    }}
-                    style={styles.locationClearButton}
-                  >
-                    <Ionicons name="close-circle" size={16} color="#9CA3AF" />
-                  </Pressable>
-                )}
-              </View>
-            </View>
-
-            {/* 검색 결과 */}
-            {showLocationSearchResults && (
-              <View style={styles.locationSearchResults}>
-                {searchPlacesMutation.isPending ? (
-                  <View style={styles.locationSearchLoading}>
-                    <ActivityIndicator size="small" color="#3B82F6" />
-                    <Text style={styles.locationSearchLoadingText}>검색 중...</Text>
-                  </View>
-                ) : searchPlacesMutation.data?.items?.length ? (
-                  <FlatList
-                    data={searchPlacesMutation.data.items}
-                    renderItem={renderPlaceSearchResult}
-                    keyExtractor={(item, index) => `${item.title}-${index}`}
-                    nestedScrollEnabled={true}
-                    style={{ maxHeight: 180 }}
-                  />
-                ) : (
-                  <View style={styles.locationNoResults}>
-                    <Text style={styles.locationNoResultsText}>검색 결과가 없습니다</Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* 현재 위치 버튼 */}
-            <Pressable
-              style={styles.currentLocationButton}
-              onPress={handleGetCurrentLocation}
-              disabled={isLoadingLocation}
-            >
-              {isLoadingLocation ? (
-                <ActivityIndicator size="small" color="#3B82F6" />
-              ) : (
-                <>
-                  <Ionicons name="navigate" size={16} color="#3B82F6" />
-                  <Text style={styles.currentLocationButtonText}>현재 위치 사용</Text>
-                </>
-              )}
-            </Pressable>
-
-            {/* 선택된 장소 */}
-            {selectedLocation && (
-              <View style={styles.selectedLocationContainer}>
-                <View style={styles.selectedLocationInfo}>
-                  <Ionicons name="pin" size={16} color="#22C55E" />
-                  <View style={styles.selectedLocationText}>
-                    {selectedLocation.placeName && (
-                      <Text style={styles.selectedLocationName}>{selectedLocation.placeName}</Text>
-                    )}
-                    <Text style={styles.selectedLocationAddress} numberOfLines={1}>
-                      {selectedLocation.address || `${selectedLocation.latitude.toFixed(4)}, ${selectedLocation.longitude.toFixed(4)}`}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => setSelectedLocation(null)}
-                    style={styles.removeLocationButton}
-                  >
-                    <Ionicons name="close" size={16} color="#9CA3AF" />
-                  </Pressable>
-                </View>
-
-                {/* 도착 알림 토글 */}
-                <Pressable
-                  style={[
-                    styles.arrivalNotificationToggle,
-                    enableArrivalNotification && styles.arrivalNotificationToggleActive,
-                  ]}
-                  onPress={() => setEnableArrivalNotification(!enableArrivalNotification)}
-                >
+              {/* 장소 검색 입력 */}
+              <View style={styles.locationSearchContainer}>
+                <View style={styles.locationSearchInputWrapper}>
                   <Ionicons
-                    name={enableArrivalNotification ? "notifications" : "notifications-outline"}
+                    name="search"
                     size={16}
-                    color={enableArrivalNotification ? "#FFFFFF" : "#6B7280"}
+                    color="#9CA3AF"
+                    style={styles.locationSearchIcon}
                   />
-                  <Text
-                    style={[
-                      styles.arrivalNotificationToggleText,
-                      enableArrivalNotification && styles.arrivalNotificationToggleTextActive,
-                    ]}
-                  >
-                    도착 알림 받기
-                  </Text>
-                </Pressable>
-
-                {/* 반경 선택 */}
-                {enableArrivalNotification && (
-                  <View style={styles.radiusContainer}>
-                    <Text style={styles.radiusLabel}>도착 인식 범위</Text>
-                    <View style={styles.radiusOptions}>
-                      {RADIUS_OPTIONS.map((option) => (
-                        <Pressable
-                          key={option.value}
-                          style={[
-                            styles.radiusOption,
-                            selectedRadius === option.value && styles.radiusOptionSelected,
-                          ]}
-                          onPress={() => setSelectedRadius(option.value)}
-                        >
-                          <Text
-                            style={[
-                              styles.radiusOptionText,
-                              selectedRadius === option.value && styles.radiusOptionTextSelected,
-                            ]}
-                          >
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                )}
+                  <TextInput
+                    style={styles.locationSearchInput}
+                    value={locationSearchQuery}
+                    onChangeText={setLocationSearchQuery}
+                    placeholder="장소 검색 (예: 강남역, 스타벅스)"
+                    placeholderTextColor="#9CA3AF"
+                    returnKeyType="search"
+                  />
+                  {locationSearchQuery.length > 0 && (
+                    <Pressable
+                      onPress={() => {
+                        setLocationSearchQuery("");
+                        setShowLocationSearchResults(false);
+                      }}
+                      style={styles.locationClearButton}
+                    >
+                      <Ionicons name="close-circle" size={16} color="#9CA3AF" />
+                    </Pressable>
+                  )}
+                </View>
               </View>
-            )}
+
+              {/* 검색 결과 */}
+              {showLocationSearchResults && (
+                <View style={styles.locationSearchResults}>
+                  {searchPlacesMutation.isPending ? (
+                    <View style={styles.locationSearchLoading}>
+                      <ActivityIndicator size="small" color="#3B82F6" />
+                      <Text style={styles.locationSearchLoadingText}>
+                        검색 중...
+                      </Text>
+                    </View>
+                  ) : searchPlacesMutation.data?.items?.length ? (
+                    <FlatList
+                      data={searchPlacesMutation.data.items}
+                      renderItem={renderPlaceSearchResult}
+                      keyExtractor={(item, index) => `${item.title}-${index}`}
+                      nestedScrollEnabled={true}
+                      style={{ maxHeight: 180 }}
+                    />
+                  ) : (
+                    <View style={styles.locationNoResults}>
+                      <Text style={styles.locationNoResultsText}>
+                        검색 결과가 없습니다
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* 현재 위치 버튼 */}
+              <Pressable
+                style={styles.currentLocationButton}
+                onPress={handleGetCurrentLocation}
+                disabled={isLoadingLocation}
+              >
+                {isLoadingLocation ? (
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                ) : (
+                  <>
+                    <Ionicons name="navigate" size={16} color="#3B82F6" />
+                    <Text style={styles.currentLocationButtonText}>
+                      현재 위치 사용
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              {/* 선택된 장소 */}
+              {selectedLocation && (
+                <View style={styles.selectedLocationContainer}>
+                  <View style={styles.selectedLocationInfo}>
+                    <Ionicons name="pin" size={16} color="#22C55E" />
+                    <View style={styles.selectedLocationText}>
+                      {selectedLocation.placeName && (
+                        <Text style={styles.selectedLocationName}>
+                          {selectedLocation.placeName}
+                        </Text>
+                      )}
+                      <Text
+                        style={styles.selectedLocationAddress}
+                        numberOfLines={1}
+                      >
+                        {selectedLocation.address ||
+                          `${selectedLocation.latitude.toFixed(
+                            4
+                          )}, ${selectedLocation.longitude.toFixed(4)}`}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setSelectedLocation(null)}
+                      style={styles.removeLocationButton}
+                    >
+                      <Ionicons name="close" size={16} color="#9CA3AF" />
+                    </Pressable>
+                  </View>
+
+                  {/* 도착 알림 토글 */}
+                  <Pressable
+                    style={[
+                      styles.arrivalNotificationToggle,
+                      enableArrivalNotification &&
+                        styles.arrivalNotificationToggleActive,
+                    ]}
+                    onPress={() =>
+                      setEnableArrivalNotification(!enableArrivalNotification)
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        enableArrivalNotification
+                          ? "notifications"
+                          : "notifications-outline"
+                      }
+                      size={16}
+                      color={enableArrivalNotification ? "#FFFFFF" : "#6B7280"}
+                    />
+                    <Text
+                      style={[
+                        styles.arrivalNotificationToggleText,
+                        enableArrivalNotification &&
+                          styles.arrivalNotificationToggleTextActive,
+                      ]}
+                    >
+                      도착 알림 받기
+                    </Text>
+                  </Pressable>
+
+                  {/* 반경 선택 */}
+                  {enableArrivalNotification && (
+                    <View style={styles.radiusContainer}>
+                      <Text style={styles.radiusLabel}>도착 인식 범위</Text>
+                      <View style={styles.radiusOptions}>
+                        {RADIUS_OPTIONS.map((option) => (
+                          <Pressable
+                            key={option.value}
+                            style={[
+                              styles.radiusOption,
+                              selectedRadius === option.value &&
+                                styles.radiusOptionSelected,
+                            ]}
+                            onPress={() => setSelectedRadius(option.value)}
+                          >
+                            <Text
+                              style={[
+                                styles.radiusOptionText,
+                                selectedRadius === option.value &&
+                                  styles.radiusOptionTextSelected,
+                              ]}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
 
             {/* 확인 버튼 */}
             <TouchableOpacity
@@ -1522,7 +1645,7 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                 {selectedLocation ? "확인" : "닫기"}
               </Text>
             </TouchableOpacity>
-          </BottomSheetView>
+          </Pressable>
         </BottomSheet>
 
         {/* 체크리스트 BottomSheet */}
@@ -1534,7 +1657,10 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
           backdropComponent={renderBackdrop}
           handleIndicatorStyle={styles.bottomSheetHandle}
         >
-          <BottomSheetView style={styles.bottomSheetContent}>
+          <Pressable
+            style={styles.checklistSheetContainer}
+            onPress={Keyboard.dismiss}
+          >
             {/* 헤더 */}
             <View style={styles.checklistHeader}>
               <View style={styles.checklistHeaderIcon}>
@@ -1543,12 +1669,17 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               <Text style={styles.checklistHeaderTitle}>체크리스트</Text>
               {checklistItems.length > 0 && (
                 <View style={styles.checklistBadge}>
-                  <Text style={styles.checklistBadgeText}>{checklistItems.length}</Text>
+                  <Text style={styles.checklistBadgeText}>
+                    {checklistItems.length}
+                  </Text>
                 </View>
               )}
             </View>
 
-            <ScrollView style={styles.checklistScrollView} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.checklistScrollView}
+              showsVerticalScrollIndicator={false}
+            >
               {/* 체크리스트 항목들 */}
               {checklistItems.length > 0 ? (
                 <View style={styles.checklistItemsContainer}>
@@ -1557,16 +1688,24 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                       key={item.id}
                       style={[
                         styles.checklistItem,
-                        index === checklistItems.length - 1 && styles.checklistItemLast,
+                        index === checklistItems.length - 1 &&
+                          styles.checklistItemLast,
                       ]}
                       onPress={() => handleToggleChecklistItem(item.id)}
                     >
-                      <View style={[
-                        styles.checklistItemCheckbox,
-                        item.isCompleted && styles.checklistItemCheckboxCompleted,
-                      ]}>
+                      <View
+                        style={[
+                          styles.checklistItemCheckbox,
+                          item.isCompleted &&
+                            styles.checklistItemCheckboxCompleted,
+                        ]}
+                      >
                         {item.isCompleted && (
-                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                          <Ionicons
+                            name="checkmark"
+                            size={14}
+                            color="#FFFFFF"
+                          />
                         )}
                       </View>
                       <Text
@@ -1586,7 +1725,11 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
                         ]}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
+                        <Ionicons
+                          name="trash-outline"
+                          size={16}
+                          color="#9CA3AF"
+                        />
                       </Pressable>
                     </Pressable>
                   ))}
@@ -1594,50 +1737,65 @@ const CreateScheduleView: React.FC<CreateScheduleViewProps> = ({
               ) : (
                 <View style={styles.checklistEmptyState}>
                   <View style={styles.checklistEmptyIcon}>
-                    <Ionicons name="checkbox-outline" size={32} color="#D1D5DB" />
+                    <Ionicons
+                      name="checkbox-outline"
+                      size={32}
+                      color="#D1D5DB"
+                    />
                   </View>
-                  <Text style={styles.checklistEmptyTitle}>체크리스트가 비어있어요</Text>
-                  <Text style={styles.checklistEmptySubtitle}>준비물이나 할 일을 추가해보세요</Text>
+                  <Text style={styles.checklistEmptyTitle}>
+                    체크리스트가 비어있어요
+                  </Text>
+                  <Text style={styles.checklistEmptySubtitle}>
+                    준비물이나 할 일을 추가해보세요
+                  </Text>
                 </View>
               )}
             </ScrollView>
 
-            {/* 새 항목 추가 입력 */}
-            <View style={styles.checklistInputContainer}>
-              <View style={styles.checklistInputWrapper}>
-                <Ionicons name="add" size={20} color="#9CA3AF" />
-                <TextInput
-                  style={styles.checklistInput}
-                  value={newChecklistItem}
-                  onChangeText={setNewChecklistItem}
-                  placeholder="새 항목 추가"
-                  placeholderTextColor="#9CA3AF"
-                  returnKeyType="done"
-                  onSubmitEditing={handleAddChecklistItem}
-                />
-              </View>
-              {newChecklistItem.trim() ? (
+            {/* 하단 고정 영역 */}
+            <View style={styles.checklistBottomSection}>
+              {/* 새 항목 추가 입력 */}
+              <View style={styles.checklistInputContainer}>
                 <Pressable
-                  onPress={handleAddChecklistItem}
-                  style={({ pressed }) => [
-                    styles.checklistAddButton,
-                    pressed && styles.checklistAddButtonPressed,
-                  ]}
+                  style={styles.checklistInputWrapper}
+                  onPress={() => checklistInputRef.current?.focus()}
                 >
-                  <Text style={styles.checklistAddButtonText}>추가</Text>
+                  <Ionicons name="add" size={20} color="#9CA3AF" />
+                  <TextInput
+                    ref={checklistInputRef}
+                    style={styles.checklistInput}
+                    value={newChecklistItem}
+                    onChangeText={setNewChecklistItem}
+                    placeholder="새 항목 추가"
+                    placeholderTextColor="#9CA3AF"
+                    returnKeyType="done"
+                    onSubmitEditing={handleAddChecklistItem}
+                  />
                 </Pressable>
-              ) : null}
-            </View>
+                {newChecklistItem.trim() ? (
+                  <Pressable
+                    onPress={handleAddChecklistItem}
+                    style={({ pressed }) => [
+                      styles.checklistAddButton,
+                      pressed && styles.checklistAddButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.checklistAddButtonText}>추가</Text>
+                  </Pressable>
+                ) : null}
+              </View>
 
-            {/* 확인 버튼 */}
-            <TouchableOpacity
-              style={styles.checklistConfirmButton}
-              onPress={() => checklistSheetRef.current?.close()}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.checklistConfirmButtonText}>완료</Text>
-            </TouchableOpacity>
-          </BottomSheetView>
+              {/* 확인 버튼 */}
+              <TouchableOpacity
+                style={styles.checklistConfirmButton}
+                onPress={() => checklistSheetRef.current?.close()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.checklistConfirmButtonText}>완료</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
         </BottomSheet>
       </View>
     </KeyboardAvoidingView>
@@ -1722,7 +1880,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   dateTimeCard: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 16,
     marginBottom: 20,
@@ -1807,7 +1965,7 @@ const styles = StyleSheet.create({
   },
   // 새로운 설정 그룹 스타일
   settingsGroup: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     marginBottom: 20,
     overflow: "hidden",
@@ -1854,7 +2012,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginLeft: -6,
     borderWidth: 2,
-    borderColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
   },
   participantMoreSmall: {
     width: 24,
@@ -1865,7 +2023,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: -6,
     borderWidth: 2,
-    borderColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
   },
   participantMoreSmallText: {
     fontSize: 9,
@@ -1919,7 +2077,7 @@ const styles = StyleSheet.create({
   },
   // 기존 스타일 (호환성 유지)
   section: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -2318,7 +2476,7 @@ const styles = StyleSheet.create({
     color: "#3B82F6",
   },
   checklistItemsContainer: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     overflow: "hidden",
   },
@@ -2400,7 +2558,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: "#E5E7EB",
@@ -2433,7 +2591,7 @@ const styles = StyleSheet.create({
   previewSection: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
@@ -2478,7 +2636,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
@@ -2492,13 +2650,22 @@ const styles = StyleSheet.create({
     color: "#007AFF",
     marginLeft: 8,
   },
+  // 장소 BottomSheet 컨테이너 스타일
+  locationSheetContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: "space-between",
+  },
+  locationSheetContent: {
+    flex: 1,
+  },
   // BottomSheet 확인 버튼 스타일
   locationConfirmButton: {
     backgroundColor: "#007AFF",
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
-    marginTop: 16,
+    marginBottom: 32,
   },
   locationConfirmButtonDisabled: {
     backgroundColor: "#E5E7EB",
@@ -2508,9 +2675,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFFFFF",
   },
+  // 체크리스트 BottomSheet 컨테이너 스타일
+  checklistSheetContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: "space-between",
+  },
   checklistScrollView: {
     flex: 1,
   },
+  checklistBottomSection: {},
   checklistConfirmButton: {
     backgroundColor: "#3B82F6",
     paddingVertical: 16,
@@ -2522,6 +2696,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
+    marginBottom: 32,
   },
   checklistConfirmButtonText: {
     fontSize: 16,

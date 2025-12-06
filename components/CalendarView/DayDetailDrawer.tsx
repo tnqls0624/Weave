@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#ffffff",
     borderRadius: 8,
   },
   commentsButtonText: {
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#ffffff",
     borderRadius: 8,
   },
   detailButtonText: {

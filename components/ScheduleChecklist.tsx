@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   itemPressed: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 8,
     marginHorizontal: -4,
     paddingHorizontal: 8,
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: "#E5E7EB",
