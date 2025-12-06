@@ -285,24 +285,9 @@ export const useCreateScheduleComment = () => {
       mentions?: string[];
     }) => apiService.createScheduleComment(scheduleId, content, parentId, mentions),
     onSuccess: (_, variables) => {
-      // 댓글 목록 캐시 무효화
+      // 댓글 목록 캐시만 무효화 (commentCount는 로컬 상태로 관리)
       queryClient.invalidateQueries({
         queryKey: ["schedules", variables.scheduleId, "comments"],
-      });
-      // 일정의 commentCount 업데이트를 위해 스케줄 캐시도 무효화
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.schedule(variables.scheduleId),
-      });
-      // 워크스페이스 스케줄 목록 캐시도 무효화 (commentCount 반영)
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey;
-          return (
-            Array.isArray(key) &&
-            key[0] === "workspaces" &&
-            (key[2] === "schedules" || key[2] === "feed")
-          );
-        },
       });
     },
   });
@@ -341,22 +326,9 @@ export const useDeleteScheduleComment = () => {
       commentId: string;
     }) => apiService.deleteScheduleComment(scheduleId, commentId),
     onSuccess: (_, variables) => {
+      // 댓글 목록 캐시만 무효화 (commentCount는 로컬 상태로 관리)
       queryClient.invalidateQueries({
         queryKey: ["schedules", variables.scheduleId, "comments"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.schedule(variables.scheduleId),
-      });
-      // 워크스페이스 스케줄 목록 캐시도 무효화 (commentCount 반영)
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey;
-          return (
-            Array.isArray(key) &&
-            key[0] === "workspaces" &&
-            (key[2] === "schedules" || key[2] === "feed")
-          );
-        },
       });
     },
   });
@@ -714,18 +686,8 @@ export const useUploadSchedulePhoto = () => {
     mutationFn: ({ scheduleId, imageUri, caption }: { scheduleId: string; imageUri: string; caption?: string }) =>
       apiService.uploadSchedulePhoto(scheduleId, imageUri, caption),
     onSuccess: (_, variables) => {
+      // 사진 목록 캐시만 무효화 (photoCount는 모달 닫을 때 갱신)
       queryClient.invalidateQueries({ queryKey: ["schedulePhotos", variables.scheduleId] });
-      // 워크스페이스 스케줄 목록 캐시도 무효화 (photoCount 반영)
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey;
-          return (
-            Array.isArray(key) &&
-            key[0] === "workspaces" &&
-            (key[2] === "schedules" || key[2] === "feed")
-          );
-        },
-      });
     },
   });
 };
@@ -737,18 +699,8 @@ export const useDeleteSchedulePhoto = () => {
     mutationFn: ({ scheduleId, photoId }: { scheduleId: string; photoId: string }) =>
       apiService.deleteSchedulePhoto(scheduleId, photoId),
     onSuccess: (_, variables) => {
+      // 사진 목록 캐시만 무효화 (photoCount는 모달 닫을 때 갱신)
       queryClient.invalidateQueries({ queryKey: ["schedulePhotos", variables.scheduleId] });
-      // 워크스페이스 스케줄 목록 캐시도 무효화 (photoCount 반영)
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey;
-          return (
-            Array.isArray(key) &&
-            key[0] === "workspaces" &&
-            (key[2] === "schedules" || key[2] === "feed")
-          );
-        },
-      });
     },
   });
 };
