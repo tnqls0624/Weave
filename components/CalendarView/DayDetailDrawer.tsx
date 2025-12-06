@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
 import { useDeleteSchedule } from "../../services/queries";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Schedule, User } from "../../types";
 import ScheduleComments from "../ScheduleComments";
 import SchedulePhotoAlbum from "../SchedulePhotoAlbum";
@@ -70,6 +71,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const deleteScheduleMutation = useDeleteSchedule();
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(
     null
@@ -86,6 +88,27 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   };
 
   const closeCommentsModal = () => {
+    // 모달 닫을 때 캐시에서 해당 스케줄의 commentCount만 업데이트
+    if (selectedScheduleForComments && localCommentCounts[selectedScheduleForComments.id] !== undefined) {
+      const scheduleId = selectedScheduleForComments.id;
+      const newCount = localCommentCounts[scheduleId];
+
+      // 워크스페이스 스케줄 캐시 업데이트
+      queryClient.setQueriesData(
+        { predicate: (query) => {
+          const key = query.queryKey;
+          return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
+        }},
+        (oldData: any) => {
+          if (!oldData || !Array.isArray(oldData)) return oldData;
+          return oldData.map((schedule: Schedule) =>
+            schedule.id === scheduleId
+              ? { ...schedule, commentCount: newCount }
+              : schedule
+          );
+        }
+      );
+    }
     setCommentsModalVisible(false);
     setSelectedScheduleForComments(null);
   };
