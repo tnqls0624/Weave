@@ -3,7 +3,7 @@ import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
-import { shareClient } from "@react-native-kakao/share";
+import { shareTextTemplate } from "@react-native-kakao/share";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
@@ -19,7 +19,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -1726,24 +1725,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                 const message = `모두의캘린더에서 함께 일정을 관리해요!\n\n초대 코드: ${currentUser.inviteCode}`;
 
                 try {
-                  // 카카오톡 SDK 사용 시도
-                  if (shareClient?.shareText) {
-                    await shareClient.shareText({
+                  await shareTextTemplate({
+                    template: {
                       text: message,
-                      buttons: [],
-                    });
-                  } else {
-                    // SDK가 없으면 카카오톡 URL scheme으로 시도
-                    const kakaoUrl = `kakaolink://send?text=${encodeURIComponent(message)}`;
-                    const canOpen = await Linking.canOpenURL(kakaoUrl);
-
-                    if (canOpen) {
-                      await Linking.openURL(kakaoUrl);
-                    } else {
-                      // 카카오톡이 없으면 일반 공유로 fallback
-                      await Share.share({ message });
-                    }
-                  }
+                      link: {
+                        mobileWebUrl: "https://weave.io.kr",
+                        webUrl: "https://weave.io.kr",
+                      },
+                      buttonTitle: "앱에서 참여하기",
+                    },
+                    useWebBrowserIfKakaoTalkNotAvailable: true,
+                  });
                 } catch (error: any) {
                   console.error("Kakao share error:", error);
                   // 에러 시 일반 공유로 fallback
