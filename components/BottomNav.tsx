@@ -15,19 +15,23 @@ const BottomNav: React.FC = () => {
   const currentRoute = segments[segments.length - 1] || "calendar";
 
   const navItems = useMemo(() => {
-    const items = [
+    if (isMapTabEnabled) {
+      // 5개: 피드 - 갤러리 - 캘린더 - 지도 - 설정
+      return [
+        { route: "feed", icon: "list", label: "피드" },
+        { route: "gallery", icon: "photo-library", label: "갤러리" },
+        { route: "calendar", icon: "event", label: "캘린더" },
+        { route: "map", icon: "map", label: "지도" },
+        { route: "settings", icon: "settings", label: "설정" },
+      ];
+    }
+    // 4개: 피드 - 캘린더 - 갤러리 - 설정
+    return [
       { route: "feed", icon: "list", label: "피드" },
       { route: "calendar", icon: "event", label: "캘린더" },
       { route: "gallery", icon: "photo-library", label: "갤러리" },
+      { route: "settings", icon: "settings", label: "설정" },
     ];
-
-    if (isMapTabEnabled) {
-      items.push({ route: "map", icon: "map", label: "지도" });
-    }
-
-    items.push({ route: "settings", icon: "settings", label: "설정" });
-
-    return items;
   }, [isMapTabEnabled]);
 
   const handleNavigate = (route: string) => {
