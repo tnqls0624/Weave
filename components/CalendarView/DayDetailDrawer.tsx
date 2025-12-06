@@ -80,6 +80,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
   const [selectedScheduleForComments, setSelectedScheduleForComments] = useState<Schedule | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedScheduleForDetail, setSelectedScheduleForDetail] = useState<Schedule | null>(null);
+  const [localCommentCounts, setLocalCommentCounts] = useState<Record<string, number>>({});
 
   const openCommentsModal = (schedule: Schedule) => {
     setSelectedScheduleForComments(schedule);
@@ -508,7 +509,7 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         >
                           <Ionicons name="chatbubble-outline" size={16} color="#6b7280" />
                           <Text style={styles.commentsButtonText}>
-                            댓글 {schedule.commentCount || 0}
+                            댓글 {localCommentCounts[schedule.id] ?? schedule.commentCount ?? 0}
                           </Text>
                         </Pressable>
                         <Pressable
@@ -595,6 +596,12 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               scheduleId={selectedScheduleForComments.id}
               currentUserId={currentUser.id}
               workspaceUsers={users}
+              onCommentCountChange={(count) => {
+                setLocalCommentCounts(prev => ({
+                  ...prev,
+                  [selectedScheduleForComments.id]: count
+                }));
+              }}
             />
           )}
         </View>

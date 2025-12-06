@@ -2,7 +2,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import relativeTime from "dayjs/plugin/relativeTime";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,12 +35,14 @@ interface ScheduleCommentsProps {
   scheduleId: string;
   currentUserId: string;
   workspaceUsers?: User[];
+  onCommentCountChange?: (count: number) => void;
 }
 
 const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
   scheduleId,
   currentUserId,
   workspaceUsers = [],
+  onCommentCountChange,
 }) => {
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ScheduleComment | null>(null);
@@ -56,6 +58,18 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
   const createCommentMutation = useCreateScheduleComment();
   const deleteCommentMutation = useDeleteScheduleComment();
   const toggleReactionMutation = useToggleCommentReaction();
+
+  // 댓글 수 변경 시 부모에게 알림
+  const totalCount = comments.reduce(
+    (acc, comment) => acc + 1 + (comment.replies?.length || 0),
+    0
+  );
+
+  useEffect(() => {
+    if (onCommentCountChange) {
+      onCommentCountChange(totalCount);
+    }
+  }, [totalCount, onCommentCountChange]);
 
   const handleSubmit = async () => {
     if (!newComment.trim()) return;
@@ -328,12 +342,6 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
     </Pressable>
   );
 
-  // 총 댓글 수 계산 (답글 포함)
-  const totalCommentCount = comments.reduce(
-    (acc, comment) => acc + 1 + (comment.replies?.length || 0),
-    0
-  );
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -350,7 +358,7 @@ const ScheduleComments: React.FC<ScheduleCommentsProps> = ({
       >
         <Ionicons name="chatbubbles" size={20} color="#374151" />
         <Text style={styles.headerTitle}>댓글</Text>
-        <Text style={styles.commentCount}>{totalCommentCount}</Text>
+        <Text style={styles.commentCount}>{totalCount}</Text>
       </Pressable>
 
       {/* 댓글 목록 */}
