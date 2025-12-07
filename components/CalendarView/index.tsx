@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { useAppStore } from "../../stores";
 import type { Schedule, User } from "../../types";
 import CalendarGrid from "./CalendarGrid";
 import CalendarHeader from "./CalendarHeader";
@@ -38,6 +39,8 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
     () => currentUser || users[0],
     [currentUser, users]
   );
+
+  const { shouldOpenDetailDrawer, setShouldOpenDetailDrawer } = useAppStore();
 
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<
@@ -135,6 +138,15 @@ const CalendarViewComponent: React.FC<CalendarViewProps> = ({
   const handleAnimationEnd = useCallback(() => {
     setAnimationDirection(null);
   }, []);
+
+  // 외부에서 shouldOpenDetailDrawer 플래그가 설정될 때 drawer 열기 (갤러리/피드에서 스케줄 선택 시)
+  useEffect(() => {
+    if (shouldOpenDetailDrawer && selectedDate) {
+      setIsDrawerOpen(true);
+      setShouldOpenDetailDrawer(false); // 플래그 리셋
+      previousSelectedDateRef.current = selectedDate;
+    }
+  }, [shouldOpenDetailDrawer, selectedDate, setShouldOpenDetailDrawer]);
 
   // 외부에서 selectedDate가 변경될 때 drawer 열기 (피드에서 스케줄 선택 시)
   useEffect(() => {

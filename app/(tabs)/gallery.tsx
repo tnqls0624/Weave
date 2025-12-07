@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function GalleryScreen() {
   const router = useRouter();
-  const { activeWorkspaceId, setCalendarDate, setDetailDrawerDate } =
+  const { activeWorkspaceId, setCalendarDate, setDetailDrawerDate, setShouldOpenDetailDrawer } =
     useAppStore();
 
   const {
@@ -27,6 +27,7 @@ export default function GalleryScreen() {
       const eventDate = dayjs(photo.scheduleDate).toDate();
       setCalendarDate(eventDate);
       setDetailDrawerDate(eventDate);
+      setShouldOpenDetailDrawer(true); // 상세 화면 열기 플래그 설정
     }
     router.push("/(tabs)/calendar");
   };

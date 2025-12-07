@@ -46,6 +46,8 @@ interface AppState {
   setCalendarDate: (date: Date) => void;
   detailDrawerDate: Date | null;
   setDetailDrawerDate: (date: Date | null) => void;
+  shouldOpenDetailDrawer: boolean;
+  setShouldOpenDetailDrawer: (open: boolean) => void;
 
   // Schedule Editing
   scheduleToEdit: Schedule | null;
@@ -103,6 +105,8 @@ export const useAppStore = create<AppState>()(
       setCalendarDate: (date) => set({ calendarDate: date }),
       detailDrawerDate: null,
       setDetailDrawerDate: (date) => set({ detailDrawerDate: date }),
+      shouldOpenDetailDrawer: false,
+      setShouldOpenDetailDrawer: (open) => set({ shouldOpenDetailDrawer: open }),
 
       // Schedule Editing
       scheduleToEdit: null,
