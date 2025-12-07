@@ -21,17 +21,23 @@
         "CFBundleName": "모두의캘린더",
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["weave-app"]
+            "CFBundleURLSchemes": [
+              "weave-app"
+            ]
           }
         ],
         "NSLocationAlwaysUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "NSLocationWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "워크스페이스 멤버들과 실시간으로 위치를 공유하기 위해 위치 권한이 필요합니다.",
         "CFBundleIconName": "AppIcon",
-        "UIBackgroundModes": ["remote-notification", "location"],
+        "UIBackgroundModes": [
+          "remote-notification",
+          "location"
+        ],
         "NSCameraUsageDescription": "프로필 사진을 촬영하여 설정하기 위해 카메라 접근 권한이 필요합니다. 예: 새로운 프로필 사진 촬영",
         "NSPhotoLibraryUsageDescription": "갤러리에서 프로필 사진을 선택하여 설정하기 위해 사진 라이브러리 접근 권한이 필요합니다. 예: 기존 사진을 프로필 이미지로 사용",
-        "NSPhotoLibraryAddUsageDescription": "편집한 프로필 사진을 기기에 저장하기 위해 사진 저장 권한이 필요합니다."
+        "NSPhotoLibraryAddUsageDescription": "편집한 프로필 사진을 기기에 저장하기 위해 사진 저장 권한이 필요합니다.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -65,10 +71,7 @@
           "image": "./assets/images/app-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#ffffff"
         }
       ],
       [
@@ -136,7 +139,9 @@
           }
         }
       ],
-      ["expo-apple-authentication"]
+      [
+        "expo-apple-authentication"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
