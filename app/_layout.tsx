@@ -19,15 +19,52 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Updates from "expo-updates";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef } from "react";
-import { AppState, AppStateStatus } from "react-native";
+import { Alert, AppState, AppStateStatus } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export const unstable_settings = {
   anchor: "(tabs)",
+};
+
+// EAS Update 확인 및 적용
+const checkForUpdates = async () => {
+  if (__DEV__) {
+    console.log("📦 [Updates] Skipping update check in development mode");
+    return;
+  }
+
+  try {
+    console.log("📦 [Updates] Checking for updates...");
+    const update = await Updates.checkForUpdateAsync();
+
+    if (update.isAvailable) {
+      console.log("📦 [Updates] New update available, downloading...");
+      await Updates.fetchUpdateAsync();
+
+      Alert.alert(
+        "업데이트 완료",
+        "새로운 버전이 다운로드되었습니다. 앱을 재시작하시겠습니까?",
+        [
+          { text: "나중에", style: "cancel" },
+          {
+            text: "재시작",
+            onPress: async () => {
+              await Updates.reloadAsync();
+            },
+          },
+        ]
+      );
+    } else {
+      console.log("📦 [Updates] App is up to date");
+    }
+  } catch (error) {
+    console.error("📦 [Updates] Error checking for updates:", error);
+  }
 };
 
 const prefetchWorkspaceSchedulesForYear = async (
@@ -80,6 +117,9 @@ const useAppInitialization = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // 0. EAS Update 확인 (프로덕션 빌드에서만)
+        await checkForUpdates();
+
         // 1. 기본 앱 초기화 (항상 실행)
         if (!appInitializedRef.current) {
           await NotificationManager.getInstance().init();
