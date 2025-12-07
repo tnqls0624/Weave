@@ -10,7 +10,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } fr
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KoreanLunarCalendar from "korean-lunar-calendar";
 import { isHoliday } from "../../constants/holidays";
-import { useDeleteSchedule } from "../../services/queries";
+import { useDeleteSchedule, useScheduleCounts, queryKeys } from "../../services/queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Schedule, User } from "../../types";
 import ScheduleComments from "../ScheduleComments";
@@ -51,6 +51,26 @@ const formatDDay = (dDay: number): string => {
   if (dDay > 0) return `D-${dDay}`;
   return `D+${Math.abs(dDay)}`;
 };
+
+// 스케줄 카운트를 표시하는 컴포넌트 (개별 쿼리 사용)
+interface ScheduleCountDisplayProps {
+  scheduleId: string;
+  type: "comment" | "photo";
+  localCount?: number;
+}
+
+const ScheduleCountDisplay: React.FC<ScheduleCountDisplayProps> = memo(({ scheduleId, type, localCount }) => {
+  const { data: counts } = useScheduleCounts(scheduleId);
+
+  // localCount가 있으면 우선 사용 (모달에서 변경된 값)
+  const count = localCount ?? (type === "comment" ? counts?.commentCount : counts?.photoCount) ?? 0;
+
+  return (
+    <Text style={styles.countText}>
+      {type === "comment" ? "댓글" : "사진"} {count}
+    </Text>
+  );
+});
 
 interface DayDetailDrawerProps {
   date: Date;
@@ -104,23 +124,11 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
         [scheduleId]: { ...prev[scheduleId], comment: newCount }
       }));
 
-      // 캐시 업데이트 (다음 프레임에 실행하여 UI 블로킹 방지)
-      requestAnimationFrame(() => {
-        queryClient.setQueriesData(
-          { predicate: (query) => {
-            const key = query.queryKey;
-            return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
-          }},
-          (oldData: any) => {
-            if (!oldData || !Array.isArray(oldData)) return oldData;
-            return oldData.map((schedule: Schedule) =>
-              schedule.id === scheduleId
-                ? { ...schedule, commentCount: newCount }
-                : schedule
-            );
-          }
-        );
-      });
+      // 스케줄 카운트 캐시만 업데이트 (캘린더 캐시는 건드리지 않음)
+      queryClient.setQueryData(queryKeys.scheduleCounts(scheduleId), (oldData: any) => ({
+        ...oldData,
+        commentCount: newCount,
+      }));
     }
     setCommentsModalVisible(false);
     setSelectedScheduleForComments(null);
@@ -147,23 +155,11 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
         [scheduleId]: { ...prev[scheduleId], photo: newCount }
       }));
 
-      // 캐시 업데이트 (다음 프레임에 실행하여 UI 블로킹 방지)
-      requestAnimationFrame(() => {
-        queryClient.setQueriesData(
-          { predicate: (query) => {
-            const key = query.queryKey;
-            return Array.isArray(key) && key[0] === "workspaces" && (key[2] === "schedules" || key[2] === "feed");
-          }},
-          (oldData: any) => {
-            if (!oldData || !Array.isArray(oldData)) return oldData;
-            return oldData.map((schedule: Schedule) =>
-              schedule.id === scheduleId
-                ? { ...schedule, photoCount: newCount }
-                : schedule
-            );
-          }
-        );
-      });
+      // 스케줄 카운트 캐시만 업데이트 (캘린더 캐시는 건드리지 않음)
+      queryClient.setQueryData(queryKeys.scheduleCounts(scheduleId), (oldData: any) => ({
+        ...oldData,
+        photoCount: newCount,
+      }));
     }
     setDetailModalVisible(false);
     setSelectedScheduleForDetail(null);
@@ -558,18 +554,22 @@ const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                           onPress={() => openCommentsModal(schedule)}
                         >
                           <Ionicons name="chatbubble-outline" size={16} color="#6b7280" />
-                          <Text style={styles.commentsButtonText}>
-                            댓글 {localCounts[schedule.id]?.comment ?? schedule.commentCount ?? 0}
-                          </Text>
+                          <ScheduleCountDisplay
+                            scheduleId={schedule.id}
+                            type="comment"
+                            localCount={localCounts[schedule.id]?.comment}
+                          />
                         </Pressable>
                         <Pressable
                           style={styles.detailButton}
                           onPress={() => openDetailModal(schedule)}
                         >
                           <Ionicons name="images-outline" size={16} color="#6b7280" />
-                          <Text style={styles.detailButtonText}>
-                            사진 {localCounts[schedule.id]?.photo ?? schedule.photoCount ?? 0}
-                          </Text>
+                          <ScheduleCountDisplay
+                            scheduleId={schedule.id}
+                            type="photo"
+                            localCount={localCounts[schedule.id]?.photo}
+                          />
                         </Pressable>
                       </View>
 
@@ -918,6 +918,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   detailButtonText: {
+    fontSize: 13,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  countText: {
     fontSize: 13,
     color: "#6b7280",
     fontWeight: "500",

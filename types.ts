@@ -48,8 +48,6 @@ export interface Schedule {
   calendarType?: string;
   reminderMinutes?: number; // 알림 시간 (분 단위, null이면 알림 없음)
   isImportant?: boolean; // 중요 일정 여부 (D-day 알림용)
-  commentCount?: number; // 댓글 수
-  photoCount?: number; // 사진 수
   checklist?: ChecklistItem[]; // 체크리스트
   photos?: SchedulePhoto[]; // 사진 앨범
   locationReminder?: LocationReminder; // 위치 기반 알림

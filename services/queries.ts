@@ -20,6 +20,7 @@ export const queryKeys = {
   // Schedule (Schedule)
   schedules: ["schedules"] as const,
   schedule: (id: string) => ["schedules", id] as const,
+  scheduleCounts: (id: string) => ["schedules", id, "counts"] as const,
 
   // Users
   users: ["users"] as const,
@@ -64,6 +65,18 @@ export const useSchedule = (scheduleId: string) => {
     enabled: !!scheduleId,
     staleTime: 10 * 60 * 1000, // 10분
     gcTime: 30 * 60 * 1000, // 30분
+    refetchOnWindowFocus: false,
+  });
+};
+
+// 스케줄 카운트 조회 (댓글 수, 사진 수) - 상세 페이지에서만 사용
+export const useScheduleCounts = (scheduleId: string, options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: queryKeys.scheduleCounts(scheduleId),
+    queryFn: () => apiService.getScheduleCounts(scheduleId),
+    enabled: options?.enabled !== undefined ? options.enabled : !!scheduleId,
+    staleTime: 30 * 1000, // 30초 - 자주 변할 수 있음
+    gcTime: 5 * 60 * 1000, // 5분
     refetchOnWindowFocus: false,
   });
 };

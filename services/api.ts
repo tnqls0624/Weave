@@ -519,6 +519,18 @@ class ApiService {
     });
   }
 
+  // 스케줄 카운트 조회 (댓글 수, 사진 수)
+  async getScheduleCounts(scheduleId: string): Promise<{ commentCount: number; photoCount: number }> {
+    const response = await this.request<{ comment_count: number; photo_count: number }>({
+      url: `/api/schedule/${scheduleId}/counts`,
+      method: "GET",
+    });
+    return {
+      commentCount: response.comment_count,
+      photoCount: response.photo_count,
+    };
+  }
+
   // ==================== Workspace API ====================
   async getMyWorkspaces(): Promise<Calendar[]> {
     const workspaces = await this.request<Calendar[]>({
@@ -765,8 +777,6 @@ class ApiService {
       isAllDay: serverSchedule.is_all_day ?? serverSchedule.isAllDay,
       reminderMinutes: serverSchedule.reminder_minutes ?? serverSchedule.reminderMinutes,
       isImportant: serverSchedule.is_important ?? serverSchedule.isImportant,
-      commentCount: serverSchedule.comment_count ?? serverSchedule.commentCount ?? 0,
-      photoCount: serverSchedule.photo_count ?? serverSchedule.photoCount ?? 0,
       locationReminder,
       checklist,
     };
