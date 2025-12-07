@@ -7,7 +7,7 @@
     "icon": "./assets/images/app-icon.png",
     "scheme": "weave",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/app-icon.png",
       "resizeMode": "contain",
@@ -125,10 +125,7 @@
               "https://devrepo.kakao.com/nexus/content/groups/public/"
             ]
           },
-          "ios": {
-            "useFrameworks": "static"
-          },
-          "newArchEnabled": true
+          "newArchEnabled": false
         }
       ],
       [
