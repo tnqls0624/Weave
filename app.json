@@ -7,7 +7,7 @@
     "icon": "./assets/images/app-icon.png",
     "scheme": "weave",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/app-icon.png",
       "resizeMode": "contain",
@@ -125,7 +125,7 @@
               "https://devrepo.kakao.com/nexus/content/groups/public/"
             ]
           },
-          "newArchEnabled": false
+          "newArchEnabled": true
         }
       ],
       [
@@ -142,7 +142,8 @@
       ],
       [
         "expo-apple-authentication"
-      ]
+      ],
+      "./plugins/withFirebaseFix.js"
     ],
     "experiments": {
       "typedRoutes": true,
